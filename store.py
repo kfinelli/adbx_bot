@@ -67,32 +67,63 @@ def save_session(state: GameState) -> None:
 # Status message management
 # ---------------------------------------------------------------------------
 
-async def post_or_update_status(
-    channel: discord.TextChannel,
-    state: GameState,
-) -> None:
-    """
-    Post a new status message or edit the existing one.
-    Saves state to DB before rendering (so the saved state is always current).
-    """
-    save_session(state)
-
+async def _post_fresh_status(channel: discord.TextChannel, state: GameState) -> None:
+    """Post a new status message at the bottom of the channel and pin it."""
     content = f"```\n{render_status(state)}\n```"
-    existing = _status_messages.get(str(channel.id))
-
-    if existing is not None:
-        try:
-            await existing.edit(content=content)
-            return
-        except discord.NotFound:
-            pass  # message was deleted; fall through to post a new one
-
     msg = await channel.send(content)
     _status_messages[str(channel.id)] = msg
     try:
         await msg.pin()
     except discord.Forbidden:
-        pass  # bot lacks pin permission; non-fatal
+        pass
+
+
+async def update_status(
+    channel: discord.TextChannel,
+    state: GameState,
+) -> None:
+    """
+    Silently edit the existing status message in place.
+    Used for most commands — no new message appears in the channel.
+    Saves state to DB first.
+    """
+    save_session(state)
+    content = f"```\n{render_status(state)}\n```"
+    existing = _status_messages.get(str(channel.id))
+    if existing is not None:
+        try:
+            await existing.edit(content=content)
+            return
+        except discord.NotFound:
+            pass
+    await _post_fresh_status(channel, state)
+
+
+async def repost_status(
+    channel: discord.TextChannel,
+    state: GameState,
+    narrative: str | None = None,
+) -> None:
+    """
+    Delete the old status message, optionally post narrative text,
+    then post a fresh status block at the bottom of the channel.
+    Used by /dm_resolve so the channel reads: narrative -> status.
+    Saves state to DB first.
+    """
+    save_session(state)
+
+    existing = _status_messages.pop(str(channel.id), None)
+    if existing is not None:
+        try:
+            await existing.unpin()
+            await existing.delete()
+        except (discord.NotFound, discord.Forbidden):
+            pass
+
+    if narrative:
+        await channel.send(narrative)
+
+    await _post_fresh_status(channel, state)
 
 
 async def restore_status_message(bot: discord.Client, channel_id: str) -> None:
@@ -141,9 +172,15 @@ async def require_session(interaction: discord.Interaction) -> Optional[GameStat
     return state
 
 
-async def ok(interaction: discord.Interaction, message: str) -> None:
-    await interaction.response.send_message(message)
+async def ack(interaction: discord.Interaction) -> None:
+    """
+    Silently acknowledge a slash command interaction (ephemeral, no visible text).
+    Discord requires every interaction to be acknowledged within 3 seconds.
+    Use this for commands where the only feedback is the status block updating.
+    """
+    await interaction.response.defer(ephemeral=True)
 
 
 async def err(interaction: discord.Interaction, message: str) -> None:
-    await interaction.response.send_message(f"⚠ {message}", ephemeral=True)
+    """Send an ephemeral error message visible only to the invoking user."""
+    await interaction.response.send_message(f"\u26a0 {message}", ephemeral=True)

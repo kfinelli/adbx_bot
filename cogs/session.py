@@ -4,7 +4,7 @@ cogs/session.py — Player-facing slash commands.
 Commands:
   /embark   — create a character and join the session
   /turn     — submit your action for the current turn
-  /status   — reprint the status block
+  /status   — repost the status block at the bottom of the channel
 """
 
 from __future__ import annotations
@@ -14,19 +14,12 @@ from discord import app_commands
 from discord.ext import commands
 
 from models import CharacterClass
-from engine import (
-    create_character,
-    open_turn,
-    submit_turn,
-)
+from engine import create_character, open_turn, submit_turn
 from store import (
-    create_session,
-    get_session,
-    has_session,
-    post_or_update_status,
+    ack, err,
+    create_session, get_session, has_session,
+    repost_status, update_status,
     require_session,
-    ok,
-    err,
 )
 from tables import EQUIPMENT_PACKAGES
 
@@ -45,10 +38,6 @@ PACKAGE_CHOICES = [
 class SessionCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-
-    # ------------------------------------------------------------------
-    # /embark
-    # ------------------------------------------------------------------
 
     @app_commands.command(
         name="embark",
@@ -70,9 +59,9 @@ class SessionCog(commands.Cog):
         character_class: app_commands.Choice[str],
         equipment_package: app_commands.Choice[str],
     ):
+        await ack(interaction)
         channel_id = str(interaction.channel_id)
 
-        # Create a session if one doesn't exist yet
         if not has_session(channel_id):
             state = create_session(channel_id, dm_user_id=str(interaction.user.id))
         else:
@@ -88,19 +77,13 @@ class SessionCog(commands.Cog):
         )
 
         if not result.ok:
-            await err(interaction, result.error)
+            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
             return
 
-        # Open first turn automatically if none exists
         if state.current_turn is None:
             open_turn(state)
 
-        await ok(interaction, result.message)
-        await post_or_update_status(interaction.channel, state)
-
-    # ------------------------------------------------------------------
-    # /turn
-    # ------------------------------------------------------------------
+        await update_status(interaction.channel, state)
 
     @app_commands.command(
         name="turn",
@@ -108,39 +91,42 @@ class SessionCog(commands.Cog):
     )
     @app_commands.describe(action="What does your character do?")
     async def turn(self, interaction: discord.Interaction, action: str):
-        state = await require_session(interaction)
+        await ack(interaction)
+        state = get_session(str(interaction.channel_id))
         if state is None:
+            await interaction.followup.send(
+                "No active session in this channel.", ephemeral=True
+            )
             return
 
-        # Find the character owned by this user
         char = _find_character(state, str(interaction.user.id))
         if char is None:
-            await err(interaction, "You don't have a character in this session. Use /embark first.")
+            await interaction.followup.send(
+                "You don't have a character in this session. Use /embark first.",
+                ephemeral=True,
+            )
             return
 
         result = submit_turn(state, char.character_id, action)
         if not result.ok:
-            await err(interaction, result.error)
+            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
             return
 
-        await ok(interaction, f"✓ Turn submitted for **{char.name}**: \"{action}\"")
-        await post_or_update_status(interaction.channel, state)
-
-    # ------------------------------------------------------------------
-    # /status
-    # ------------------------------------------------------------------
+        await update_status(interaction.channel, state)
 
     @app_commands.command(
         name="status",
-        description="Reprint the current game status.",
+        description="Repost the current game status at the bottom of the channel.",
     )
     async def status(self, interaction: discord.Interaction):
-        state = await require_session(interaction)
+        await ack(interaction)
+        state = get_session(str(interaction.channel_id))
         if state is None:
+            await interaction.followup.send(
+                "No active session in this channel.", ephemeral=True
+            )
             return
-        await interaction.response.defer()
-        await post_or_update_status(interaction.channel, state)
-        await interaction.followup.send("Status updated.", ephemeral=True)
+        await repost_status(interaction.channel, state)
 
 
 def _find_character(state, owner_id: str):

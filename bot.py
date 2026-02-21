@@ -7,10 +7,15 @@ import os
 import discord
 from discord.ext import commands
 
-# Load token from environment variable
 TOKEN = os.environ.get("DISCORD_TOKEN")
 if not TOKEN:
     raise RuntimeError("DISCORD_TOKEN environment variable not set.")
+
+GUILD_ID = int(os.environ.get("DISCORD_GUILD_ID", "0"))
+if not GUILD_ID:
+    raise RuntimeError("DISCORD_GUILD_ID environment variable not set.")
+
+GUILD = discord.Object(id=GUILD_ID)
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -19,9 +24,15 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user} ({bot.user.id})")
+    print(f"Target guild ID: {GUILD_ID}")
+
+    # Register all commands directly to the guild (instant, no global sync)
+    bot.tree.copy_global_to(guild=GUILD)
     try:
-        synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} slash command(s).")
+        synced = await bot.tree.sync(guild=GUILD)
+        print(f"Synced {len(synced)} slash command(s) to guild {GUILD_ID}.")
+    except discord.Forbidden as e:
+        print(f"Forbidden — check bot has 'applications.commands' scope: {e}")
     except Exception as e:
         print(f"Failed to sync commands: {e}")
 

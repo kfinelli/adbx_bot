@@ -185,24 +185,3 @@ and reprint the status block.
 | `/status` | Reprint the status block |
 
 ---
-
-## Known Limitations (Demo Phase)
-
-- **No persistence** — if the bot restarts, all session data is lost.
-- **One character per Discord user** — `/turn` finds your character by your user ID.
-- **DM is whoever created the session** — the first person to `/embark` becomes DM.
-  For solo play this is fine.
-- Slash commands are global (not guild-specific), so they sync slowly (~1 hour)
-  on first run. For faster testing during development, see the discord.py docs
-  on guild-specific command syncing.
-
----
-
-## Next Steps (Post-Demo)
-
-1. **Persistence** — serialize `GameState` to JSON or SQLite on every mutation.
-2. **Guild-scoped commands** — faster sync during development.
-3. **Turn timer** — background task that auto-closes turns when `due_at` passes.
-4. **`/oracle` and `/say`** — cosmetic but fun.
-5. **Multiple characters per session** — already supported by the engine; just
-   needs multi-character `/embark` flow and initiative/round order tracking.

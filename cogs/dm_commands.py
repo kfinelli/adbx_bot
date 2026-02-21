@@ -1,8 +1,8 @@
 """
 cogs/dm_commands.py — DM-facing slash commands.
 
-All commands are prefixed /dm_ and check that the invoking user
-is the session DM before proceeding.
+All responses are ephemeral (errors only) or silent.
+The channel stays clean — feedback comes from the status block updating.
 
 Commands:
   /dm_resolve     — write turn resolution narrative, advance turn
@@ -23,7 +23,6 @@ from discord import app_commands
 from discord.ext import commands
 
 from models import (
-    CharacterClass,
     CharacterStatus,
     DoorState,
     Exit,
@@ -34,8 +33,6 @@ from models import (
 from engine import (
     add_npc,
     close_turn,
-    enter_rounds,
-    exit_rounds,
     open_turn,
     resolve_turn,
     set_character_hp,
@@ -47,10 +44,10 @@ from engine import (
     set_room,
 )
 from store import (
-    err,
+    ack, err,
     get_session,
-    ok,
-    post_or_update_status,
+    repost_status,
+    update_status,
     require_session,
 )
 
@@ -59,15 +56,8 @@ class DMCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    # ------------------------------------------------------------------
-    # DM guard
-    # ------------------------------------------------------------------
-
     async def _require_dm(self, interaction: discord.Interaction):
-        """
-        Return the session if the invoking user is the DM, else send an
-        error and return None.
-        """
+        """Return session if invoking user is the DM, else send ephemeral error."""
         state = await require_session(interaction)
         if state is None:
             return None
@@ -82,30 +72,28 @@ class DMCog(commands.Cog):
 
     @app_commands.command(
         name="dm_resolve",
-        description="[DM] Write the turn resolution and advance to the next turn.",
+        description="[DM] Resolve the current turn with a narrative and advance.",
     )
-    @app_commands.describe(narrative="Describe what happens as a result of the players' actions.")
+    @app_commands.describe(narrative="What happens as a result of the players' actions.")
     async def dm_resolve(self, interaction: discord.Interaction, narrative: str):
+        await ack(interaction)
         state = await self._require_dm(interaction)
         if state is None:
             return
 
-        # Close then resolve
         if state.current_turn is None:
-            await err(interaction, "No open turn to resolve.")
+            await interaction.followup.send("⚠ No open turn to resolve.", ephemeral=True)
             return
 
         close_turn(state)
         result = resolve_turn(state, narrative)
         if not result.ok:
-            await err(interaction, result.error)
+            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
             return
 
-        # Open the next turn automatically
         open_turn(state)
-
-        await ok(interaction, f"📜 **Turn resolved:**\n{narrative}")
-        await post_or_update_status(interaction.channel, state)
+        # Post narrative visibly, then fresh status below it
+        await repost_status(interaction.channel, state, narrative=narrative)
 
     # ------------------------------------------------------------------
     # /dm_sethp
@@ -115,32 +103,30 @@ class DMCog(commands.Cog):
         name="dm_sethp",
         description="[DM] Set HP for a character or NPC by name.",
     )
-    @app_commands.describe(
-        target_name="Name of the character or NPC",
-        hp="New HP value",
-    )
+    @app_commands.describe(target_name="Name of the character or NPC", hp="New HP value")
     async def dm_sethp(self, interaction: discord.Interaction, target_name: str, hp: int):
+        await ack(interaction)
         state = await self._require_dm(interaction)
         if state is None:
             return
 
-        # Try characters first
         char = _find_char_by_name(state, target_name)
         if char is not None:
             result = set_character_hp(state, char.character_id, hp)
         else:
             npc = _find_npc_by_name(state, target_name)
             if npc is None:
-                await err(interaction, f"No character or NPC named '{target_name}'.")
+                await interaction.followup.send(
+                    f"⚠ No character or NPC named '{target_name}'.", ephemeral=True
+                )
                 return
             result = set_npc_hp(state, npc.npc_id, hp)
 
         if not result.ok:
-            await err(interaction, result.error)
+            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
             return
 
-        await ok(interaction, result.message)
-        await post_or_update_status(interaction.channel, state)
+        await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
     # /dm_setstatus
@@ -152,8 +138,8 @@ class DMCog(commands.Cog):
     )
     @app_commands.describe(
         character_name="Character name",
-        status="Status (active, dead, fled, petrified, paralyzed)",
-        notes="Optional notes shown in status block (e.g. 'fatigued', 'poisoned')",
+        status="Status: active, dead, fled, petrified, paralyzed",
+        notes="Short note shown in status block (e.g. 'fatigued', 'poisoned')",
     )
     async def dm_setstatus(
         self,
@@ -162,29 +148,33 @@ class DMCog(commands.Cog):
         status: str,
         notes: str = "",
     ):
+        await ack(interaction)
         state = await self._require_dm(interaction)
         if state is None:
             return
 
         char = _find_char_by_name(state, character_name)
         if char is None:
-            await err(interaction, f"No character named '{character_name}'.")
+            await interaction.followup.send(
+                f"⚠ No character named '{character_name}'.", ephemeral=True
+            )
             return
 
         try:
             char_status = CharacterStatus(status.lower())
         except ValueError:
             valid = [s.value for s in CharacterStatus]
-            await err(interaction, f"Unknown status '{status}'. Valid: {valid}")
+            await interaction.followup.send(
+                f"⚠ Unknown status '{status}'. Valid: {valid}", ephemeral=True
+            )
             return
 
         result = set_character_status(state, char.character_id, char_status, notes)
         if not result.ok:
-            await err(interaction, result.error)
+            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
             return
 
-        await ok(interaction, result.message)
-        await post_or_update_status(interaction.channel, state)
+        await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
     # /dm_setroom
@@ -197,7 +187,7 @@ class DMCog(commands.Cog):
     @app_commands.describe(
         name="Room name (e.g. 'Blue Atrium')",
         description="Player-visible room description",
-        notes="DM-facing notes (hidden from players)",
+        notes="DM-facing notes (not shown to players)",
     )
     async def dm_setroom(
         self,
@@ -206,18 +196,14 @@ class DMCog(commands.Cog):
         description: str,
         notes: str = "",
     ):
+        await ack(interaction)
         state = await self._require_dm(interaction)
         if state is None:
             return
 
         room = Room(name=name, description=description, notes=notes)
-        result = set_room(state, room)
-        if not result.ok:
-            await err(interaction, result.error)
-            return
-
-        await ok(interaction, f"🚪 Moved party to **{name}**.")
-        await post_or_update_status(interaction.channel, state)
+        set_room(state, room)
+        await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
     # /dm_addfeature
@@ -239,20 +225,20 @@ class DMCog(commands.Cog):
         description: str,
         state_str: str = "intact",
     ):
+        await ack(interaction)
         state = await self._require_dm(interaction)
         if state is None:
             return
 
         room = state.current_room
         if room is None:
-            await err(interaction, "No current room. Use /dm_setroom first.")
+            await interaction.followup.send(
+                "⚠ No current room. Use /dm_setroom first.", ephemeral=True
+            )
             return
 
-        feature = RoomFeature(name=name, description=description, state=state_str)
-        room.features.append(feature)
-
-        await ok(interaction, f"Feature added: **{name}**.")
-        await post_or_update_status(interaction.channel, state)
+        room.features.append(RoomFeature(name=name, description=description, state=state_str))
+        await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
     # /dm_setfeature
@@ -264,7 +250,7 @@ class DMCog(commands.Cog):
     )
     @app_commands.describe(
         feature_name="Name of the feature to update",
-        new_state="New state description (e.g. 'smashed', 'unlocked')",
+        new_state="New state (e.g. 'smashed', 'unlocked')",
     )
     async def dm_setfeature(
         self,
@@ -272,29 +258,31 @@ class DMCog(commands.Cog):
         feature_name: str,
         new_state: str,
     ):
+        await ack(interaction)
         state = await self._require_dm(interaction)
         if state is None:
             return
 
         room = state.current_room
         if room is None:
-            await err(interaction, "No current room.")
+            await interaction.followup.send("⚠ No current room.", ephemeral=True)
             return
 
         feature = next(
             (f for f in room.features if f.name.lower() == feature_name.lower()), None
         )
         if feature is None:
-            await err(interaction, f"No feature named '{feature_name}' in this room.")
+            await interaction.followup.send(
+                f"⚠ No feature named '{feature_name}' in this room.", ephemeral=True
+            )
             return
 
         result = set_feature_state(state, feature.feature_id, new_state)
         if not result.ok:
-            await err(interaction, result.error)
+            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
             return
 
-        await ok(interaction, result.message)
-        await post_or_update_status(interaction.channel, state)
+        await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
     # /dm_addnpc
@@ -307,10 +295,10 @@ class DMCog(commands.Cog):
     @app_commands.describe(
         name="NPC name (e.g. 'Goblin A')",
         hp="Hit points",
-        ac="Armor class (descending, e.g. 6)",
+        ac="Armor class (descending AC, e.g. 6)",
         description="Brief description shown in status block",
         damage_dice="Damage dice string (e.g. 1d6)",
-        notes="DM-facing notes (hidden from players)",
+        notes="DM-facing notes (not shown to players)",
     )
     async def dm_addnpc(
         self,
@@ -322,6 +310,7 @@ class DMCog(commands.Cog):
         damage_dice: str = "1d6",
         notes: str = "",
     ):
+        await ack(interaction)
         state = await self._require_dm(interaction)
         if state is None:
             return
@@ -335,9 +324,8 @@ class DMCog(commands.Cog):
             damage_dice=damage_dice,
             notes=notes,
         )
-        result = add_npc(state, npc)
-        await ok(interaction, result.message)
-        await post_or_update_status(interaction.channel, state)
+        add_npc(state, npc)
+        await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
     # /dm_setnpcstatus
@@ -347,32 +335,31 @@ class DMCog(commands.Cog):
         name="dm_setnpcstatus",
         description="[DM] Update an NPC's status (e.g. dead, fled, charmed).",
     )
-    @app_commands.describe(
-        npc_name="Name of the NPC",
-        status="New status string",
-    )
+    @app_commands.describe(npc_name="Name of the NPC", status="New status string")
     async def dm_setnpcstatus(
         self,
         interaction: discord.Interaction,
         npc_name: str,
         status: str,
     ):
+        await ack(interaction)
         state = await self._require_dm(interaction)
         if state is None:
             return
 
         npc = _find_npc_by_name(state, npc_name)
         if npc is None:
-            await err(interaction, f"No NPC named '{npc_name}'.")
+            await interaction.followup.send(
+                f"⚠ No NPC named '{npc_name}'.", ephemeral=True
+            )
             return
 
         result = set_npc_status(state, npc.npc_id, status.lower())
         if not result.ok:
-            await err(interaction, result.error)
+            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
             return
 
-        await ok(interaction, result.message)
-        await post_or_update_status(interaction.channel, state)
+        await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
     # /dm_setlight
@@ -384,7 +371,7 @@ class DMCog(commands.Cog):
     )
     @app_commands.describe(
         label="Description of the light source (e.g. 'Torch', 'Lantern')",
-        turns="Remaining turns (leave blank for permanent/magical)",
+        turns="Remaining turns (omit or set -1 for permanent/magical)",
     )
     async def dm_setlight(
         self,
@@ -392,6 +379,7 @@ class DMCog(commands.Cog):
         label: str,
         turns: int = -1,
     ):
+        await ack(interaction)
         state = await self._require_dm(interaction)
         if state is None:
             return
@@ -399,11 +387,10 @@ class DMCog(commands.Cog):
         turns_remaining = None if turns < 0 else turns
         result = set_light_source(state, label, turns_remaining)
         if not result.ok:
-            await err(interaction, result.error)
+            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
             return
 
-        await ok(interaction, result.message)
-        await post_or_update_status(interaction.channel, state)
+        await update_status(interaction.channel, state)
 
 
 # ---------------------------------------------------------------------------
