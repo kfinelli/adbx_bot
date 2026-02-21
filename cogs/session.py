@@ -14,7 +14,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from models import CharacterClass
-from engine import create_character, open_turn, submit_turn
+from engine import abscond, create_character, open_turn, submit_turn
 from store import (
     ack, err,
     create_session, get_session, has_session,
@@ -80,6 +80,9 @@ class SessionCog(commands.Cog):
             await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
             return
 
+        if state.party.leader_id is None:
+            state.party.leader_id = state.party.member_ids[-1]
+
         if state.current_turn is None:
             open_turn(state)
 
@@ -127,6 +130,33 @@ class SessionCog(commands.Cog):
             )
             return
         await repost_status(interaction.channel, state)
+
+
+    @app_commands.command(
+        name="abscond",
+        description="[Party leader] Move the party through a numbered exit.",
+    )
+    @app_commands.describe(exit_number="The number of the exit to take (see status block)")
+    async def abscond_cmd(self, interaction: discord.Interaction, exit_number: int):
+        await ack(interaction)
+        state = get_session(str(interaction.channel_id))
+        if state is None:
+            await interaction.followup.send("No active session in this channel.", ephemeral=True)
+            return
+
+        char = _find_character(state, str(interaction.user.id))
+        if char is None:
+            await interaction.followup.send(
+                "You don't have a character in this session.", ephemeral=True
+            )
+            return
+
+        result = abscond(state, char.character_id, exit_number)
+        if not result.ok:
+            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
+            return
+
+        await update_status(interaction.channel, state)
 
 
 def _find_character(state, owner_id: str):

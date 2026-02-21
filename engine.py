@@ -25,6 +25,7 @@ from models import (
     CharacterClass,
     CharacterStatus,
     Dungeon,
+    DoorState,
     Exit,
     GameState,
     InventoryItem,
@@ -513,6 +514,89 @@ def set_exit_state(
     return _err(state, f"Exit {exit_id} not found in current room.")
 
 
+def add_exit(
+    state:       GameState,
+    label:       str,
+    description: str,
+    door_state=DoorState.OPEN,
+    notes:       str = "",
+) -> EngineResult:
+    """DM adds a new exit to the current room."""
+    room = state.current_room
+    if room is None:
+        return _err(state, "No current room.")
+    exit_ = Exit(
+        label=label,
+        description=description,
+        door_state=door_state,
+        notes=notes,
+    )
+    room.exits.append(exit_)
+    n = len(room.exits)
+    state.updated_at = datetime.utcnow()
+    return _ok(state, f"Exit {n} added: {label}.")
+
+
+def abscond(
+    state:        GameState,
+    character_id: UUID,
+    exit_number:  int,
+) -> EngineResult:
+    """
+    Party leader moves the group through a numbered exit.
+
+    - Only the party leader may call this.
+    - Exit must not be locked or stuck.
+    - Clears all existing turn submissions and replaces them with a
+      single movement submission, then closes the turn so the DM
+      sees it as ready to resolve.
+    - Does NOT resolve the turn — DM still uses /dm_resolve.
+    """
+    if state.party is None:
+        return _err(state, "No active party.")
+    if state.party.leader_id != character_id:
+        return _err(state, "Only the party leader can use /abscond.")
+
+    room = state.current_room
+    if room is None:
+        return _err(state, "No current room.")
+    if not room.exits:
+        return _err(state, "No exits in this room.")
+
+    idx = exit_number - 1
+    if idx < 0 or idx >= len(room.exits):
+        return _err(state, f"Exit {exit_number} does not exist. There are {len(room.exits)} exit(s).")
+
+    exit_ = room.exits[idx]
+    if exit_.door_state in (DoorState.LOCKED, DoorState.STUCK):
+        return _err(state, f"The {exit_.label} exit is {exit_.door_state.value} and cannot be used.")
+
+    if state.current_turn is None:
+        open_turn(state)
+
+    # Clear existing submissions — leader overrides
+    for sub in state.current_turn.submissions:
+        sub.is_latest = False
+
+    leader = state.characters.get(character_id)
+    leader_name = leader.name if leader else "Party leader"
+    action = f"leads the party through exit {exit_number}: {exit_.label} ({exit_.description})"
+
+    state.current_turn.submissions.append(PlayerTurnSubmission(
+        character_id=character_id,
+        submitted_at=datetime.utcnow(),
+        action_text=action,
+        is_latest=True,
+    ))
+
+    # Close turn — ready for DM resolution
+    state.current_turn.status = TurnStatus.CLOSED
+    state.current_turn.closed_at = datetime.utcnow()
+    state.updated_at = datetime.utcnow()
+
+    return _ok(state, f"{leader_name} {action}.")
+
+
 # ---------------------------------------------------------------------------
 # Mode switching
 # ---------------------------------------------------------------------------
@@ -617,8 +701,8 @@ def render_status(state: GameState) -> str:
                 lines.append(f"  {feat.name}{state_note}: {feat.description}")
         if room.exits:
             lines.append("Exits:")
-            for ex in room.exits:
-                lines.append(f"  {ex.label.capitalize()}: {ex.description} [{ex.door_state.value}]")
+            for i, ex in enumerate(room.exits, 1):
+                lines.append(f"  {i}. {ex.label.capitalize()}: {ex.description} [{ex.door_state.value}]")
     else:
         lines.append("Room: (none)")
 

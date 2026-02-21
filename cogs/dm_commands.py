@@ -31,12 +31,14 @@ from models import (
     RoomFeature,
 )
 from engine import (
+    add_exit,
     add_npc,
     close_turn,
     open_turn,
     resolve_turn,
     set_character_hp,
     set_character_status,
+    set_exit_state,
     set_feature_state,
     set_light_source,
     set_npc_hp,
@@ -386,6 +388,101 @@ class DMCog(commands.Cog):
 
         turns_remaining = None if turns < 0 else turns
         result = set_light_source(state, label, turns_remaining)
+        if not result.ok:
+            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
+            return
+
+        await update_status(interaction.channel, state)
+
+
+    # ------------------------------------------------------------------
+    # /dm_addexit
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="dm_addexit",
+        description="[DM] Add an exit to the current room.",
+    )
+    @app_commands.describe(
+        label="Exit label (e.g. 'north', 'west door', 'ladder down')",
+        description="Player-visible description of the exit",
+        door_state="Door state: open, closed, locked, stuck, secret",
+        notes="DM-facing notes (not shown to players)",
+    )
+    async def dm_addexit(
+        self,
+        interaction: discord.Interaction,
+        label: str,
+        description: str,
+        door_state: str = "open",
+        notes: str = "",
+    ):
+        await ack(interaction)
+        state = await self._require_dm(interaction)
+        if state is None:
+            return
+
+        try:
+            ds = DoorState(door_state.lower())
+        except ValueError:
+            valid = [d.value for d in DoorState]
+            await interaction.followup.send(
+                f"⚠ Unknown door state '{door_state}'. Valid: {valid}", ephemeral=True
+            )
+            return
+
+        result = add_exit(state, label, description, ds, notes)
+        if not result.ok:
+            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
+            return
+
+        await update_status(interaction.channel, state)
+
+    # ------------------------------------------------------------------
+    # /dm_setexitstate
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="dm_setexitstate",
+        description="[DM] Change the state of a numbered exit (e.g. unlock a door).",
+    )
+    @app_commands.describe(
+        exit_number="Exit number as shown in the status block",
+        door_state="New state: open, closed, locked, stuck, secret",
+    )
+    async def dm_setexitstate(
+        self,
+        interaction: discord.Interaction,
+        exit_number: int,
+        door_state: str,
+    ):
+        await ack(interaction)
+        state = await self._require_dm(interaction)
+        if state is None:
+            return
+
+        room = state.current_room
+        if room is None:
+            await interaction.followup.send("⚠ No current room.", ephemeral=True)
+            return
+
+        idx = exit_number - 1
+        if idx < 0 or idx >= len(room.exits):
+            await interaction.followup.send(
+                f"⚠ Exit {exit_number} does not exist.", ephemeral=True
+            )
+            return
+
+        try:
+            ds = DoorState(door_state.lower())
+        except ValueError:
+            valid = [d.value for d in DoorState]
+            await interaction.followup.send(
+                f"⚠ Unknown door state '{door_state}'. Valid: {valid}", ephemeral=True
+            )
+            return
+
+        result = set_exit_state(state, room.exits[idx].exit_id, ds)
         if not result.ok:
             await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
             return
