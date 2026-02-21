@@ -66,14 +66,15 @@ def _now() -> datetime:
 
 @dataclass
 class EngineResult:
-    ok:      bool       = True
-    message: str        = ""   # narrative / confirmation text for the platform to display
-    error:   str        = ""   # human-readable error if ok=False
-    state:   Optional[GameState] = None
+    ok:        bool             = True
+    message:   str              = ""   # narrative / confirmation text for the platform to display
+    error:     str              = ""   # human-readable error if ok=False
+    state:     Optional[GameState] = None
+    notify_dm: bool             = False  # platform should notify DM to resolve
 
 
-def _ok(state: GameState, message: str = "") -> EngineResult:
-    return EngineResult(ok=True, message=message, state=state)
+def _ok(state: GameState, message: str = "", notify_dm: bool = False) -> EngineResult:
+    return EngineResult(ok=True, message=message, state=state, notify_dm=notify_dm)
 
 def _err(state: GameState, error: str) -> EngineResult:
     return EngineResult(ok=False, error=error, state=state)
@@ -269,6 +270,22 @@ def submit_turn(
         is_latest=True,
     ))
     state.updated_at = _now()
+
+    # Auto-close if all active party members have submitted
+    if state.party is not None:
+        submitted_ids = {
+            s.character_id for s in state.current_turn.submissions if s.is_latest
+        }
+        active_ids = {
+            cid for cid in state.party.member_ids
+            if state.characters.get(cid) and
+               state.characters[cid].status == CharacterStatus.ACTIVE
+        }
+        if active_ids and active_ids.issubset(submitted_ids):
+            state.current_turn.status = TurnStatus.CLOSED
+            state.current_turn.closed_at = _now()
+            return _ok(state, f"{char.name}: \"{action_text}\"", notify_dm=True)
+
     return _ok(state, f"{char.name}: \"{action_text}\"")
 
 
@@ -608,7 +625,7 @@ def abscond(
     state.current_turn.closed_at = _now()
     state.updated_at = _now()
 
-    return _ok(state, f"{leader_name} {action}.")
+    return _ok(state, f"{leader_name} {action}.", notify_dm=True)
 
 
 # ---------------------------------------------------------------------------

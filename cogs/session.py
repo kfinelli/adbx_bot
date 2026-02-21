@@ -18,6 +18,7 @@ from engine import abscond, create_character, open_turn, submit_turn
 from store import (
     ack, err,
     create_session, get_session, has_session,
+    notify_dm_of_turn_close,
     repost_status, update_status,
     require_session,
 )
@@ -110,12 +111,16 @@ class SessionCog(commands.Cog):
             )
             return
 
+        turn_number = state.turn_number
         result = submit_turn(state, char.character_id, action)
         if not result.ok:
             await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
             return
 
         await update_status(interaction.channel, state)
+
+        if result.notify_dm:
+            await notify_dm_of_turn_close(interaction.channel, state, turn_number)
 
     @app_commands.command(
         name="status",
@@ -151,12 +156,16 @@ class SessionCog(commands.Cog):
             )
             return
 
+        turn_number = state.turn_number
         result = abscond(state, char.character_id, exit_number)
         if not result.ok:
             await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
             return
 
         await update_status(interaction.channel, state)
+
+        if result.notify_dm:
+            await notify_dm_of_turn_close(interaction.channel, state, turn_number)
 
 
 def _find_character(state, owner_id: str):

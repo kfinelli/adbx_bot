@@ -148,6 +148,37 @@ async def restore_status_message(bot: discord.Client, channel_id: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# DM turn-close notification
+# ---------------------------------------------------------------------------
+
+async def notify_dm_of_turn_close(bot_or_channel, state: GameState, turn_number: int) -> None:
+    """
+    Post a visible channel notification that the turn has closed early
+    (all players submitted or party leader used /abscond) and attempt
+    a DM to the DM user.
+    Called by the platform layer when EngineResult.notify_dm is True.
+    """
+    # bot_or_channel can be a TextChannel directly
+    channel = bot_or_channel
+    dm_mention = f"<@{state.dm_user_id}>" if state.dm_user_id else "DM"
+    await channel.send(
+        f"All turns submitted — Turn {turn_number} ready for resolution ({dm_mention})."
+    )
+
+    if state.dm_user_id:
+        try:
+            import discord as _discord
+            # Fetch user via the channel's guild
+            dm_user = await channel.guild.fetch_member(int(state.dm_user_id))
+            await dm_user.send(
+                f"All turns submitted in <#{state.platform_channel_id}>. "
+                f"Turn {turn_number} is ready for your resolution."
+            )
+        except Exception:
+            pass  # DMs disabled or member not found — channel ping is enough
+
+
+# ---------------------------------------------------------------------------
 # Interaction helpers
 # ---------------------------------------------------------------------------
 
