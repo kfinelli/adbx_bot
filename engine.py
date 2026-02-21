@@ -246,6 +246,8 @@ def submit_turn(
     Submit (or resubmit) a player's action for the current open turn.
     Previous submissions by this character are marked superseded.
     """
+    if not state.session_active:
+        return _err(state, "The session is on hold.")
     if state.current_turn is None or state.current_turn.status != TurnStatus.OPEN:
         return _err(state, "No open turn to submit to.")
 
@@ -610,6 +612,28 @@ def abscond(
 
 
 # ---------------------------------------------------------------------------
+# Session hold / resume
+# ---------------------------------------------------------------------------
+
+def hold_session(state: GameState) -> EngineResult:
+    """Put the session on hold. No player turns or DM commands accepted until resumed."""
+    if not state.session_active:
+        return _err(state, "Session is already on hold.")
+    state.session_active = False
+    state.updated_at = _now()
+    return _ok(state, "Session is now on hold.")
+
+
+def resume_session(state: GameState) -> EngineResult:
+    """Resume a session that was put on hold."""
+    if state.session_active:
+        return _err(state, "Session is not on hold.")
+    state.session_active = True
+    state.updated_at = _now()
+    return _ok(state, "Session resumed.")
+
+
+# ---------------------------------------------------------------------------
 # Mode switching
 # ---------------------------------------------------------------------------
 
@@ -667,8 +691,19 @@ def render_status(state: GameState) -> str:
 
     lines.append(sep)
 
-    # Mode line (turn number now lives in the header above the code block)
-    lines.append("In rounds" if state.mode == SessionMode.ROUNDS else "Exploration")
+    # Mode and session/turn state
+    mode_str = "Rounds" if state.mode == SessionMode.ROUNDS else "Exploration"
+    if not state.session_active:
+        state_str = "ON HOLD"
+    elif state.current_turn is None:
+        state_str = "No active turn"
+    elif state.current_turn.status == TurnStatus.OPEN:
+        state_str = "Open — accepting turn submissions"
+    elif state.current_turn.status == TurnStatus.CLOSED:
+        state_str = "Closed — awaiting DM resolution"
+    else:
+        state_str = state.current_turn.status.value
+    lines.append(f"{mode_str} | {state_str}")
 
     # Light source
     if state.party:

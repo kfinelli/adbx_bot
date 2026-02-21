@@ -360,6 +360,9 @@ class GameState:
     current_turn:    Optional[TurnRecord]    = None
     turn_history:    list[TurnRecord]        = field(default_factory=list)
 
+    # Session control
+    session_active:      bool                 = True   # False = on hold
+
     # Turn timer config
     default_turn_hours: float                = 24.0  # default turn length in hours
 

@@ -34,8 +34,10 @@ from engine import (
     add_exit,
     add_npc,
     close_turn,
+    hold_session,
     open_turn,
     resolve_turn,
+    resume_session,
     set_character_hp,
     set_character_status,
     set_exit_state,
@@ -58,13 +60,16 @@ class DMCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    async def _require_dm(self, interaction: discord.Interaction):
+    async def _require_dm(self, interaction: discord.Interaction, allow_on_hold: bool = False):
         """Return session if invoking user is the DM, else send ephemeral error."""
         state = await require_session(interaction)
         if state is None:
             return None
         if state.dm_user_id != str(interaction.user.id):
             await err(interaction, "Only the DM can use this command.")
+            return None
+        if not state.session_active and not allow_on_hold:
+            await err(interaction, "Session is on hold. Use /dm_resume first.")
             return None
         return state
 
@@ -549,6 +554,41 @@ class DMCog(commands.Cog):
         from store import save_session
         save_session(state)
         await update_status(interaction.channel, state)
+
+
+    # ------------------------------------------------------------------
+    # /dm_hold and /dm_resume
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="dm_hold",
+        description="[DM] Put the session on hold (no turns accepted).",
+    )
+    async def dm_hold(self, interaction: discord.Interaction):
+        await ack(interaction)
+        state = await self._require_dm(interaction, allow_on_hold=True)
+        if state is None:
+            return
+        result = hold_session(state)
+        if not result.ok:
+            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
+            return
+        await repost_status(interaction.channel, state)
+
+    @app_commands.command(
+        name="dm_resume",
+        description="[DM] Resume a session that is on hold.",
+    )
+    async def dm_resume(self, interaction: discord.Interaction):
+        await ack(interaction)
+        state = await self._require_dm(interaction, allow_on_hold=True)
+        if state is None:
+            return
+        result = resume_session(state)
+        if not result.ok:
+            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
+            return
+        await repost_status(interaction.channel, state)
 
 
 # ---------------------------------------------------------------------------

@@ -36,6 +36,9 @@ class TimerCog(commands.Cog):
             if state is None:
                 continue
 
+            if not state.session_active:
+                continue
+
             turn = state.current_turn
             if turn is None:
                 continue
