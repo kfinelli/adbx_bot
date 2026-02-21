@@ -360,6 +360,9 @@ class GameState:
     current_turn:    Optional[TurnRecord]    = None
     turn_history:    list[TurnRecord]        = field(default_factory=list)
 
+    # Turn timer config
+    default_turn_hours: float                = 24.0  # default turn length in hours
+
     # Metadata
     created_at:      datetime                = field(default_factory=datetime.utcnow)
     updated_at:      datetime                = field(default_factory=datetime.utcnow)

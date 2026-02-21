@@ -490,6 +490,67 @@ class DMCog(commands.Cog):
         await update_status(interaction.channel, state)
 
 
+    # ------------------------------------------------------------------
+    # /dm_setturnlength
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="dm_setturnlength",
+        description="[DM] Set the default turn length for this session.",
+    )
+    @app_commands.describe(hours="Default turn duration in hours (e.g. 24)")
+    async def dm_setturnlength(self, interaction: discord.Interaction, hours: float):
+        await ack(interaction)
+        state = await self._require_dm(interaction)
+        if state is None:
+            return
+
+        if hours <= 0:
+            await interaction.followup.send(
+                "⚠ Turn length must be greater than 0.", ephemeral=True
+            )
+            return
+
+        state.default_turn_hours = hours
+        from store import save_session
+        save_session(state)
+        await interaction.followup.send(
+            f"Default turn length set to {hours}h. Takes effect from the next turn.",
+            ephemeral=True,
+        )
+
+    # ------------------------------------------------------------------
+    # /dm_settimer
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="dm_settimer",
+        description="[DM] Override the deadline for the current open turn.",
+    )
+    @app_commands.describe(hours="Hours from now until this turn expires")
+    async def dm_settimer(self, interaction: discord.Interaction, hours: float):
+        await ack(interaction)
+        state = await self._require_dm(interaction)
+        if state is None:
+            return
+
+        if state.current_turn is None:
+            await interaction.followup.send("⚠ No open turn.", ephemeral=True)
+            return
+
+        if hours <= 0:
+            await interaction.followup.send(
+                "⚠ Duration must be greater than 0.", ephemeral=True
+            )
+            return
+
+        from datetime import datetime, timedelta, timezone
+        state.current_turn.due_at = datetime.now(timezone.utc) + timedelta(hours=hours)
+        from store import save_session
+        save_session(state)
+        await update_status(interaction.channel, state)
+
+
 # ---------------------------------------------------------------------------
 # Lookup helpers
 # ---------------------------------------------------------------------------

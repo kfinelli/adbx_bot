@@ -15,7 +15,7 @@ from __future__ import annotations
 import copy
 import random
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID, uuid4
 
@@ -50,6 +50,14 @@ from tables import (
     get_saving_throws,
     get_spell_slots,
 )
+
+
+# ---------------------------------------------------------------------------
+# Timezone-aware UTC now (replaces deprecated _now())
+# ---------------------------------------------------------------------------
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 # ---------------------------------------------------------------------------
@@ -187,7 +195,7 @@ def create_character(
     if state.party is not None:
         state.party.member_ids.append(character.character_id)
 
-    state.updated_at = datetime.utcnow()
+    state.updated_at = _now()
 
     msg = (
         f"{name} the {character_class.value} joins the party!\n"
@@ -208,20 +216,24 @@ def open_turn(
 ) -> EngineResult:
     """
     Open a new dungeon turn (or combat round).
+    If due_at is not provided, uses state.default_turn_hours from now.
     Fails if a turn is already open.
     """
     if state.current_turn is not None and state.current_turn.status == TurnStatus.OPEN:
         return _err(state, "A turn is already open. Close or resolve it first.")
 
+    if due_at is None:
+        due_at = _now() + timedelta(hours=state.default_turn_hours)
+
     turn = TurnRecord(
         turn_number=state.turn_number,
         mode=state.mode,
         status=TurnStatus.OPEN,
-        opened_at=datetime.utcnow(),
+        opened_at=_now(),
         due_at=due_at,
     )
     state.current_turn = turn
-    state.updated_at = datetime.utcnow()
+    state.updated_at = _now()
     return _ok(state, f"Turn {state.turn_number} is now open.")
 
 
@@ -250,11 +262,11 @@ def submit_turn(
 
     state.current_turn.submissions.append(PlayerTurnSubmission(
         character_id=character_id,
-        submitted_at=datetime.utcnow(),
+        submitted_at=_now(),
         action_text=action_text,
         is_latest=True,
     ))
-    state.updated_at = datetime.utcnow()
+    state.updated_at = _now()
     return _ok(state, f"{char.name}: \"{action_text}\"")
 
 
@@ -269,8 +281,8 @@ def close_turn(state: GameState) -> EngineResult:
         return _err(state, "Current turn is not open.")
 
     state.current_turn.status = TurnStatus.CLOSED
-    state.current_turn.closed_at = datetime.utcnow()
-    state.updated_at = datetime.utcnow()
+    state.current_turn.closed_at = _now()
+    state.updated_at = _now()
     return _ok(state, f"Turn {state.turn_number} closed. Awaiting DM resolution.")
 
 
@@ -294,7 +306,7 @@ def resolve_turn(
     turn.state_snapshot = _snapshot(state)
     turn.resolution     = resolution
     turn.status         = TurnStatus.RESOLVED
-    turn.resolved_at    = datetime.utcnow()
+    turn.resolved_at    = _now()
 
     # Move to history
     state.turn_history.append(turn)
@@ -305,7 +317,7 @@ def resolve_turn(
     if state.mode == SessionMode.EXPLORATION:
         _tick_light(state)
 
-    state.updated_at = datetime.utcnow()
+    state.updated_at = _now()
     return _ok(state, resolution)
 
 
@@ -366,7 +378,7 @@ def set_light_source(
         is_active=True,
     )
     state.party.light_sources.append(new_light)
-    state.updated_at = datetime.utcnow()
+    state.updated_at = _now()
     duration = f"{turns_remaining} turns" if turns_remaining is not None else "permanent"
     return _ok(state, f"Light source set: {label} ({duration}).")
 
@@ -387,7 +399,7 @@ def set_character_hp(
     char.hp_current = max(0, min(new_hp, char.hp_max))
     if char.hp_current == 0:
         char.status = CharacterStatus.DEAD
-    state.updated_at = datetime.utcnow()
+    state.updated_at = _now()
     return _ok(state, f"{char.name} HP: {old} → {char.hp_current}/{char.hp_max}.")
 
 
@@ -402,7 +414,7 @@ def set_character_status(
         return _err(state, f"Character {character_id} not found.")
     char.status = status
     char.status_notes = notes
-    state.updated_at = datetime.utcnow()
+    state.updated_at = _now()
     return _ok(state, f"{char.name} status → {status.value}. {notes}".strip())
 
 
@@ -413,7 +425,7 @@ def set_character_status(
 def add_npc(state: GameState, npc: NPC) -> EngineResult:
     """Add an NPC to the current room."""
     state.npcs.append(npc)
-    state.updated_at = datetime.utcnow()
+    state.updated_at = _now()
     return _ok(state, f"{npc.name} appears.")
 
 
@@ -429,7 +441,7 @@ def set_npc_hp(
     npc.hp_current = max(0, new_hp)
     if npc.hp_current == 0:
         npc.status = "dead"
-    state.updated_at = datetime.utcnow()
+    state.updated_at = _now()
     return _ok(state, f"{npc.name} HP: {old} → {npc.hp_current}/{npc.hp_max}.")
 
 
@@ -442,7 +454,7 @@ def set_npc_status(
     if npc is None:
         return _err(state, f"NPC {npc_id} not found.")
     npc.status = status
-    state.updated_at = datetime.utcnow()
+    state.updated_at = _now()
     return _ok(state, f"{npc.name} status → {status}.")
 
 
@@ -451,7 +463,7 @@ def remove_npc(state: GameState, npc_id: UUID) -> EngineResult:
     if npc is None:
         return _err(state, f"NPC {npc_id} not found.")
     state.npcs = [n for n in state.npcs if n.npc_id != npc_id]
-    state.updated_at = datetime.utcnow()
+    state.updated_at = _now()
     return _ok(state, f"{npc.name} removed from room.")
 
 
@@ -477,7 +489,7 @@ def set_room(state: GameState, room: Room) -> EngineResult:
     state.current_room_id = room.room_id
     room.visited = True
     state.npcs = []
-    state.updated_at = datetime.utcnow()
+    state.updated_at = _now()
     return _ok(state, f"Entered: {room.name}.")
 
 
@@ -493,7 +505,7 @@ def set_feature_state(
     for feat in room.features:
         if feat.feature_id == feature_id:
             feat.state = new_state
-            state.updated_at = datetime.utcnow()
+            state.updated_at = _now()
             return _ok(state, f"{feat.name} → {new_state}.")
     return _err(state, f"Feature {feature_id} not found in current room.")
 
@@ -509,7 +521,7 @@ def set_exit_state(
     for ex in room.exits:
         if ex.exit_id == exit_id:
             ex.door_state = new_state
-            state.updated_at = datetime.utcnow()
+            state.updated_at = _now()
             return _ok(state, f"Exit '{ex.label}' → {new_state.value}.")
     return _err(state, f"Exit {exit_id} not found in current room.")
 
@@ -533,7 +545,7 @@ def add_exit(
     )
     room.exits.append(exit_)
     n = len(room.exits)
-    state.updated_at = datetime.utcnow()
+    state.updated_at = _now()
     return _ok(state, f"Exit {n} added: {label}.")
 
 
@@ -584,15 +596,15 @@ def abscond(
 
     state.current_turn.submissions.append(PlayerTurnSubmission(
         character_id=character_id,
-        submitted_at=datetime.utcnow(),
+        submitted_at=_now(),
         action_text=action,
         is_latest=True,
     ))
 
     # Close turn — ready for DM resolution
     state.current_turn.status = TurnStatus.CLOSED
-    state.current_turn.closed_at = datetime.utcnow()
-    state.updated_at = datetime.utcnow()
+    state.current_turn.closed_at = _now()
+    state.updated_at = _now()
 
     return _ok(state, f"{leader_name} {action}.")
 
@@ -608,7 +620,7 @@ def enter_rounds(state: GameState) -> EngineResult:
     state.mode = SessionMode.ROUNDS
     if state.current_turn:
         state.current_turn.mode = SessionMode.ROUNDS
-    state.updated_at = datetime.utcnow()
+    state.updated_at = _now()
     return _ok(state, "Entering rounds! Initiative order to be set by DM.")
 
 
@@ -619,7 +631,7 @@ def exit_rounds(state: GameState) -> EngineResult:
     state.mode = SessionMode.EXPLORATION
     if state.current_turn:
         state.current_turn.mode = SessionMode.EXPLORATION
-    state.updated_at = datetime.utcnow()
+    state.updated_at = _now()
     return _ok(state, "Returning to exploration.")
 
 
@@ -642,8 +654,11 @@ def render_status(state: GameState) -> str:
     if state.mode == SessionMode.ROUNDS:
         turn_label += " (ROUNDS)"
     if state.current_turn and state.current_turn.due_at:
-        due = state.current_turn.due_at.strftime("%-m/%-d/%y, %H:%M %Z").strip()
-        turn_label += f"  •  next turn {due}"
+        due = state.current_turn.due_at
+        if due.tzinfo is None:
+            due = due.replace(tzinfo=timezone.utc)
+        unix_ts = int(due.timestamp())
+        turn_label += f" (deadline <t:{unix_ts}:f>)"
     lines.append(turn_label)
     lines.append("In rounds" if state.mode == SessionMode.ROUNDS else "Exploration")
 

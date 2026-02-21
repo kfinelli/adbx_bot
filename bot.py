@@ -49,6 +49,7 @@ async def main():
     async with bot:
         await bot.load_extension("cogs.session")
         await bot.load_extension("cogs.dm_commands")
+        await bot.load_extension("cogs.timer")
         await bot.start(TOKEN)
 
 
