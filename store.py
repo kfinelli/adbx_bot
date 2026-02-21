@@ -72,10 +72,6 @@ async def _post_fresh_status(channel: discord.TextChannel, state: GameState) -> 
     content = f"```\n{render_status(state)}\n```"
     msg = await channel.send(content)
     _status_messages[str(channel.id)] = msg
-    try:
-        await msg.pin()
-    except discord.Forbidden:
-        pass
 
 
 async def update_status(
@@ -115,7 +111,6 @@ async def repost_status(
     existing = _status_messages.pop(str(channel.id), None)
     if existing is not None:
         try:
-            await existing.unpin()
             await existing.delete()
         except (discord.NotFound, discord.Forbidden):
             pass
@@ -129,8 +124,9 @@ async def repost_status(
 async def restore_status_message(bot: discord.Client, channel_id: str) -> None:
     """
     Called on bot startup for each saved session.
-    Finds the most recent pinned bot message in the channel and re-registers
-    it as the status message so future edits work correctly.
+    Scans recent channel history for the last status message posted by the bot
+    and re-registers it so future edits work correctly.
+    Falls back to posting a fresh status if none is found.
     """
     channel = bot.get_channel(int(channel_id))
     if channel is None:
@@ -139,22 +135,15 @@ async def restore_status_message(bot: discord.Client, channel_id: str) -> None:
     if state is None:
         return
     try:
-        pins = await channel.pins()
-        for msg in pins:
+        async for msg in channel.history(limit=50):
             if msg.author == bot.user and msg.content.startswith("```"):
                 _status_messages[channel_id] = msg
-                # Update it immediately so it reflects the restored state
                 await msg.edit(content=f"```\n{render_status(state)}\n```")
                 return
     except discord.Forbidden:
         pass
-    # No existing pin found — post a fresh one
-    msg = await channel.send(f"```\n{render_status(state)}\n```")
-    _status_messages[channel_id] = msg
-    try:
-        await msg.pin()
-    except discord.Forbidden:
-        pass
+    # No existing status found — post a fresh one
+    await _post_fresh_status(channel, state)
 
 
 # ---------------------------------------------------------------------------
