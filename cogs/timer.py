@@ -16,6 +16,7 @@ from discord.ext import commands, tasks
 from datetime import datetime, timezone
 
 from engine import close_turn
+from models import TurnStatus
 from store import db, get_session, update_status, save_session
 
 
@@ -42,7 +43,7 @@ class TimerCog(commands.Cog):
             turn = state.current_turn
             if turn is None:
                 continue
-            if turn.status.value != "open":
+            if turn.status != TurnStatus.OPEN:
                 continue
             if turn.due_at is None:
                 continue
