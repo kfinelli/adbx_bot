@@ -12,7 +12,7 @@ import discord
 from typing import Optional
 
 from models import GameState, Party
-from engine import render_status
+from engine import render_status, render_status_header
 from persistence import Database
 
 # ---------------------------------------------------------------------------
@@ -28,15 +28,13 @@ db = Database("dungeon.db")
 # channel_id (str) -> GameState
 _sessions: dict[str, GameState] = {}
 
-# channel_id (str) -> discord.Message  (the pinned status message)
+# channel_id (str) -> discord.Message  (the live status message)
 _status_messages: dict[str, discord.Message] = {}
 
 
 def get_session(channel_id: str) -> Optional[GameState]:
-    # Serve from cache if available
     if channel_id in _sessions:
         return _sessions[channel_id]
-    # Try loading from DB (covers bot restarts)
     state = db.load(channel_id)
     if state is not None:
         _sessions[channel_id] = state
@@ -64,13 +62,18 @@ def save_session(state: GameState) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Status message management
+# Status message helpers
 # ---------------------------------------------------------------------------
 
+def _build_content(state: GameState) -> str:
+    header = render_status_header(state)
+    body = render_status(state)
+    return header + "\n```\n" + body + "\n```"
+
+
 async def _post_fresh_status(channel: discord.TextChannel, state: GameState) -> None:
-    """Post a new status message at the bottom of the channel and pin it."""
-    content = f"```\n{render_status(state)}\n```"
-    msg = await channel.send(content)
+    """Post a new status message at the bottom of the channel."""
+    msg = await channel.send(_build_content(state))
     _status_messages[str(channel.id)] = msg
 
 
@@ -84,11 +87,10 @@ async def update_status(
     Saves state to DB first.
     """
     save_session(state)
-    content = f"```\n{render_status(state)}\n```"
     existing = _status_messages.get(str(channel.id))
     if existing is not None:
         try:
-            await existing.edit(content=content)
+            await existing.edit(content=_build_content(state))
             return
         except discord.NotFound:
             pass
@@ -136,13 +138,12 @@ async def restore_status_message(bot: discord.Client, channel_id: str) -> None:
         return
     try:
         async for msg in channel.history(limit=50):
-            if msg.author == bot.user and msg.content.startswith("```"):
+            if msg.author == bot.user and "```" in msg.content:
                 _status_messages[channel_id] = msg
-                await msg.edit(content=f"```\n{render_status(state)}\n```")
+                await msg.edit(content=_build_content(state))
                 return
     except discord.Forbidden:
         pass
-    # No existing status found — post a fresh one
     await _post_fresh_status(channel, state)
 
 
@@ -165,11 +166,10 @@ async def ack(interaction: discord.Interaction) -> None:
     """
     Silently acknowledge a slash command interaction (ephemeral, no visible text).
     Discord requires every interaction to be acknowledged within 3 seconds.
-    Use this for commands where the only feedback is the status block updating.
     """
     await interaction.response.defer(ephemeral=True)
 
 
 async def err(interaction: discord.Interaction, message: str) -> None:
     """Send an ephemeral error message visible only to the invoking user."""
-    await interaction.response.send_message(f"\u26a0 {message}", ephemeral=True)
+    await interaction.response.send_message(f"⚠ {message}", ephemeral=True)

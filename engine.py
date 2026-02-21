@@ -639,27 +639,35 @@ def exit_rounds(state: GameState) -> EngineResult:
 # Status message renderer
 # ---------------------------------------------------------------------------
 
-def render_status(state: GameState) -> str:
+def render_status_header(state: GameState) -> str:
     """
-    Produce the formatted status block displayed in the Discord channel.
-    Mirrors the mockup in the design doc.
+    Produce the plain-text header line shown above the code block.
+    Includes a Discord timestamp tag so clients render the deadline
+    in local time.
     """
-    lines: list[str] = []
-    sep = "─" * 32
-
-    lines.append(sep)
-
-    # Turn info
-    turn_label = f"Turn {state.turn_number}"
+    turn_label = f"**Turn {state.turn_number}**"
     if state.mode == SessionMode.ROUNDS:
-        turn_label += " (ROUNDS)"
+        turn_label += " — ROUNDS"
     if state.current_turn and state.current_turn.due_at:
         due = state.current_turn.due_at
         if due.tzinfo is None:
             due = due.replace(tzinfo=timezone.utc)
         unix_ts = int(due.timestamp())
         turn_label += f" (deadline <t:{unix_ts}:f>)"
-    lines.append(turn_label)
+    return turn_label
+
+
+def render_status(state: GameState) -> str:
+    """
+    Produce the code-block body of the status message.
+    Does not include the header line (see render_status_header).
+    """
+    lines: list[str] = []
+    sep = "─" * 32
+
+    lines.append(sep)
+
+    # Mode line (turn number now lives in the header above the code block)
     lines.append("In rounds" if state.mode == SessionMode.ROUNDS else "Exploration")
 
     # Light source
