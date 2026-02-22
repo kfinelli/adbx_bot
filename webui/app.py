@@ -1,21 +1,14 @@
 """
 webui/app.py — FastAPI DM control panel.
 
-Runs inside the bot's asyncio event loop (started from bot.py).
-Shares store._sessions directly — no IPC needed.
-
-All mutation routes:
-  1. Call the engine function
-  2. If ok: trigger Discord status update via bot reference
-  3. Return a refreshed dashboard HTML fragment (HTMX swaps it in)
-
-The `bot` reference is injected at startup via set_bot().
+All form inputs use `name` attributes that match the Form() parameter
+names in these routes directly. No hx-include id-based lookups.
 """
 
 from __future__ import annotations
 
 import asyncio
-from typing import Annotated, Optional
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import FastAPI, Form, Request
@@ -23,9 +16,8 @@ from fastapi.responses import HTMLResponse
 
 import store
 from engine import (
-    abscond,
     add_exit,
-    add_npc,
+    add_npc as eng_add_npc,
     close_turn,
     hold_session,
     open_turn,
@@ -55,7 +47,6 @@ from webui.templates import (
 
 app = FastAPI(title="DM Control Panel")
 
-# Bot reference — set by bot.py after the bot is ready
 _bot = None
 
 
@@ -69,13 +60,11 @@ def set_bot(bot) -> None:
 # ---------------------------------------------------------------------------
 
 def _session_list() -> list[tuple[str, str]]:
-    """Return (channel_id, display_name) for all active sessions."""
     channel_ids = store.db.list_channels()
     result = []
     for cid in channel_ids:
-        state = store.get_session(cid)
         name = f"#{cid}"
-        if state and _bot:
+        if _bot:
             ch = _bot.get_channel(int(cid))
             if ch:
                 name = f"#{ch.name}"
@@ -84,7 +73,6 @@ def _session_list() -> list[tuple[str, str]]:
 
 
 async def _sync_discord(channel_id: str) -> None:
-    """Push updated status to Discord after a mutation."""
     if _bot is None:
         return
     state = store.get_session(channel_id)
@@ -97,10 +85,6 @@ async def _sync_discord(channel_id: str) -> None:
 
 
 def _respond(channel_id: str, flash: str = "", error: str = "", sync: bool = True) -> HTMLResponse:
-    """Build the dashboard fragment response after a mutation.
-    Set sync=False when the caller is already handling the Discord update
-    (e.g. resolve, which calls repost_status directly).
-    """
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse('<div class="error">Session not found.</div>')
@@ -135,21 +119,17 @@ async def route_resolve(channel_id: str, narrative: Annotated[str, Form()]):
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse("Session not found.", status_code=404)
-
     if state.current_turn is not None:
         close_turn(state)
     result = resolve_turn(state, narrative)
     if not result.ok:
-        return _respond(channel_id, error=result.error)
+        return _respond(channel_id, error=result.error, sync=False)
     open_turn(state)
     store.save_session(state)
-
-    # Post narrative + fresh status to Discord (skip the _sync_discord in _respond)
     if _bot:
         channel = _bot.get_channel(int(channel_id))
         if channel:
             asyncio.create_task(store.repost_status(channel, state, narrative=narrative))
-
     return _respond(channel_id, flash="Turn resolved.", sync=False)
 
 
@@ -252,7 +232,7 @@ async def route_setleader(channel_id: str, char_id: str):
 
 
 # ---------------------------------------------------------------------------
-# Light source route
+# Light source
 # ---------------------------------------------------------------------------
 
 @app.post("/session/{channel_id}/setlight", response_class=HTMLResponse)
@@ -309,16 +289,15 @@ async def route_addfeature(
 
 
 @app.post("/session/{channel_id}/feature/{feature_id}/setstate", response_class=HTMLResponse)
-async def route_feature_setstate(channel_id: str, feature_id: str, request: Request):
+async def route_feature_setstate(
+    channel_id: str,
+    feature_id: str,
+    state_str: Annotated[str, Form()],
+):
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse("Session not found.", status_code=404)
-    form = await request.form()
-    # HTMX includes the input by its element id: fstate_{feature_id}
-    new_state = form.get(f"fstate_{feature_id}", "")
-    if not new_state:
-        return _respond(channel_id, error="No state value received.")
-    result = set_feature_state(state, UUID(feature_id), new_state)
+    result = set_feature_state(state, UUID(feature_id), state_str)
     if not result.ok:
         return _respond(channel_id, error=result.error)
     return _respond(channel_id)
@@ -345,19 +324,18 @@ async def route_addexit(
 
 
 @app.post("/session/{channel_id}/exit/{exit_id}/setstate", response_class=HTMLResponse)
-async def route_exit_setstate(channel_id: str, exit_id: str, request: Request):
+async def route_exit_setstate(
+    channel_id: str,
+    exit_id: str,
+    door_state: Annotated[str, Form()],
+):
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse("Session not found.", status_code=404)
-    form = await request.form()
-    # The select element sends its value under its id (estate_{eid})
-    new_state_str = form.get(f"estate_{exit_id}", "")
-    if not new_state_str:
-        return _respond(channel_id, error="No state value received.")
     try:
-        ds = DoorState(new_state_str)
+        ds = DoorState(door_state)
     except ValueError:
-        return _respond(channel_id, error=f"Unknown door state: {new_state_str}")
+        return _respond(channel_id, error=f"Unknown door state: {door_state}")
     result = set_exit_state(state, UUID(exit_id), ds)
     if not result.ok:
         return _respond(channel_id, error=result.error)
@@ -386,22 +364,19 @@ async def route_addnpc(
         armor_class=ac, damage_dice=damage_dice,
         description=description, notes=notes,
     )
-    from engine import add_npc as eng_add_npc
     eng_add_npc(state, npc)
     return _respond(channel_id)
 
 
 @app.post("/session/{channel_id}/npc/{npc_id}/sethp", response_class=HTMLResponse)
-async def route_npc_sethp(channel_id: str, npc_id: str, request: Request):
+async def route_npc_sethp(
+    channel_id: str,
+    npc_id: str,
+    hp: Annotated[int, Form()],
+):
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse("Session not found.", status_code=404)
-    form = await request.form()
-    hp_val = form.get(f"nhp_{npc_id}", "")
-    try:
-        hp = int(hp_val)
-    except (ValueError, TypeError):
-        return _respond(channel_id, error="Invalid HP value.")
     result = set_npc_hp(state, UUID(npc_id), hp)
     if not result.ok:
         return _respond(channel_id, error=result.error)
@@ -409,13 +384,15 @@ async def route_npc_sethp(channel_id: str, npc_id: str, request: Request):
 
 
 @app.post("/session/{channel_id}/npc/{npc_id}/setstatus", response_class=HTMLResponse)
-async def route_npc_setstatus(channel_id: str, npc_id: str, request: Request):
+async def route_npc_setstatus(
+    channel_id: str,
+    npc_id: str,
+    status: Annotated[str, Form()],
+):
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse("Session not found.", status_code=404)
-    form = await request.form()
-    status_val = form.get(f"nstatus_{npc_id}", "")
-    result = set_npc_status(state, UUID(npc_id), status_val)
+    result = set_npc_status(state, UUID(npc_id), status)
     if not result.ok:
         return _respond(channel_id, error=result.error)
     return _respond(channel_id)
