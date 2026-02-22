@@ -3,8 +3,11 @@ Async Dungeon Crawler — Discord Bot
 Entry point. Run with: python bot.py
 """
 
+import asyncio
 import os
+
 import discord
+import uvicorn
 from discord.ext import commands
 
 TOKEN = os.environ.get("DISCORD_TOKEN")
@@ -16,6 +19,7 @@ if not GUILD_ID:
     raise RuntimeError("DISCORD_GUILD_ID environment variable not set.")
 
 GUILD = discord.Object(id=GUILD_ID)
+WEB_PORT = int(os.environ.get("DM_PANEL_PORT", "8080"))
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -26,7 +30,6 @@ async def on_ready():
     print(f"Logged in as {bot.user} ({bot.user.id})")
     print(f"Target guild ID: {GUILD_ID}")
 
-    # Register all commands directly to the guild (instant, no global sync)
     bot.tree.copy_global_to(guild=GUILD)
     try:
         synced = await bot.tree.sync(guild=GUILD)
@@ -36,8 +39,12 @@ async def on_ready():
     except Exception as e:
         print(f"Failed to sync commands: {e}")
 
+    # Inject bot reference into web UI
+    from webui.app import set_bot
+    set_bot(bot)
+
     # Restore status messages for all saved sessions
-    from store import db, restore_status_message, save_session, notify_dm_of_turn_close
+    from store import db, restore_status_message, save_session, get_session
     from engine import close_turn
     from datetime import datetime, timezone
 
@@ -47,7 +54,6 @@ async def on_ready():
         await restore_status_message(bot, channel_id)
 
         # Catch turns that expired while the bot was offline
-        from store import get_session
         state = get_session(channel_id)
         if state is None:
             continue
@@ -73,7 +79,21 @@ async def on_ready():
                 from store import update_status
                 await update_status(channel, state)
 
-    print("Sessions restored.")
+    print(f"Sessions restored.")
+    print(f"DM panel available at http://localhost:{WEB_PORT}/")
+
+
+async def start_webui():
+    """Run the FastAPI web UI inside the bot's event loop."""
+    from webui.app import app as fastapi_app
+    config = uvicorn.Config(
+        fastapi_app,
+        host="127.0.0.1",
+        port=WEB_PORT,
+        log_level="warning",   # keep terminal clean
+    )
+    server = uvicorn.Server(config)
+    await server.serve()
 
 
 async def main():
@@ -81,9 +101,12 @@ async def main():
         await bot.load_extension("cogs.session")
         await bot.load_extension("cogs.dm_commands")
         await bot.load_extension("cogs.timer")
-        await bot.start(TOKEN)
+        # Run bot and web UI concurrently in the same event loop
+        await asyncio.gather(
+            bot.start(TOKEN),
+            start_webui(),
+        )
 
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main())
