@@ -105,6 +105,22 @@ def roll_stat_block() -> AbilityScores:
         charisma=roll_3d6(),
     )
 
+def roll_stats() -> dict:
+    """
+    Public helper: roll 3d6 stats and return as a plain dict.
+    Used by the /arrive DM conversation before character creation.
+    """
+    block = roll_stat_block()
+    return {
+        "strength":     block.strength,
+        "intelligence": block.intelligence,
+        "wisdom":       block.wisdom,
+        "dexterity":    block.dexterity,
+        "constitution": block.constitution,
+        "charisma":     block.charisma,
+    }
+
+
 def _con_modifier(con: int) -> int:
     return CON_HP_MODIFIER.get(con, 0)
 
@@ -124,11 +140,16 @@ def create_character(
     equipment_package: str,
     owner_id:        Optional[str] = None,
     ability_scores:  Optional[AbilityScores] = None,   # pre-rolled, or we roll
+    prerolled_stats: Optional[dict] = None,             # from roll_stats() dict
 ) -> EngineResult:
     """
     Create a new level-1 character, add them to the session, and return the result.
-    If ability_scores is None, rolls 3d6 straight.
+    If prerolled_stats (dict) is provided, converts to AbilityScores and uses those.
+    If ability_scores is provided directly, uses that.
+    Otherwise rolls 3d6 straight.
     """
+    if prerolled_stats is not None:
+        ability_scores = AbilityScores(**prerolled_stats)
     if not name.strip():
         return EngineResult(ok=False, error="Character name cannot be empty.", state=state)
 
@@ -249,6 +270,8 @@ def submit_turn(
     """
     if not state.session_active:
         return _err(state, "The session is on hold.")
+    if state.mode == SessionMode.PRE_START:
+        return _err(state, "The session has not started yet.")
     if state.current_turn is None or state.current_turn.status != TurnStatus.OPEN:
         return _err(state, "No open turn to submit to.")
 
@@ -585,6 +608,8 @@ def abscond(
     """
     if state.party is None:
         return _err(state, "No active party.")
+    if state.mode == SessionMode.PRE_START:
+        return _err(state, "The session has not started yet.")
     if state.party.leader_id != character_id:
         return _err(state, "Only the party leader can use /abscond.")
 
@@ -629,8 +654,23 @@ def abscond(
 
 
 # ---------------------------------------------------------------------------
-# Session hold / resume
+# Session start / hold / resume
 # ---------------------------------------------------------------------------
+
+def start_session(state: GameState) -> EngineResult:
+    """
+    DM command: transition from PRE_START to EXPLORATION.
+    Opens the first dungeon turn.
+    """
+    if state.mode != SessionMode.PRE_START:
+        return _err(state, "Session is already started.")
+    if not state.characters:
+        return _err(state, "No characters have arrived yet.")
+    state.mode = SessionMode.EXPLORATION
+    state.session_active = True
+    state.updated_at = _now()
+    open_turn(state)
+    return _ok(state, "Session started. The adventure begins!")
 
 def hold_session(state: GameState) -> EngineResult:
     """Put the session on hold. No player turns or DM commands accepted until resumed."""
@@ -686,6 +726,8 @@ def render_status_header(state: GameState) -> str:
     Includes a Discord timestamp tag so clients render the deadline
     in local time.
     """
+    if state.mode == SessionMode.PRE_START:
+        return "**Awaiting players** — session not yet started"
     turn_label = f"**Turn {state.turn_number}**"
     if state.mode == SessionMode.ROUNDS:
         turn_label += " — ROUNDS"
@@ -709,18 +751,21 @@ def render_status(state: GameState) -> str:
     lines.append(sep)
 
     # Mode and session/turn state
-    mode_str = "Rounds" if state.mode == SessionMode.ROUNDS else "Exploration"
-    if not state.session_active:
-        state_str = "ON HOLD"
-    elif state.current_turn is None:
-        state_str = "No active turn"
-    elif state.current_turn.status == TurnStatus.OPEN:
-        state_str = "Open — accepting turn submissions"
-    elif state.current_turn.status == TurnStatus.CLOSED:
-        state_str = "Closed — awaiting DM resolution"
+    if state.mode == SessionMode.PRE_START:
+        lines.append("Waiting for players — session not yet started")
     else:
-        state_str = state.current_turn.status.value
-    lines.append(f"{mode_str} | {state_str}")
+        mode_str = "Rounds" if state.mode == SessionMode.ROUNDS else "Exploration"
+        if not state.session_active:
+            state_str = "ON HOLD"
+        elif state.current_turn is None:
+            state_str = "No active turn"
+        elif state.current_turn.status == TurnStatus.OPEN:
+            state_str = "Open — accepting turn submissions"
+        elif state.current_turn.status == TurnStatus.CLOSED:
+            state_str = "Closed — awaiting DM resolution"
+        else:
+            state_str = state.current_turn.status.value
+        lines.append(f"{mode_str} | {state_str}")
 
     # Light source
     if state.party:

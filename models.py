@@ -37,6 +37,7 @@ class CharacterStatus(Enum):
 
 
 class SessionMode(Enum):
+    PRE_START   = "pre_start"     # lobby — players arriving, not yet in dungeon
     EXPLORATION = "exploration"   # dungeon turn (10-min) time scale
     ROUNDS      = "rounds"        # combat, 6-second intervals
 
@@ -355,7 +356,7 @@ class GameState:
     characters:      dict[UUID, Character]   = field(default_factory=dict)
     npcs:            list[NPC]               = field(default_factory=list)  # in current room
 
-    mode:            SessionMode             = SessionMode.EXPLORATION
+    mode:            SessionMode             = SessionMode.PRE_START
     turn_number:     int                     = 1
     current_turn:    Optional[TurnRecord]    = None
     turn_history:    list[TurnRecord]        = field(default_factory=list)

@@ -46,6 +46,7 @@ from engine import (
     set_npc_hp,
     set_npc_status,
     set_room,
+    start_session,
 )
 from store import (
     ack, err,
@@ -72,6 +73,45 @@ class DMCog(commands.Cog):
             await err(interaction, "Session is on hold. Use /dm_resume first.")
             return None
         return state
+
+    # ------------------------------------------------------------------
+    # /dm_newsession
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="dm_newsession",
+        description="[DM] Create a new session in this channel (pre-start lobby).",
+    )
+    async def dm_newsession(self, interaction: discord.Interaction):
+        await ack(interaction)
+        channel_id = str(interaction.channel_id)
+        from store import has_session, create_session
+        if has_session(channel_id):
+            await interaction.followup.send(
+                "A session already exists in this channel.", ephemeral=True
+            )
+            return
+        state = create_session(channel_id, dm_user_id=str(interaction.user.id))
+        await update_status(interaction.channel, state)
+
+    # ------------------------------------------------------------------
+    # /embark
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="embark",
+        description="[DM] Begin the session — move from lobby into the dungeon.",
+    )
+    async def embark(self, interaction: discord.Interaction):
+        await ack(interaction)
+        state = await self._require_dm(interaction, allow_on_hold=True)
+        if state is None:
+            return
+        result = start_session(state)
+        if not result.ok:
+            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
+            return
+        await repost_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
     # /dm_resolve
