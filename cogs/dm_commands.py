@@ -55,6 +55,7 @@ from engine import (
 from models import SessionMode, TurnStatus
 from store import (
     ack, err,
+    delete_session,
     get_session,
     repost_status,
     update_status,
@@ -78,6 +79,36 @@ class DMCog(commands.Cog):
             await err(interaction, "Session is on hold. Use /dm_resume first.")
             return None
         return state
+
+    # ------------------------------------------------------------------
+    # /dm_reset
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="dm_reset",
+        description="[DM] End the session permanently. Use /dm_newsession to start a new one.",
+    )
+    async def dm_reset(self, interaction: discord.Interaction):
+        await ack(interaction)
+        channel_id = str(interaction.channel_id)
+
+        state = get_session(channel_id)
+        if state is None:
+            await interaction.followup.send(
+                "No active session in this channel.", ephemeral=True
+            )
+            return
+
+        if state.dm_user_id and state.dm_user_id != str(interaction.user.id):
+            await interaction.followup.send(
+                "Only the DM who created this session can reset it.", ephemeral=True
+            )
+            return
+
+        delete_session(channel_id)
+        await interaction.channel.send(
+            "Session ended. Use `/dm_newsession` to start a new lobby."
+        )
 
     # ------------------------------------------------------------------
     # /dm_newsession

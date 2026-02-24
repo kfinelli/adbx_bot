@@ -52,6 +52,13 @@ def create_session(channel_id: str, dm_user_id: str) -> GameState:
     return state
 
 
+def delete_session(channel_id: str) -> None:
+    """Remove a session from memory and the database entirely."""
+    _sessions.pop(channel_id, None)
+    _status_messages.pop(channel_id, None)
+    db.delete(channel_id)
+
+
 def has_session(channel_id: str) -> bool:
     return get_session(channel_id) is not None
 
