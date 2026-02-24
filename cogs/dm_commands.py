@@ -33,11 +33,15 @@ from models import (
 from engine import (
     add_exit,
     add_npc,
+    answer_oracle,
     close_turn,
+    enter_rounds,
+    exit_rounds,
     hold_session,
     open_turn,
     resolve_turn,
     resume_session,
+    say,
     set_character_hp,
     set_character_status,
     set_exit_state,
@@ -48,6 +52,7 @@ from engine import (
     set_room,
     start_session,
 )
+from models import SessionMode, TurnStatus
 from store import (
     ack, err,
     get_session,
@@ -112,6 +117,37 @@ class DMCog(commands.Cog):
             await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
             return
         await repost_status(interaction.channel, state)
+
+    # ------------------------------------------------------------------
+    # /dm_strife
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="dm_strife",
+        description="[DM] Toggle combat rounds mode.",
+    )
+    async def dm_strife(self, interaction: discord.Interaction):
+        await ack(interaction)
+        state = await self._require_dm(interaction)
+        if state is None:
+            return
+
+        if state.mode == SessionMode.ROUNDS:
+            result = exit_rounds(state)
+            label = "Combat ended — returning to exploration."
+        else:
+            result = enter_rounds(state)
+            label = "Combat begins!"
+
+        if not result.ok:
+            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
+            return
+
+        # Open a fresh turn in the new mode
+        if state.current_turn is None or state.current_turn.status != TurnStatus.OPEN:
+            open_turn(state)
+
+        await repost_status(interaction.channel, state, narrative=label)
 
     # ------------------------------------------------------------------
     # /dm_resolve
@@ -559,10 +595,7 @@ class DMCog(commands.Cog):
         state.default_turn_hours = hours
         from store import save_session
         save_session(state)
-        await interaction.followup.send(
-            f"Default turn length set to {hours}h. Takes effect from the next turn.",
-            ephemeral=True,
-        )
+        await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
     # /dm_settimer
@@ -631,7 +664,62 @@ class DMCog(commands.Cog):
         await repost_status(interaction.channel, state)
 
 
-# ---------------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # /dm_say
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="dm_say",
+        description="[DM] Have an NPC or narrator say something.",
+    )
+    @app_commands.describe(
+        speaker="Speaker name (e.g. 'Goblin King', 'Narrator')",
+        text="What they say",
+    )
+    async def dm_say(self, interaction: discord.Interaction, speaker: str, text: str):
+        await ack(interaction)
+        state = await self._require_dm(interaction)
+        if state is None:
+            return
+        say(state, speaker, text)
+        await update_status(interaction.channel, state)
+    # ------------------------------------------------------------------
+    # /dm_oracle
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="dm_oracle",
+        description="[DM] Answer a player oracle by number.",
+    )
+    @app_commands.describe(
+        number="Oracle number to answer",
+        answer="Your response",
+    )
+    async def dm_oracle(self, interaction: discord.Interaction, number: int, answer: str):
+        await ack(interaction)
+        state = await self._require_dm(interaction)
+        if state is None:
+            return
+        result, oracle = answer_oracle(state, number, answer)
+        if not result.ok:
+            await interaction.followup.send(f"\u26a0 {result.error}", ephemeral=True)
+            return
+        if oracle.message_id:
+            try:
+                msg = await interaction.channel.fetch_message(oracle.message_id)
+                new_content = (
+                    "**Oracle #" + str(oracle.number) + "** \u2014 "
+                    + oracle.asker_name + " asks: \"" + oracle.question + "\"\n"
+                    + "> " + oracle.answer
+                )
+                await msg.edit(content=new_content)
+            except (discord.NotFound, discord.Forbidden):
+                await interaction.channel.send(
+                    "**Oracle #" + str(oracle.number) + "** (answer): " + oracle.answer
+                )
+        from store import save_session
+        save_session(state)
+
 # Lookup helpers
 # ---------------------------------------------------------------------------
 

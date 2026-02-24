@@ -325,6 +325,17 @@ class LightSource:
 
 
 @dataclass
+class Oracle:
+    """A player question to the DM, posted as a persistent Discord message."""
+    oracle_id:  UUID            = field(default_factory=uuid4)
+    number:     int             = 1       # resets each turn
+    asker_name: str             = ""
+    question:   str             = ""
+    answer:     Optional[str]   = None
+    message_id: Optional[int]   = None    # Discord message ID for in-place editing
+
+
+@dataclass
 class Party:
     party_id:       UUID               = field(default_factory=uuid4)
     name:           str                = ""
@@ -358,8 +369,16 @@ class GameState:
 
     mode:            SessionMode             = SessionMode.PRE_START
     turn_number:     int                     = 1
+    rounds_started_at_turn: Optional[int]    = None  # exploration turn when combat began
     current_turn:    Optional[TurnRecord]    = None
     turn_history:    list[TurnRecord]        = field(default_factory=list)
+
+    # In-channel log (clears each turn)
+    say_log:         list[str]               = field(default_factory=list)
+
+    # Oracle posts (persist across turns, number resets each turn)
+    oracles:         list['Oracle']           = field(default_factory=list)
+    oracle_counter:  int                     = 0  # increments per turn, resets on resolve
 
     # Session control
     session_active:      bool                 = True   # False = on hold

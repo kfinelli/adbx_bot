@@ -164,6 +164,29 @@ def serialize_dungeon(d: Dungeon) -> dict:
     }
 
 
+def serialize_oracle(o) -> dict:
+    return {
+        "oracle_id":  str(o.oracle_id),
+        "number":     o.number,
+        "asker_name": o.asker_name,
+        "question":   o.question,
+        "answer":     o.answer,
+        "message_id": o.message_id,
+    }
+
+
+def deserialize_oracle(d: dict):
+    from models import Oracle
+    return Oracle(
+        oracle_id=UUID(d["oracle_id"]),
+        number=d["number"],
+        asker_name=d["asker_name"],
+        question=d["question"],
+        answer=d.get("answer"),
+        message_id=d.get("message_id"),
+    )
+
+
 def serialize_npc(n: NPC) -> dict:
     return {
         "npc_id":         _uuid(n.npc_id),
@@ -240,7 +263,11 @@ def serialize_state(state: GameState) -> str:
         "turn_number":          state.turn_number,
         "current_turn":         serialize_turn_record(state.current_turn) if state.current_turn else None,
         "turn_history":         [serialize_turn_record(t) for t in state.turn_history],
+        "say_log":              state.say_log,
+        "oracles":              [serialize_oracle(o) for o in state.oracles],
+        "oracle_counter":       state.oracle_counter,
         "session_active":       state.session_active,
+        "rounds_started_at_turn": state.rounds_started_at_turn,
         "default_turn_hours":   state.default_turn_hours,
         "created_at":           _dt(state.created_at),
         "updated_at":           _dt(state.updated_at),
@@ -448,7 +475,11 @@ def deserialize_state(json_str: str) -> GameState:
         turn_number=d["turn_number"],
         current_turn=deserialize_turn_record(d["current_turn"]) if d["current_turn"] else None,
         turn_history=[deserialize_turn_record(t) for t in d["turn_history"]],
+        say_log=d.get("say_log", []),
+        oracles=[deserialize_oracle(o) for o in d.get("oracles", [])],
+        oracle_counter=d.get("oracle_counter", 0),
         session_active=d.get("session_active", True),
+        rounds_started_at_turn=d.get("rounds_started_at_turn", None),
         default_turn_hours=d.get("default_turn_hours", 24.0),
         created_at=_load_dt(d["created_at"]),
         updated_at=_load_dt(d["updated_at"]),

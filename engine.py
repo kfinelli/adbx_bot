@@ -273,7 +273,8 @@ def submit_turn(
     if state.mode == SessionMode.PRE_START:
         return _err(state, "The session has not started yet.")
     if state.current_turn is None or state.current_turn.status != TurnStatus.OPEN:
-        return _err(state, "No open turn to submit to.")
+        mode_str = "round" if state.mode == SessionMode.ROUNDS else "turn"
+        return _err(state, f"No open {mode_str} to submit to. The DM needs to resolve the previous {mode_str} first.")
 
     char = state.characters.get(character_id)
     if char is None:
@@ -353,6 +354,10 @@ def resolve_turn(
     # Move to history
     state.turn_history.append(turn)
     state.current_turn = None
+
+    # Clear say log and reset oracle counter for next turn
+    state.say_log = []
+    state.oracle_counter = 0
 
     # Advance turn counter and tick light source (exploration mode only)
     state.turn_number += 1
@@ -654,6 +659,56 @@ def abscond(
 
 
 # ---------------------------------------------------------------------------
+# Say log and oracles
+# ---------------------------------------------------------------------------
+
+def say(state: GameState, speaker: str, text: str) -> EngineResult:
+    """Add a speech entry to the say log. Shown in status block, clears each turn."""
+    entry = f'{speaker} says "{text}"'
+    state.say_log.append(entry)
+    state.updated_at = _now()
+    return _ok(state, entry)
+
+
+def ask_oracle(
+    state:      GameState,
+    asker_name: str,
+    question:   str,
+) -> "tuple[EngineResult, object]":
+    """
+    Create a new oracle entry. Returns (result, oracle) so the platform
+    layer can post the Discord message and store the message_id back.
+    """
+    from models import Oracle
+    state.oracle_counter += 1
+    oracle = Oracle(
+        number=state.oracle_counter,
+        asker_name=asker_name,
+        question=question,
+    )
+    state.oracles.append(oracle)
+    state.updated_at = _now()
+    return _ok(state, f"Oracle #{oracle.number} posted."), oracle
+
+
+def answer_oracle(
+    state:     GameState,
+    number:    int,
+    answer:    str,
+) -> "tuple[EngineResult, object | None]":
+    """
+    DM answers an oracle by number. Returns (result, oracle) so the
+    platform layer can edit the Discord message in place.
+    """
+    oracle = next((o for o in state.oracles if o.number == number), None)
+    if oracle is None:
+        return _err(state, f"Oracle #{number} not found."), None
+    oracle.answer = answer
+    state.updated_at = _now()
+    return _ok(state, f"Oracle #{number} answered."), oracle
+
+
+# ---------------------------------------------------------------------------
 # Session start / hold / resume
 # ---------------------------------------------------------------------------
 
@@ -695,23 +750,39 @@ def resume_session(state: GameState) -> EngineResult:
 # ---------------------------------------------------------------------------
 
 def enter_rounds(state: GameState) -> EngineResult:
-    """Switch to combat rounds mode."""
+    """
+    Switch to combat rounds mode.
+    Saves the current exploration turn number and resets the counter to 1
+    so rounds are counted from Round 1.
+    """
     if state.mode == SessionMode.ROUNDS:
         return _err(state, "Already in rounds.")
+    state.rounds_started_at_turn = state.turn_number
     state.mode = SessionMode.ROUNDS
+    state.turn_number = 1
     if state.current_turn:
         state.current_turn.mode = SessionMode.ROUNDS
+        state.current_turn.turn_number = 1
     state.updated_at = _now()
-    return _ok(state, "Entering rounds! Initiative order to be set by DM.")
+    return _ok(state, "Entering rounds!")
 
 
 def exit_rounds(state: GameState) -> EngineResult:
-    """Return to exploration mode."""
+    """
+    Return to exploration mode.
+    Restores the exploration turn counter, advancing by 1 to account
+    for the turn consumed by combat (standard B/X ruling).
+    """
     if state.mode == SessionMode.EXPLORATION:
         return _err(state, "Already in exploration mode.")
     state.mode = SessionMode.EXPLORATION
+    # Restore exploration turn number, +1 for the turn combat consumed
+    resumed_at = (state.rounds_started_at_turn or state.turn_number) + 1
+    state.turn_number = resumed_at
+    state.rounds_started_at_turn = None
     if state.current_turn:
         state.current_turn.mode = SessionMode.EXPLORATION
+        state.current_turn.turn_number = resumed_at
     state.updated_at = _now()
     return _ok(state, "Returning to exploration.")
 
@@ -728,9 +799,10 @@ def render_status_header(state: GameState) -> str:
     """
     if state.mode == SessionMode.PRE_START:
         return "**Awaiting players** — session not yet started"
-    turn_label = f"**Turn {state.turn_number}**"
     if state.mode == SessionMode.ROUNDS:
-        turn_label += " — ROUNDS"
+        turn_label = f"⚔ **Round {state.turn_number}** ⚔"
+    else:
+        turn_label = f"**Turn {state.turn_number}**"
     if state.current_turn and state.current_turn.due_at:
         due = state.current_turn.due_at
         if due.tzinfo is None:
@@ -840,6 +912,12 @@ def render_status(state: GameState) -> str:
             )
     else:
         lines.append("NPCs: none")
+
+    # Say log — clears each turn
+    if state.say_log:
+        lines.append(sep)
+        for entry in state.say_log:
+            lines.append(entry)
 
     lines.append(sep)
 
