@@ -700,7 +700,10 @@ def answer_oracle(
     DM answers an oracle by number. Returns (result, oracle) so the
     platform layer can edit the Discord message in place.
     """
-    oracle = next((o for o in state.oracles if o.number == number), None)
+    # Match the *last* oracle with this number — oracles reset to #1 each turn
+    # so there may be multiple oracles with the same number across turns.
+    matches = [o for o in state.oracles if o.number == number]
+    oracle = matches[-1] if matches else None
     if oracle is None:
         return _err(state, f"Oracle #{number} not found."), None
     oracle.answer = answer
