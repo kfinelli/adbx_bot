@@ -240,33 +240,60 @@ MU_STARTING_SPELLS = ["Read Magic"]  # guaranteed; player picks one more
 # Each package is a list of (item_name, quantity, encumbrance_per_item)
 # ---------------------------------------------------------------------------
 
+# B4 The Lost City equipment packs (Moldvay, 1982)
+# Each entry: (item_name, quantity, weight_each_in_coins)
+# Pack C varies by class — handled in create_character
 EQUIPMENT_PACKAGES: dict[str, list[tuple[str, int, float]]] = {
-    "Delver": [
-        ("Torch",          6, 0.1),
-        ("Rations (iron)", 3, 0.5),
-        ("Rope (50')",     1, 1.0),
-        ("Backpack",       1, 0.0),
-        ("Waterskin",      1, 0.5),
-        ("Dagger",         1, 0.5),
+    "Pack A": [
+        ("Backpack",        1, 0.0),
+        ("Large Sack",      2, 0.2),
+        ("Lantern",         1, 3.0),
+        ("Oil Flask",       4, 0.5),
+        ("Tinderbox",       1, 0.1),
+        ("Iron Spikes",    12, 0.1),
+        ("Hammer (small)",  1, 0.5),
+        ("Waterskin",       1, 0.5),
+        ("Rations (normal)",7, 0.5),
     ],
-    "Warrior": [
-        ("Torch",          3, 0.1),
-        ("Rations (iron)", 3, 0.5),
-        ("Backpack",       1, 0.0),
-        ("Waterskin",      1, 0.5),
-        ("Sword",          1, 1.0),
-        ("Shield",         1, 1.0),
-        ("Leather armor",  1, 2.0),
+    "Pack B": [
+        ("Backpack",        1, 0.0),
+        ("Large Sack",      2, 0.2),
+        ("Torch",           6, 0.1),
+        ("Oil Flask",       3, 0.5),
+        ("Tinderbox",       1, 0.1),
+        ("10' Pole",        1, 1.0),
+        ("Rope (50')",      1, 1.5),
+        ("Waterskin",       1, 0.5),
+        ("Rations (normal)",7, 0.5),
+        ("Mirror (silver)", 1, 0.1),
     ],
-    "Scholar": [
-        ("Torch",          6, 0.1),
-        ("Rations (iron)", 3, 0.5),
-        ("Backpack",       1, 0.0),
-        ("Waterskin",      1, 0.5),
-        ("Dagger",         1, 0.5),
-        ("Spellbook",      1, 1.0),
-        ("10' Pole",       1, 1.0),
+    "Pack C": [
+        # Class-specific item added by create_character:
+        # Cleric -> Holy Symbol, Thief -> Thief's Tools, others -> Holy Water
+        ("Backpack",        1, 0.0),
+        ("Small Sack",      4, 0.1),
+        ("Iron Spikes",    12, 0.1),
+        ("Rope (50')",      1, 1.5),
+        ("Waterskin",       1, 0.5),
+        ("Rations (normal)",7, 0.5),
     ],
+}
+
+# Human-readable descriptions shown to players during /arrive
+EQUIPMENT_PACKAGE_DESCRIPTIONS: dict[str, str] = {
+    "Pack A": (
+        "Backpack, 2 large sacks, lantern, 4 oil flasks, tinderbox, "
+        "12 iron spikes, small hammer, waterskin, 7 days rations"
+    ),
+    "Pack B": (
+        "Backpack, 2 large sacks, 6 torches, 3 oil flasks, tinderbox, "
+        "10' pole, 50' rope, waterskin, 7 days rations, silver mirror"
+    ),
+    "Pack C": (
+        "Backpack, 4 small sacks, 12 iron spikes, 50' rope, waterskin, "
+        "7 days rations + Holy Symbol (cleric), Thief's Tools (thief), "
+        "or Holy Water (other classes)"
+    ),
 }
 
 

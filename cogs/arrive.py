@@ -20,7 +20,7 @@ from discord.ext import commands
 from models import CharacterClass, SessionMode
 from engine import create_character, open_turn, roll_stats
 from store import ack, get_session, update_status
-from tables import EQUIPMENT_PACKAGES
+from tables import EQUIPMENT_PACKAGES, EQUIPMENT_PACKAGE_DESCRIPTIONS
 
 
 # ---------------------------------------------------------------------------
@@ -58,6 +58,7 @@ class LoadoutView(discord.ui.View):
         self.owner_id = owner_id
 
         for package_name in EQUIPMENT_PACKAGES:
+            desc = EQUIPMENT_PACKAGE_DESCRIPTIONS.get(package_name, "")
             btn = discord.ui.Button(
                 label=package_name,
                 style=discord.ButtonStyle.secondary,
@@ -65,6 +66,13 @@ class LoadoutView(discord.ui.View):
             )
             btn.callback = self._make_callback(package_name)
             self.add_item(btn)
+        self._pack_list = "\n".join(
+            f"**{name}:** {desc}"
+            for name, desc in EQUIPMENT_PACKAGE_DESCRIPTIONS.items()
+        )
+
+    def _pack_summary(self) -> str:
+        return self._pack_list
 
     def _make_callback(self, package_name: str):
         async def callback(interaction: discord.Interaction):
@@ -154,8 +162,9 @@ class ClassView(discord.ui.View):
                 stats=self.stats,
                 owner_id=self.owner_id,
             )
+            pack_info = loadout_view._pack_summary()
             await interaction.followup.send(
-                "Choose your starting equipment:",
+                "Choose your starting equipment pack:\n\n" + pack_info,
                 view=loadout_view,
             )
 

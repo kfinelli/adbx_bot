@@ -118,7 +118,10 @@ class DMCog(commands.Cog):
         name="dm_newsession",
         description="[DM] Create a new session in this channel (pre-start lobby).",
     )
-    async def dm_newsession(self, interaction: discord.Interaction):
+    @app_commands.describe(
+        header="Introduction text shown to players above the lobby status block."
+    )
+    async def dm_newsession(self, interaction: discord.Interaction, header: str = ""):
         await ack(interaction)
         channel_id = str(interaction.channel_id)
         from store import has_session, create_session
@@ -128,6 +131,12 @@ class DMCog(commands.Cog):
             )
             return
         state = create_session(channel_id, dm_user_id=str(interaction.user.id))
+        if header:
+            intro_msg = await interaction.channel.send(header)
+            try:
+                await intro_msg.pin()
+            except (discord.Forbidden, discord.HTTPException):
+                pass  # pin is best-effort
         await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------

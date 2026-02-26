@@ -188,8 +188,17 @@ def create_character(
         )
 
     # --- Inventory from equipment package
+    raw_items = list(EQUIPMENT_PACKAGES[equipment_package])
+    # Pack C: add class-specific item
+    if equipment_package == "Pack C":
+        if character_class == CharacterClass.CLERIC:
+            raw_items.append(("Holy Symbol", 1, 0.0))
+        elif character_class == CharacterClass.THIEF:
+            raw_items.append(("Thief's Tools", 1, 0.5))
+        else:
+            raw_items.append(("Holy Water (vial)", 1, 0.1))
     inventory = []
-    for item_name, qty, enc in EQUIPMENT_PACKAGES[equipment_package]:
+    for item_name, qty, enc in raw_items:
         inventory.append(InventoryItem(
             name=item_name,
             quantity=qty,

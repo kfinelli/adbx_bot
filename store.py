@@ -110,32 +110,26 @@ async def repost_status(
     narrative: str | None = None,
 ) -> None:
     """
-    Delete the old status message, optionally post narrative text,
-    then post a fresh status block at the bottom of the channel.
-    Used by /dm_resolve so the channel reads: narrative -> status.
+    Post narrative text (if any) then a fresh status block, leaving the
+    old status message in place. This creates a rolling log in the channel:
+      Turn N status block
+      [player submissions, oracle posts, DM notifications]
+      Resolution narrative
+      Turn N+1 status block
+      ...
     Saves state to DB first.
     """
     save_session(state)
-
-    existing = _status_messages.pop(str(channel.id), None)
-    if existing is not None:
-        try:
-            await existing.delete()
-        except (discord.NotFound, discord.Forbidden):
-            pass
-
     if narrative:
         await channel.send(narrative)
-
     await _post_fresh_status(channel, state)
 
 
 async def restore_status_message(bot: discord.Client, channel_id: str) -> None:
     """
     Called on bot startup for each saved session.
-    Scans recent channel history for the last status message posted by the bot
-    and re-registers it so future edits work correctly.
-    Falls back to posting a fresh status if none is found.
+    Posts a fresh status block so the current state is always visible
+    at the bottom of the channel after a restart.
     """
     channel = bot.get_channel(int(channel_id))
     if channel is None:
@@ -143,14 +137,6 @@ async def restore_status_message(bot: discord.Client, channel_id: str) -> None:
     state = get_session(channel_id)
     if state is None:
         return
-    try:
-        async for msg in channel.history(limit=50):
-            if msg.author == bot.user and "```" in msg.content:
-                _status_messages[channel_id] = msg
-                await msg.edit(content=_build_content(state))
-                return
-    except discord.Forbidden:
-        pass
     await _post_fresh_status(channel, state)
 
 
