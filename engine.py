@@ -887,8 +887,9 @@ def render_status(state: GameState) -> str:
             submission = state.latest_submission(cid)
             sub_text = f" (\"{submission.action_text}\")" if submission else ""
 
+            cls_name = char.character_class.value
             lines.append(
-                f"{leader_mark}{char.name}: {char.hp_current}/{char.hp_max}"
+                f"{leader_mark}{char.name} the {cls_name}: {char.hp_current}/{char.hp_max}"
                 f"{status_tag}{sub_text}"
             )
 

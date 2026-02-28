@@ -15,6 +15,7 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse
 
 import store
+from store import notify_players_new_turn
 from engine import (
     add_exit,
     add_npc as eng_add_npc,
@@ -130,6 +131,7 @@ async def route_resolve(channel_id: str, narrative: Annotated[str, Form()]):
         channel = _bot.get_channel(int(channel_id))
         if channel:
             asyncio.create_task(store.repost_status(channel, state, narrative=narrative))
+            asyncio.create_task(notify_players_new_turn(channel, state))
     return _respond(channel_id, flash="Turn resolved.", sync=False)
 
 

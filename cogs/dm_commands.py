@@ -57,6 +57,7 @@ from store import (
     ack, err,
     delete_session,
     get_session,
+    notify_players_new_turn,
     repost_status,
     update_status,
     require_session,
@@ -217,6 +218,7 @@ class DMCog(commands.Cog):
         open_turn(state)
         # Post narrative visibly, then fresh status below it
         await repost_status(interaction.channel, state, narrative=narrative)
+        await notify_players_new_turn(interaction.channel, state)
 
     # ------------------------------------------------------------------
     # /dm_sethp

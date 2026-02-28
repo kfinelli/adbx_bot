@@ -141,6 +141,42 @@ async def restore_status_message(bot: discord.Client, channel_id: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Player new-turn ping
+# ---------------------------------------------------------------------------
+
+async def notify_players_new_turn(
+    channel: discord.TextChannel,
+    state: GameState,
+) -> None:
+    """
+    Ping every active character owner when a new turn opens.
+    Uses stored owner_id (Discord user ID) so no role is needed.
+    """
+    if not state.party or not state.characters:
+        return
+    mentions = []
+    seen = set()
+    for char_id in state.party.member_ids:
+        char = state.characters.get(char_id)
+        if char is None:
+            continue
+        if char.status.value == "dead":
+            continue
+        if not char.owner_id or char.owner_id in seen:
+            continue
+        seen.add(char.owner_id)
+        mentions.append("<@{}>".format(char.owner_id))
+    if not mentions:
+        return
+    mode = "Round" if state.mode.value == "rounds" else "Turn"
+    await channel.send(
+        "{} — {} {} is ready!".format(
+            " ".join(mentions), mode, state.turn_number
+        )
+    )
+
+
+# ---------------------------------------------------------------------------
 # DM turn-close notification
 # ---------------------------------------------------------------------------
 
