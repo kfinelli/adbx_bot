@@ -10,6 +10,14 @@ import discord
 import uvicorn
 from discord.ext import commands
 
+# Load .env file if present. Actual environment variables take precedence.
+# pip install python-dotenv
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv not installed — fall back to environment variables only
+
 TOKEN = os.environ.get("DISCORD_TOKEN")
 if not TOKEN:
     raise RuntimeError("DISCORD_TOKEN environment variable not set.")
