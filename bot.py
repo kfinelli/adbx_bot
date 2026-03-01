@@ -22,7 +22,31 @@ GUILD = discord.Object(id=GUILD_ID)
 WEB_PORT = int(os.environ.get("DM_PANEL_PORT", "8080"))
 
 intents = discord.Intents.default()
+intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
+
+
+@bot.event
+async def on_message(message: discord.Message):
+    """
+    Auto-delete any human-typed messages in active game channels.
+    This keeps the channel clean since players must use slash commands.
+    The bot's own messages are never deleted.
+    Silently ignores channels with no active session.
+    """
+    # Never delete the bot's own messages
+    if message.author == bot.user:
+        return
+    # Only act on guild text messages (not DMs)
+    if not message.guild:
+        return
+    # Only delete if this channel has an active session
+    from store import has_session
+    if has_session(str(message.channel.id)):
+        try:
+            await message.delete()
+        except (discord.Forbidden, discord.NotFound):
+            pass  # missing permissions or already deleted — silently ignore
 
 
 @bot.event
