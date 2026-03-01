@@ -2,23 +2,6 @@
 
 A Discord bot for asynchronous B/X D&D dungeon crawling, mediated via slash commands.
 
----
-
-## Project Structure
-
-```
-bot.py                  # Entry point
-store.py                # In-memory session state and shared helpers
-models.py               # Game state data model (no dependencies)
-engine.py               # Game logic (operates on models)
-tables.py               # Static B/X reference data (saves, spell slots, etc.)
-cogs/
-    session.py          # Player slash commands (/embark, /turn, /status)
-    dm_commands.py      # DM slash commands (/dm_resolve, /dm_setroom, etc.)
-```
-
----
-
 ## One-Time Discord Setup
 
 ### 1. Create a Bot Application
@@ -62,7 +45,8 @@ channel permissions if you like, but it's not required for the demo.
 ### Install dependencies
 
 ```bash
-pip install "discord.py>=2.3"
+pip install "discord.py>=2.3" python-multipart fastapi "uvicorn[standard]"
+
 ```
 
 ### Set your bot token
@@ -81,18 +65,7 @@ $env:DISCORD_TOKEN="your-token-here"
 python bot.py
 ```
 
-Alternatively, create a `.env` file and use `python-dotenv`:
-```
-DISCORD_TOKEN=your-token-here
-```
-```bash
-pip install python-dotenv
-```
-Then add this to the top of `bot.py` before the TOKEN line:
-```python
-from dotenv import load_dotenv
-load_dotenv()
-```
+Alternatively, create a `.env` file and use `python-dotenv`, check `.env.example` for deatils.
 
 ---
 
@@ -112,18 +85,7 @@ Slash commands may take a few minutes to appear in Discord after the first sync.
 
 ---
 
-## Playing a Solo Demo Session
-
-Since you're playing DM and player simultaneously, open Discord in two windows
-or just switch hats as needed.
-
-### Starting a Session
-
-1. In your dungeon channel, type `/embark` and fill in the form:
-   - **name**: your character's name
-   - **character_class**: pick a class
-   - **equipment_package**: pick a package
-2. The bot will create your character, print their stats, and post the status block.
+## Playing a Session
 
 ### DM Setup (do this as DM)
 
@@ -161,27 +123,5 @@ Add an NPC:
 
 The bot will post the resolution, advance the turn counter, tick the light source,
 and reprint the status block.
-
-### Useful DM Commands Reference
-
-| Command | Description |
-|---|---|
-| `/dm_resolve narrative:...` | Resolve current turn with narrative |
-| `/dm_sethp target_name:X hp:N` | Set HP for character or NPC by name |
-| `/dm_setstatus character_name:X status:Y notes:Z` | Set character status |
-| `/dm_setroom name:X description:Y` | Move party to a new room |
-| `/dm_addfeature name:X description:Y state:Z` | Add a room feature |
-| `/dm_setfeature feature_name:X new_state:Y` | Update a feature's state |
-| `/dm_addnpc name:X hp:N ac:N description:Y` | Add an NPC |
-| `/dm_setnpcstatus npc_name:X status:Y` | Update NPC status (dead, fled, etc.) |
-| `/dm_setlight label:X turns:N` | Set active light source (omit turns for permanent) |
-
-### Player Commands Reference
-
-| Command | Description |
-|---|---|
-| `/embark name:X character_class:Y equipment_package:Z` | Create character and join |
-| `/turn action:...` | Submit your action for this turn |
-| `/status` | Reprint the status block |
 
 ---
