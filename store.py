@@ -225,11 +225,30 @@ async def require_session(interaction: discord.Interaction) -> Optional[GameStat
 async def ack(interaction: discord.Interaction) -> None:
     """
     Acknowledge a slash command interaction with a brief ephemeral message.
-    Using send_message instead of defer so the text reads "Command received"
-    rather than Discord's default "is thinking...".
-    Subsequent followup.send() calls will appear as new ephemeral messages.
+    The message is deleted on success via ack_done(), or replaced with an
+    error via ack_err(). This keeps the channel clean for all outcomes.
     """
     await interaction.response.send_message("Command received.", ephemeral=True)
+
+
+async def ack_done(interaction: discord.Interaction) -> None:
+    """Delete the 'Command received' ephemeral on successful completion."""
+    try:
+        await interaction.delete_original_response()
+    except (discord.NotFound, discord.HTTPException):
+        pass  # already gone or token expired — silently ignore
+
+
+async def ack_err(interaction: discord.Interaction, message: str) -> None:
+    """Replace the 'Command received' ephemeral with an error message."""
+    try:
+        await interaction.edit_original_response(content=f"⚠ {message}")
+    except (discord.NotFound, discord.HTTPException):
+        # Token expired or message gone — fall back to a new followup
+        try:
+            await interaction.followup.send(f"⚠ {message}", ephemeral=True)
+        except discord.HTTPException:
+            pass
 
 
 async def err(interaction: discord.Interaction, message: str) -> None:

@@ -55,7 +55,9 @@ from engine import (
 )
 from models import SessionMode, TurnStatus
 from store import (
-    ack, err,
+    ack,
+    ack_done,
+    ack_err,
     delete_session,
     get_session,
     notify_players_new_turn,
@@ -96,15 +98,11 @@ class DMCog(commands.Cog):
 
         state = get_session(channel_id)
         if state is None:
-            await interaction.followup.send(
-                "No active session in this channel.", ephemeral=True
-            )
+            await ack_err(interaction, "No active session in this channel.")
             return
 
         if state.dm_user_id and state.dm_user_id != str(interaction.user.id):
-            await interaction.followup.send(
-                "Only the DM who created this session can reset it.", ephemeral=True
-            )
+            await ack_err(interaction, "Only the DM who created this session can reset it.")
             return
 
         delete_session(channel_id)
@@ -128,9 +126,7 @@ class DMCog(commands.Cog):
         channel_id = str(interaction.channel_id)
         from store import has_session, create_session
         if has_session(channel_id):
-            await interaction.followup.send(
-                "A session already exists in this channel.", ephemeral=True
-            )
+            await ack_err(interaction, "A session already exists in this channel.")
             return
         state = create_session(channel_id, dm_user_id=str(interaction.user.id))
         if header:
@@ -139,6 +135,7 @@ class DMCog(commands.Cog):
                 await intro_msg.pin()
             except (discord.Forbidden, discord.HTTPException):
                 pass  # pin is best-effort
+        await ack_done(interaction)
         await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
@@ -156,8 +153,9 @@ class DMCog(commands.Cog):
             return
         result = start_session(state)
         if not result.ok:
-            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
+            await ack_err(interaction, result.error)
             return
+        await ack_done(interaction)
         await repost_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
@@ -182,13 +180,14 @@ class DMCog(commands.Cog):
             label = "Combat begins!"
 
         if not result.ok:
-            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
+            await ack_err(interaction, result.error)
             return
 
         # Open a fresh turn in the new mode
         if state.current_turn is None or state.current_turn.status != TurnStatus.OPEN:
             open_turn(state)
 
+        await ack_done(interaction)
         await repost_status(interaction.channel, state, narrative=label)
 
     # ------------------------------------------------------------------
@@ -207,17 +206,18 @@ class DMCog(commands.Cog):
             return
 
         if state.current_turn is None:
-            await interaction.followup.send("⚠ No open turn to resolve.", ephemeral=True)
+            await ack_err(interaction, "No open turn to resolve.")
             return
 
         close_turn(state)
         result = resolve_turn(state, narrative)
         if not result.ok:
-            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
+            await ack_err(interaction, result.error)
             return
 
         open_turn(state)
         # Post narrative visibly, then fresh status below it
+        await ack_done(interaction)
         await repost_status(interaction.channel, state, narrative=narrative)
         await notify_players_new_turn(interaction.channel, state)
 
@@ -242,16 +242,15 @@ class DMCog(commands.Cog):
         else:
             npc = _find_npc_by_name(state, target_name)
             if npc is None:
-                await interaction.followup.send(
-                    f"⚠ No character or NPC named '{target_name}'.", ephemeral=True
-                )
+                await ack_err(interaction, "No character or NPC named '{}'".format(target_name))
                 return
             result = set_npc_hp(state, npc.npc_id, hp)
 
         if not result.ok:
-            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
+            await ack_err(interaction, result.error)
             return
 
+        await ack_done(interaction)
         await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
@@ -281,25 +280,22 @@ class DMCog(commands.Cog):
 
         char = _find_char_by_name(state, character_name)
         if char is None:
-            await interaction.followup.send(
-                f"⚠ No character named '{character_name}'.", ephemeral=True
-            )
+            await ack_err(interaction, "No character named '{}'".format(character_name))
             return
 
         try:
             char_status = CharacterStatus(status.lower())
         except ValueError:
             valid = [s.value for s in CharacterStatus]
-            await interaction.followup.send(
-                f"⚠ Unknown status '{status}'. Valid: {valid}", ephemeral=True
-            )
+            await ack_err(interaction, "Unknown status '{}'. Valid: {}".format(status, valid))
             return
 
         result = set_character_status(state, char.character_id, char_status, notes)
         if not result.ok:
-            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
+            await ack_err(interaction, result.error)
             return
 
+        await ack_done(interaction)
         await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
@@ -329,6 +325,7 @@ class DMCog(commands.Cog):
 
         room = Room(name=name, description=description, notes=notes)
         set_room(state, room)
+        await ack_done(interaction)
         await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
@@ -358,12 +355,11 @@ class DMCog(commands.Cog):
 
         room = state.current_room
         if room is None:
-            await interaction.followup.send(
-                "⚠ No current room. Use /dm_setroom first.", ephemeral=True
-            )
+            await ack_err(interaction, "No current room. Use /dm_setroom first.")
             return
 
         room.features.append(RoomFeature(name=name, description=description, state=state_str))
+        await ack_done(interaction)
         await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
@@ -391,23 +387,22 @@ class DMCog(commands.Cog):
 
         room = state.current_room
         if room is None:
-            await interaction.followup.send("⚠ No current room.", ephemeral=True)
+            await ack_err(interaction, "No current room.")
             return
 
         feature = next(
             (f for f in room.features if f.name.lower() == feature_name.lower()), None
         )
         if feature is None:
-            await interaction.followup.send(
-                f"⚠ No feature named '{feature_name}' in this room.", ephemeral=True
-            )
+            await ack_err(interaction, "No feature named '{}' in this room.".format(feature_name))
             return
 
         result = set_feature_state(state, feature.feature_id, new_state)
         if not result.ok:
-            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
+            await ack_err(interaction, result.error)
             return
 
+        await ack_done(interaction)
         await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
@@ -451,6 +446,7 @@ class DMCog(commands.Cog):
             notes=notes,
         )
         add_npc(state, npc)
+        await ack_done(interaction)
         await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
@@ -475,16 +471,15 @@ class DMCog(commands.Cog):
 
         npc = _find_npc_by_name(state, npc_name)
         if npc is None:
-            await interaction.followup.send(
-                f"⚠ No NPC named '{npc_name}'.", ephemeral=True
-            )
+            await ack_err(interaction, "No NPC named '{}'".format(npc_name))
             return
 
         result = set_npc_status(state, npc.npc_id, status.lower())
         if not result.ok:
-            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
+            await ack_err(interaction, result.error)
             return
 
+        await ack_done(interaction)
         await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
@@ -513,9 +508,10 @@ class DMCog(commands.Cog):
         turns_remaining = None if turns < 0 else turns
         result = set_light_source(state, label, turns_remaining)
         if not result.ok:
-            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
+            await ack_err(interaction, result.error)
             return
 
+        await ack_done(interaction)
         await update_status(interaction.channel, state)
 
 
@@ -550,16 +546,15 @@ class DMCog(commands.Cog):
             ds = DoorState(door_state.lower())
         except ValueError:
             valid = [d.value for d in DoorState]
-            await interaction.followup.send(
-                f"⚠ Unknown door state '{door_state}'. Valid: {valid}", ephemeral=True
-            )
+            await ack_err(interaction, "Unknown door state '{}'. Valid: {}".format(door_state, valid))
             return
 
         result = add_exit(state, label, description, ds, notes)
         if not result.ok:
-            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
+            await ack_err(interaction, result.error)
             return
 
+        await ack_done(interaction)
         await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
@@ -587,30 +582,27 @@ class DMCog(commands.Cog):
 
         room = state.current_room
         if room is None:
-            await interaction.followup.send("⚠ No current room.", ephemeral=True)
+            await ack_err(interaction, "No current room.")
             return
 
         idx = exit_number - 1
         if idx < 0 or idx >= len(room.exits):
-            await interaction.followup.send(
-                f"⚠ Exit {exit_number} does not exist.", ephemeral=True
-            )
+            await ack_err(interaction, "Exit {} does not exist.".format(exit_number))
             return
 
         try:
             ds = DoorState(door_state.lower())
         except ValueError:
             valid = [d.value for d in DoorState]
-            await interaction.followup.send(
-                f"⚠ Unknown door state '{door_state}'. Valid: {valid}", ephemeral=True
-            )
+            await ack_err(interaction, "Unknown door state '{}'. Valid: {}".format(door_state, valid))
             return
 
         result = set_exit_state(state, room.exits[idx].exit_id, ds)
         if not result.ok:
-            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
+            await ack_err(interaction, result.error)
             return
 
+        await ack_done(interaction)
         await update_status(interaction.channel, state)
 
 
@@ -630,14 +622,13 @@ class DMCog(commands.Cog):
             return
 
         if hours <= 0:
-            await interaction.followup.send(
-                "⚠ Turn length must be greater than 0.", ephemeral=True
-            )
+            await ack_err(interaction, "Turn length must be greater than 0.")
             return
 
         state.default_turn_hours = hours
         from store import save_session
         save_session(state)
+        await ack_done(interaction)
         await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
@@ -656,19 +647,18 @@ class DMCog(commands.Cog):
             return
 
         if state.current_turn is None:
-            await interaction.followup.send("⚠ No open turn.", ephemeral=True)
+            await ack_err(interaction, "No open turn.")
             return
 
         if hours <= 0:
-            await interaction.followup.send(
-                "⚠ Duration must be greater than 0.", ephemeral=True
-            )
+            await ack_err(interaction, "Duration must be greater than 0.")
             return
 
         from datetime import datetime, timedelta, timezone
         state.current_turn.due_at = datetime.now(timezone.utc) + timedelta(hours=hours)
         from store import save_session
         save_session(state)
+        await ack_done(interaction)
         await update_status(interaction.channel, state)
 
 
@@ -687,8 +677,9 @@ class DMCog(commands.Cog):
             return
         result = hold_session(state)
         if not result.ok:
-            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
+            await ack_err(interaction, result.error)
             return
+        await ack_done(interaction)
         await repost_status(interaction.channel, state)
 
     @app_commands.command(
@@ -702,8 +693,9 @@ class DMCog(commands.Cog):
             return
         result = resume_session(state)
         if not result.ok:
-            await interaction.followup.send(f"⚠ {result.error}", ephemeral=True)
+            await ack_err(interaction, result.error)
             return
+        await ack_done(interaction)
         await repost_status(interaction.channel, state)
 
 
@@ -725,6 +717,7 @@ class DMCog(commands.Cog):
         if state is None:
             return
         say(state, speaker, text)
+        await ack_done(interaction)
         await update_status(interaction.channel, state)
     # ------------------------------------------------------------------
     # /dm_emote
@@ -744,6 +737,7 @@ class DMCog(commands.Cog):
         if state is None:
             return
         emote(state, speaker, text)
+        await ack_done(interaction)
         await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
@@ -765,7 +759,7 @@ class DMCog(commands.Cog):
             return
         result, oracle = answer_oracle(state, number, answer)
         if not result.ok:
-            await interaction.followup.send(f"\u26a0 {result.error}", ephemeral=True)
+            await ack_err(interaction, result.error)
             return
         if oracle.message_id:
             try:
