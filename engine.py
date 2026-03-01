@@ -680,8 +680,8 @@ def say(state: GameState, speaker: str, text: str) -> EngineResult:
 
 
 def emote(state: GameState, speaker: str, text: str) -> EngineResult:
-    """Add an emote entry to the say log. Like say but italicised, no quotes."""
-    entry = f"_{speaker} {text}_"
+    """Add an emote entry to the say log. Like say but no quotes."""
+    entry = f"{speaker} {text}"
     state.say_log.append(entry)
     state.updated_at = _now()
     return _ok(state, entry)
