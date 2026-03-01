@@ -166,12 +166,13 @@ def serialize_dungeon(d: Dungeon) -> dict:
 
 def serialize_oracle(o) -> dict:
     return {
-        "oracle_id":  str(o.oracle_id),
-        "number":     o.number,
-        "asker_name": o.asker_name,
-        "question":   o.question,
-        "answer":     o.answer,
-        "message_id": o.message_id,
+        "oracle_id":      str(o.oracle_id),
+        "number":         o.number,
+        "asker_name":     o.asker_name,
+        "asker_owner_id": o.asker_owner_id,
+        "question":       o.question,
+        "answer":         o.answer,
+        "message_id":     o.message_id,
     }
 
 
@@ -181,6 +182,7 @@ def deserialize_oracle(d: dict):
         oracle_id=UUID(d["oracle_id"]),
         number=d["number"],
         asker_name=d["asker_name"],
+        asker_owner_id=d.get("asker_owner_id"),
         question=d["question"],
         answer=d.get("answer"),
         message_id=d.get("message_id"),

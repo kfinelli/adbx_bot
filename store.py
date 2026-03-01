@@ -224,10 +224,12 @@ async def require_session(interaction: discord.Interaction) -> Optional[GameStat
 
 async def ack(interaction: discord.Interaction) -> None:
     """
-    Silently acknowledge a slash command interaction (ephemeral, no visible text).
-    Discord requires every interaction to be acknowledged within 3 seconds.
+    Acknowledge a slash command interaction with a brief ephemeral message.
+    Using send_message instead of defer so the text reads "Command received"
+    rather than Discord's default "is thinking...".
+    Subsequent followup.send() calls will appear as new ephemeral messages.
     """
-    await interaction.response.defer(ephemeral=True)
+    await interaction.response.send_message("Command received.", ephemeral=True)
 
 
 async def err(interaction: discord.Interaction, message: str) -> None:

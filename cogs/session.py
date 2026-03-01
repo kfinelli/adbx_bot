@@ -24,6 +24,7 @@ from discord.ext import commands
 from engine import (
     abscond,
     ask_oracle,
+    emote,
     enter_rounds,
     exit_rounds,
     open_turn,
@@ -283,6 +284,30 @@ class SessionCog(commands.Cog):
         await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
+    # /emote
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="emote",
+        description="Describe your character doing something.",
+    )
+    @app_commands.describe(text="What does your character do? (e.g. 'nods respectfully')")
+    async def emote_cmd(self, interaction: discord.Interaction, text: str):
+        await ack(interaction)
+        state = get_session(str(interaction.channel_id))
+        if state is None:
+            await interaction.followup.send("No active session.", ephemeral=True)
+            return
+        char = _find_character(state, str(interaction.user.id))
+        if char is None:
+            await interaction.followup.send(
+                "You don't have a character in this session.", ephemeral=True
+            )
+            return
+        emote(state, char.name, text)
+        await update_status(interaction.channel, state)
+
+    # ------------------------------------------------------------------
     # /oracle
     # ------------------------------------------------------------------
 
@@ -299,7 +324,9 @@ class SessionCog(commands.Cog):
             return
         char = _find_character(state, str(interaction.user.id))
         asker = char.name if char else interaction.user.display_name
-        result, oracle = ask_oracle(state, asker, question)
+        result, oracle = ask_oracle(
+            state, asker, question, asker_owner_id=str(interaction.user.id)
+        )
         if not result.ok:
             await interaction.followup.send(
                 "\u26a0 {}".format(result.error), ephemeral=True

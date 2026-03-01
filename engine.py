@@ -679,10 +679,19 @@ def say(state: GameState, speaker: str, text: str) -> EngineResult:
     return _ok(state, entry)
 
 
+def emote(state: GameState, speaker: str, text: str) -> EngineResult:
+    """Add an emote entry to the say log. Like say but italicised, no quotes."""
+    entry = f"_{speaker} {text}_"
+    state.say_log.append(entry)
+    state.updated_at = _now()
+    return _ok(state, entry)
+
+
 def ask_oracle(
-    state:      GameState,
-    asker_name: str,
-    question:   str,
+    state:          GameState,
+    asker_name:     str,
+    question:       str,
+    asker_owner_id: str = None,
 ) -> "tuple[EngineResult, object]":
     """
     Create a new oracle entry. Returns (result, oracle) so the platform
@@ -693,6 +702,7 @@ def ask_oracle(
     oracle = Oracle(
         number=state.oracle_counter,
         asker_name=asker_name,
+        asker_owner_id=asker_owner_id,
         question=question,
     )
     state.oracles.append(oracle)

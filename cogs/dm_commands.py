@@ -35,6 +35,7 @@ from engine import (
     add_npc,
     answer_oracle,
     close_turn,
+    emote,
     enter_rounds,
     exit_rounds,
     hold_session,
@@ -726,6 +727,26 @@ class DMCog(commands.Cog):
         say(state, speaker, text)
         await update_status(interaction.channel, state)
     # ------------------------------------------------------------------
+    # /dm_emote
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="dm_emote",
+        description="[DM] Describe an NPC or environmental action.",
+    )
+    @app_commands.describe(
+        speaker="Who is acting (e.g. 'Goblin A', 'Narrator')",
+        text="What they do (e.g. 'twirls a dagger menacingly')",
+    )
+    async def dm_emote(self, interaction: discord.Interaction, speaker: str, text: str):
+        await ack(interaction)
+        state = await self._require_dm(interaction)
+        if state is None:
+            return
+        emote(state, speaker, text)
+        await update_status(interaction.channel, state)
+
+    # ------------------------------------------------------------------
     # /dm_oracle
     # ------------------------------------------------------------------
 
@@ -759,6 +780,19 @@ class DMCog(commands.Cog):
                 await interaction.channel.send(
                     "**Oracle #" + str(oracle.number) + "** (answer): " + oracle.answer
                 )
+        # DM the player who asked if we know their Discord ID
+        if oracle.asker_owner_id:
+            try:
+                user = await self.bot.fetch_user(int(oracle.asker_owner_id))
+                dm_text = (
+                    "**Oracle #" + str(oracle.number) + "** \u2014 "
+                    "The DM answered your question: \"" + oracle.question + "\"\n"
+                    "> " + oracle.answer
+                )
+                await user.send(dm_text)
+            except (discord.Forbidden, discord.NotFound, discord.HTTPException):
+                pass  # user has DMs closed — silently skip
+
         from store import save_session
         save_session(state)
 

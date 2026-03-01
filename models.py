@@ -327,12 +327,13 @@ class LightSource:
 @dataclass
 class Oracle:
     """A player question to the DM, posted as a persistent Discord message."""
-    oracle_id:  UUID            = field(default_factory=uuid4)
-    number:     int             = 1       # resets each turn
-    asker_name: str             = ""
-    question:   str             = ""
-    answer:     Optional[str]   = None
-    message_id: Optional[int]   = None    # Discord message ID for in-place editing
+    oracle_id:       UUID           = field(default_factory=uuid4)
+    number:          int            = 1       # resets each turn
+    asker_name:      str            = ""
+    asker_owner_id:  Optional[str]  = None    # Discord user ID for DM notification
+    question:        str            = ""
+    answer:          Optional[str]  = None
+    message_id:      Optional[int]  = None    # Discord message ID for in-place editing
 
 
 @dataclass
