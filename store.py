@@ -9,6 +9,7 @@ The Database is the source of truth on disk; the in-memory dict is a cache.
 from __future__ import annotations
 
 import discord
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from models import GameState, Party
@@ -125,11 +126,20 @@ async def repost_status(
     await _post_fresh_status(channel, state)
 
 
+# How far back to look for an existing status message on restart.
+# If the most recent bot status post is older than this, post fresh instead.
+_RESTORE_WINDOW_HOURS = 24
+
+
 async def restore_status_message(bot: discord.Client, channel_id: str) -> None:
     """
     Called on bot startup for each saved session.
-    Posts a fresh status block so the current state is always visible
-    at the bottom of the channel after a restart.
+
+    Scans recent channel history for a status message posted by the bot
+    within the last _RESTORE_WINDOW_HOURS hours. If found, re-registers it
+    so the next update_status call edits it in place (no new message, no
+    player notification). Falls back to posting fresh if nothing recent
+    is found — e.g. after a long downtime or the first-ever start.
     """
     channel = bot.get_channel(int(channel_id))
     if channel is None:
@@ -137,6 +147,30 @@ async def restore_status_message(bot: discord.Client, channel_id: str) -> None:
     state = get_session(channel_id)
     if state is None:
         return
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=_RESTORE_WINDOW_HOURS)
+
+    try:
+        candidates = []
+        async for msg in channel.history(limit=50):
+            if msg.author != bot.user:
+                continue
+            if "```" not in msg.content:
+                continue
+            msg_ts = msg.created_at
+            if msg_ts.tzinfo is None:
+                msg_ts = msg_ts.replace(tzinfo=timezone.utc)
+            if msg_ts >= cutoff:
+                candidates.append((msg_ts, msg))
+
+        if candidates:
+            _, best = max(candidates, key=lambda x: x[0])
+            _status_messages[channel_id] = best
+            await best.edit(content=_build_content(state))
+            return
+    except discord.Forbidden:
+        pass
+
     await _post_fresh_status(channel, state)
 
 
