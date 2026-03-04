@@ -44,9 +44,9 @@ from models import (
 from tables import (
     ABILITY_MODIFIERS,
     CON_HP_MODIFIER,
+    CREATION_RULES,
     EQUIPMENT_PACKAGES,
-    HIT_DIE,
-    NON_CASTERS,
+    PACK_BONUS_DEFAULT,
     get_saving_throws,
     get_spell_slots,
 )
@@ -164,22 +164,24 @@ def create_character(
     # --- Ability scores
     scores = ability_scores if ability_scores is not None else roll_stat_block()
 
+    # --- Look up class rules — all class-specific values come from here
+    rules = CREATION_RULES[character_class]
+
     # --- HP: roll hit die, add CON modifier, minimum 1
-    hit_die    = HIT_DIE[character_class]
-    hp_roll    = roll_sum(1, hit_die)
-    con_mod    = _con_modifier(scores.constitution)
-    hp_max     = max(1, hp_roll + con_mod)
+    hp_roll = roll_sum(1, rules.hit_die)
+    con_mod = _con_modifier(scores.constitution)
+    hp_max  = max(1, hp_roll + con_mod)
 
-    # --- AC: base 9 (descending), DEX modifier lowers AC (better)
-    dex_mod    = _dex_ac_modifier(scores.dexterity)
-    base_ac    = 9 - dex_mod  # unarmored; equipment will further modify this
+    # --- AC: class base AC, DEX modifier applied on top
+    dex_mod = _dex_ac_modifier(scores.dexterity)
+    base_ac = rules.base_ac - dex_mod
 
-    # --- Saving throws
+    # --- Saving throws from class rules
     saves = get_saving_throws(character_class, 1)
 
-    # --- Spell book (spellcasters only)
+    # --- Spell book (spellcasters only, determined by class rules)
     spellbook: Optional[SpellBook] = None
-    if character_class not in NON_CASTERS:
+    if rules.is_spellcaster:
         slots = get_spell_slots(character_class, 1)
         spellbook = SpellBook(
             max_slots=slots,
@@ -189,14 +191,11 @@ def create_character(
 
     # --- Inventory from equipment package
     raw_items = list(EQUIPMENT_PACKAGES[equipment_package])
-    # Pack C: add class-specific item
-    if equipment_package == "Pack C":
-        if character_class == CharacterClass.CLERIC:
-            raw_items.append(("Holy Symbol", 1, 0.0))
-        elif character_class == CharacterClass.THIEF:
-            raw_items.append(("Thief's Tools", 1, 0.5))
-        else:
-            raw_items.append(("Holy Water (vial)", 1, 0.1))
+    # Add class-specific bonus item for this pack if defined, else use default
+    bonus = rules.pack_bonus_items.get(equipment_package) \
+        or PACK_BONUS_DEFAULT.get(equipment_package)
+    if bonus:
+        raw_items.append(bonus)
     inventory = []
     for item_name, qty, enc in raw_items:
         inventory.append(InventoryItem(
@@ -215,6 +214,7 @@ def create_character(
         hp_max=hp_max,
         hp_current=hp_max,
         armor_class=base_ac,
+        movement_speed=rules.base_movement,
         saving_throws=saves,
         spellbook=spellbook,
         inventory=inventory,

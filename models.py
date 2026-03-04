@@ -2,7 +2,9 @@
 Core data model for the async dungeon crawler engine.
 No I/O, no platform dependencies — pure game state.
 
-B/X D&D ruleset, single active party per session.
+Ruleset-agnostic: CharacterClass is defined in tables.py and generated
+from _CLASS_DEFINITIONS, so adding/removing classes only requires editing
+tables.py. Nothing here changes when the ruleset changes.
 """
 
 from __future__ import annotations
@@ -13,19 +15,14 @@ from enum import Enum, auto
 from typing import Optional
 from uuid import UUID, uuid4
 
+# CharacterClass is generated in tables.py from _CLASS_DEFINITIONS.
+# Import it here so the rest of the codebase can import from models as before.
+from tables import CharacterClass
+
 
 # ---------------------------------------------------------------------------
-# Enumerations
+# Enumerations (non-ruleset — these don't change between game systems)
 # ---------------------------------------------------------------------------
-
-class CharacterClass(Enum):
-    FIGHTER   = "Fighter"
-    THIEF     = "Thief"
-    CLERIC    = "Cleric"
-    MAGIC_USER = "Magic-User"
-    ELF       = "Elf"
-    DWARF     = "Dwarf"
-    HALFLING  = "Halfling"
 
 
 class CharacterStatus(Enum):
@@ -156,16 +153,12 @@ class Character:
 
     hp_max:          int               = 1
     hp_current:      int               = 1
-    armor_class:     int               = 9     # unarmored B/X default (descending AC)
-    movement_speed:  int               = 120   # feet per turn (B/X standard)
+    armor_class:     int               = 9     # set by create_character from CharacterCreationRules
+    movement_speed:  int               = 120   # set by create_character from CharacterCreationRules
 
-    saving_throws: dict[str, int] = field(default_factory=lambda: {
-        "death_poison":   14,
-        "wands":          15,
-        "paralysis_stone": 16,
-        "breath_weapon":  17,
-        "spells":         18,
-    })
+    saving_throws: dict = field(default_factory=dict)
+    # Keys and values are ruleset-defined; populated by create_character from
+    # CharacterCreationRules.default_saves. No key names are enforced here.
 
     status:          CharacterStatus   = CharacterStatus.ACTIVE
     status_notes:    str               = ""    # e.g. "fatigued", "poisoned (saves at -2)"
