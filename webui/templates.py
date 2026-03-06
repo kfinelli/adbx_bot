@@ -194,6 +194,7 @@ def dashboard_fragment(state: GameState, flash: str = "", error: str = "") -> st
   <div class="grid-2">
     <div>
       {turn_panel(state)}
+      {oracle_panel(state)}
       {party_panel(state)}
     </div>
     <div>
@@ -518,8 +519,55 @@ def room_panel(state: GameState) -> str:
 
 
 # ---------------------------------------------------------------------------
-# NPC panel
+# Oracle panel
 # ---------------------------------------------------------------------------
+
+def oracle_panel(state: GameState) -> str:
+    channel_id = state.platform_channel_id
+
+    # Show oracles from the current turn (oracle_counter > 0 means some exist)
+    # Unanswered ones are most urgent; show all current-turn oracles.
+    current_turn_oracles = [o for o in state.oracles if o.answer is None]
+    answered = [o for o in state.oracles if o.answer is not None]
+
+    unanswered_html = ""
+    for o in current_turn_oracles:
+        unanswered_html += f"""
+<div style="margin-bottom:1rem; padding:0.75rem; background:#0f2040; border-radius:6px; border-left:3px solid #c9a84c">
+  <div style="margin-bottom:0.4rem">
+    <strong>#{o.number}</strong>
+    <span class="muted" style="margin-left:0.5rem">{o.asker_name} asks:</span>
+  </div>
+  <div style="margin-bottom:0.6rem; color:#e0e0e0">{o.question}</div>
+  <form hx-post="/session/{channel_id}/oracle/{o.number}/answer"
+        hx-target="#dashboard" hx-swap="outerHTML">
+    <div class="row">
+      <input type="text" name="answer" placeholder="Your answer..." autofocus>
+      <button class="btn-success btn-sm" type="submit">Answer</button>
+    </div>
+  </form>
+</div>"""
+
+    answered_html = ""
+    for o in answered[-5:]:  # show last 5 answered for reference
+        answered_html += f"""
+<div class="muted" style="margin-bottom:0.4rem; font-size:0.82rem">
+  <strong>#{o.number} {o.asker_name}:</strong> {o.question}<br>
+  <span style="color:#4caf50">&rsaquo; {o.answer}</span>
+</div>"""
+
+    body = unanswered_html or '<p class="muted">No pending oracles.</p>'
+    if answered_html:
+        body += f'<hr class="divider"><p class="muted" style="font-size:0.8rem;margin-bottom:0.4rem">ANSWERED</p>{answered_html}'
+
+    return f"""
+<div class="card">
+  <div class="section-header"><h3>&#128302; Oracles</h3></div>
+  {body}
+</div>"""
+
+
+
 
 def npc_panel(state: GameState) -> str:
     channel_id = state.platform_channel_id

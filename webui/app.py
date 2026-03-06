@@ -19,6 +19,7 @@ from store import notify_players_new_turn
 from engine import (
     add_exit,
     add_npc as eng_add_npc,
+    answer_oracle,
     close_turn,
     hold_session,
     open_turn,
@@ -398,3 +399,47 @@ async def route_npc_setstatus(
     if not result.ok:
         return _respond(channel_id, error=result.error)
     return _respond(channel_id)
+
+@app.post("/session/{channel_id}/oracle/{number}/answer", response_class=HTMLResponse)
+async def route_oracle_answer(
+    channel_id: str,
+    number: int,
+    answer: Annotated[str, Form()],
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    result, oracle = answer_oracle(state, number, answer)
+    if not result.ok:
+        return _respond(channel_id, error=result.error)
+    store.save_session(state)
+    if _bot:
+        # Edit the Discord oracle message in place
+        channel = _bot.get_channel(int(channel_id))
+        if channel and oracle.message_id:
+            async def _edit():
+                try:
+                    msg = await channel.fetch_message(oracle.message_id)
+                    new_content = (
+                        f"**Oracle #{oracle.number}** \u2014 "
+                        f"{oracle.asker_name} asks: \"{oracle.question}\"\n"
+                        f"> {oracle.answer}"
+                    )
+                    await msg.edit(content=new_content)
+                except Exception:
+                    pass
+            asyncio.create_task(_edit())
+        # DM the player who asked
+        if oracle.asker_owner_id:
+            async def _dm_player():
+                try:
+                    user = await _bot.fetch_user(int(oracle.asker_owner_id))
+                    await user.send(
+                        f"**Oracle #{oracle.number}** \u2014 "
+                        f"The DM answered your question: \"{oracle.question}\"\n"
+                        f"> {oracle.answer}"
+                    )
+                except Exception:
+                    pass
+            asyncio.create_task(_dm_player())
+    return _respond(channel_id, flash="Oracle answered.")

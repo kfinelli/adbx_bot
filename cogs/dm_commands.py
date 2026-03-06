@@ -789,6 +789,7 @@ class DMCog(commands.Cog):
 
         from store import save_session
         save_session(state)
+        await ack_done(interaction)
 
 # Lookup helpers
 # ---------------------------------------------------------------------------
