@@ -488,3 +488,61 @@ def deserialize_state(json_str: str) -> GameState:
         platform_channel_id=d["platform_channel_id"],
         dm_user_id=d["dm_user_id"],
     )
+
+
+# ---------------------------------------------------------------------------
+# Standalone dungeon file (import / export)
+# ---------------------------------------------------------------------------
+# A dungeon file is a self-contained JSON document representing only the
+# Dungeon object — no session state, no characters, no party. This is the
+# format used for the web UI importer/exporter and for sharing dungeons.
+#
+# Schema:
+#   {
+#     "format":  "adbx-dungeon",   // sentinel to catch wrong file types
+#     "version": 1,
+#     "dungeon": { ...serialize_dungeon() output... }
+#   }
+
+_DUNGEON_FILE_FORMAT  = "adbx-dungeon"
+_DUNGEON_FILE_VERSION = 1
+
+
+def serialize_dungeon_file(dungeon: Dungeon) -> str:
+    """Produce a pretty-printed JSON string suitable for download."""
+    doc = {
+        "format":  _DUNGEON_FILE_FORMAT,
+        "version": _DUNGEON_FILE_VERSION,
+        "dungeon": serialize_dungeon(dungeon),
+    }
+    return json.dumps(doc, indent=2)
+
+
+def deserialize_dungeon_file(json_str: str) -> Dungeon:
+    """
+    Parse a dungeon file JSON string and return a Dungeon.
+    Raises ValueError with a human-readable message on any problem.
+    """
+    try:
+        doc = json.loads(json_str)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON: {e}") from e
+
+    if doc.get("format") != _DUNGEON_FILE_FORMAT:
+        raise ValueError(
+            f"Unrecognised file format '{doc.get('format')}'. "
+            f"Expected '{_DUNGEON_FILE_FORMAT}'."
+        )
+    version = doc.get("version", 0)
+    if version != _DUNGEON_FILE_VERSION:
+        raise ValueError(
+            f"Unsupported dungeon file version {version} "
+            f"(this build supports version {_DUNGEON_FILE_VERSION})."
+        )
+    if "dungeon" not in doc:
+        raise ValueError("Missing 'dungeon' key in dungeon file.")
+
+    try:
+        return deserialize_dungeon(doc["dungeon"])
+    except (KeyError, TypeError, ValueError) as e:
+        raise ValueError(f"Dungeon data is malformed: {e}") from e

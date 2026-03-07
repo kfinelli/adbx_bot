@@ -690,6 +690,35 @@ def abscond(
 
 
 # ---------------------------------------------------------------------------
+# Dungeon import
+# ---------------------------------------------------------------------------
+
+def import_dungeon(state: GameState, dungeon: Dungeon) -> EngineResult:
+    """
+    Load a pre-authored dungeon into the session.
+
+    Only permitted in PRE_START — the dungeon must be set before the
+    session begins so players arrive into a known map. Replaces any
+    previously loaded dungeon wholesale.
+
+    If the dungeon has an entrance_id, the current room is set to that
+    room so the DM can immediately see it in the status block. The room
+    is NOT marked visited — that happens when the party actually enters
+    via /embark + /dm_setroom or move_party_to_room.
+    """
+    if state.mode != SessionMode.PRE_START:
+        return _err(state, "Dungeons can only be imported before the session starts.")
+    state.dungeon = dungeon
+    # Point current_room_id at the entrance so the web UI has something
+    # to show, but leave visited=False until the party actually enters.
+    if dungeon.entrance_id and dungeon.entrance_id in dungeon.rooms:
+        state.current_room_id = dungeon.entrance_id
+    state.updated_at = _now()
+    room_count = len(dungeon.rooms)
+    return _ok(state, f"Dungeon '{dungeon.name}' loaded ({room_count} room(s)).")
+
+
+# ---------------------------------------------------------------------------
 # Say log and oracles
 # ---------------------------------------------------------------------------
 

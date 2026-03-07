@@ -188,12 +188,14 @@ def dashboard_fragment(state: GameState, flash: str = "", error: str = "") -> st
     channel_id = state.platform_channel_id
     flash_html = f'<div class="flash">{flash}</div>' if flash else ""
     error_html = f'<div class="error">{error}</div>' if error else ""
+    dungeon_html = dungeon_panel(state)
     return f"""
 <div id="dashboard">
   {flash_html}{error_html}
   <div class="grid-2">
     <div>
       {turn_panel(state)}
+      {dungeon_html}
       {oracle_panel(state)}
       {party_panel(state)}
     </div>
@@ -515,6 +517,62 @@ def room_panel(state: GameState) -> str:
   {add_exit_html}
 
   {set_room_html}
+</div>"""
+
+
+# ---------------------------------------------------------------------------
+# Dungeon import / export panel (PRE_START only)
+# ---------------------------------------------------------------------------
+
+def dungeon_panel(state: GameState) -> str:
+    channel_id = state.platform_channel_id
+    dungeon = state.dungeon
+
+    if dungeon:
+        summary = (
+            f"<p><strong>{dungeon.name}</strong> &mdash; "
+            f"{len(dungeon.rooms)} room(s) loaded.</p>"
+        )
+        if dungeon.description:
+            summary += f'<p class="muted">{dungeon.description}</p>'
+        entrance = dungeon.rooms.get(dungeon.entrance_id) if dungeon.entrance_id else None
+        if entrance:
+            summary += f'<p class="muted">Entrance: {entrance.name}</p>'
+        safe_name = dungeon.name.replace(" ", "_").lower()
+        export_btn = f"""
+<a class="btn btn-sm"
+   href="/session/{channel_id}/dungeon/export"
+   download="{safe_name}.json">Export dungeon JSON</a>"""
+    else:
+        summary = '<p class="muted">No dungeon loaded.</p>'
+        export_btn = ""
+
+    # Import only available before the session starts
+    if state.mode == SessionMode.PRE_START:
+        replace_note = (
+            '<p class="muted" style="margin-top:0.75rem">Import a new file to replace:</p>'
+            if dungeon else ""
+        )
+        import_html = f"""
+  {replace_note}
+  <form id="dungeon-import-form"
+        hx-post="/session/{channel_id}/dungeon/import"
+        hx-target="#dashboard" hx-swap="outerHTML"
+        hx-encoding="multipart/form-data">
+    <label>Import dungeon JSON</label>
+    <input type="file" name="file" accept=".json"
+           onchange="this.form.requestSubmit()"
+           style="color:#e0e0e0; margin-top:4px">
+  </form>"""
+    else:
+        import_html = ""
+
+    return f"""
+<div class="card">
+  <div class="section-header"><h3>&#128506; Dungeon</h3></div>
+  {summary}
+  {export_btn}
+  {import_html}
 </div>"""
 
 

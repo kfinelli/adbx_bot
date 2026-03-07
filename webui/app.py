@@ -13,14 +13,17 @@ from discord_tasks import dispatch_oracle_answer, dispatch_turn_resolved
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, Request, UploadFile, File
+from fastapi.responses import Response
 from fastapi.responses import HTMLResponse
 
 import store
+from serialization import deserialize_dungeon_file, serialize_dungeon_file
 from engine import (
     add_exit,
     add_npc as eng_add_npc,
     answer_oracle,
+    import_dungeon,
     close_turn,
     hold_session,
     open_turn,
@@ -418,3 +421,40 @@ async def route_oracle_answer(
         if channel:
             asyncio.create_task(dispatch_oracle_answer(_bot, channel, oracle))
     return _respond(channel_id, flash="Oracle answered.")
+
+
+# ---------------------------------------------------------------------------
+# Dungeon import / export
+# ---------------------------------------------------------------------------
+
+@app.post("/session/{channel_id}/dungeon/import", response_class=HTMLResponse)
+async def route_dungeon_import(channel_id: str, file: UploadFile = File(...)):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    raw = await file.read()
+    try:
+        dungeon = deserialize_dungeon_file(raw.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError) as e:
+        return _respond(channel_id, error=f"Import failed: {e}")
+    result = import_dungeon(state, dungeon)
+    if not result.ok:
+        return _respond(channel_id, error=result.error)
+    store.save_session(state)
+    return _respond(channel_id, flash=result.message)
+
+
+@app.get("/session/{channel_id}/dungeon/export")
+async def route_dungeon_export(channel_id: str):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    if state.dungeon is None:
+        return HTMLResponse("No dungeon loaded.", status_code=404)
+    json_str = serialize_dungeon_file(state.dungeon)
+    safe_name = state.dungeon.name.replace(" ", "_").lower()
+    return Response(
+        content=json_str,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}.json"'},
+    )
