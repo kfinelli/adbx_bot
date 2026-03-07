@@ -536,13 +536,35 @@ def _find_npc(state: GameState, npc_id: UUID) -> Optional[NPC]:
 
 def set_room(state: GameState, room: Room) -> EngineResult:
     """
-    DM sets the current room. Adds it to the dungeon graph if not present.
-    Clears NPCs (new room, new NPC list).
+    DM creates a new room on the fly and makes it the current room.
+    Adds it to the dungeon graph and clears NPCs.
+    Use move_party_to_room() to navigate to an already-authored room.
     """
     if state.dungeon is None:
         state.dungeon = Dungeon(name="The Dungeon")
     state.dungeon.rooms[room.room_id] = room
     state.current_room_id = room.room_id
+    room.visited = True
+    state.npcs = []
+    state.updated_at = _now()
+    return _ok(state, f"Entered: {room.name}.")
+
+
+def move_party_to_room(state: GameState, room_id: UUID) -> EngineResult:
+    """
+    Move the party into an already-authored room in the dungeon graph.
+
+    - Looks up the room by ID; fails if not found.
+    - Marks the room visited.
+    - Clears state.npcs (session-transient; DM repopulates as needed).
+    - Does NOT modify the room's features, exits, or any other authored data.
+    """
+    if state.dungeon is None:
+        return _err(state, "No dungeon loaded.")
+    room = state.dungeon.rooms.get(room_id)
+    if room is None:
+        return _err(state, f"Room {room_id} not found in dungeon.")
+    state.current_room_id = room_id
     room.visited = True
     state.npcs = []
     state.updated_at = _now()

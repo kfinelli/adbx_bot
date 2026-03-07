@@ -50,6 +50,7 @@ from engine import (
     set_light_source,
     set_npc_hp,
     set_npc_status,
+    move_party_to_room,
     set_room,
     start_session,
 )
@@ -302,18 +303,20 @@ class DMCog(commands.Cog):
 
     @app_commands.command(
         name="dm_setroom",
-        description="[DM] Move the party to a new room.",
+        description="[DM] Move the party into a room (new or existing).",
     )
     @app_commands.describe(
-        name="Room name (e.g. 'Blue Atrium')",
-        description="Player-visible room description",
-        notes="DM-facing notes (not shown to players)",
+        room_id="Existing room UUID to move into (from dungeon graph). Omit to create a new room.",
+        name="New room name — required when creating a new room",
+        description="New room description — required when creating a new room",
+        notes="DM-facing notes (new rooms only; ignored when entering existing room)",
     )
     async def dm_setroom(
         self,
         interaction: discord.Interaction,
-        name: str,
-        description: str,
+        room_id: str = "",
+        name: str = "",
+        description: str = "",
         notes: str = "",
     ):
         await ack(interaction)
@@ -321,8 +324,29 @@ class DMCog(commands.Cog):
         if state is None:
             return
 
-        room = Room(name=name, description=description, notes=notes)
-        set_room(state, room)
+        if room_id:
+            # Navigate to an existing authored room
+            try:
+                from uuid import UUID as _UUID
+                rid = _UUID(room_id)
+            except ValueError:
+                await ack_err(interaction, f"Invalid room ID: {room_id!r}")
+                return
+            result = move_party_to_room(state, rid)
+        else:
+            # Create a new room on the fly
+            if not name.strip():
+                await ack_err(interaction, "Provide either a room_id (existing room) or a name (new room).")
+                return
+            room = Room(name=name, description=description, notes=notes)
+            result = set_room(state, room)
+
+        if not result.ok:
+            await ack_err(interaction, result.error)
+            return
+
+        from store import save_session
+        save_session(state)
         await ack_done(interaction)
         await update_status(interaction.channel, state)
 
