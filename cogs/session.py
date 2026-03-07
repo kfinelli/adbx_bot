@@ -19,6 +19,7 @@ from engine import (
     submit_turn,
 )
 from models import SessionMode, TurnStatus
+from discord_tasks import post_oracle_question
 from store import (
     ack,
     ack_done,
@@ -258,11 +259,8 @@ class SessionCog(commands.Cog):
         if not result.ok:
             await ack_err(interaction, result.error)
             return
-        oracle_text = "**Oracle #{}** \u2014 {} asks: \"{}\"".format(
-            oracle.number, oracle.asker_name, oracle.question
-        )
         await ack_done(interaction)
-        msg = await interaction.channel.send(oracle_text)
+        msg = await post_oracle_question(interaction.channel, oracle)
         oracle.message_id = msg.id
         save_session(state)
 

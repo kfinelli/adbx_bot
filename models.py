@@ -328,6 +328,25 @@ class Oracle:
     answer:          Optional[str]  = None
     message_id:      Optional[int]  = None    # Discord message ID for in-place editing
 
+    @property
+    def question_text(self) -> str:
+        """Formatted Discord message when the oracle is first posted."""
+        return f"**Oracle #{self.number}** — {self.asker_name} asks: \"{self.question}\""
+
+    @property
+    def answer_text(self) -> str:
+        """Formatted Discord message after the DM answers (replaces question_text)."""
+        return f"{self.question_text}\n> {self.answer}"
+
+    @property
+    def player_dm_text(self) -> str:
+        """Text sent privately to the player when their oracle is answered."""
+        return (
+            f"**Oracle #{self.number}** — "
+            f"The DM answered your question: \"{self.question}\"\n"
+            f"> {self.answer}"
+        )
+
 
 @dataclass
 class Party:

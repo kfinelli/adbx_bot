@@ -8,6 +8,8 @@ names in these routes directly. No hx-include id-based lookups.
 from __future__ import annotations
 
 import asyncio
+import sys, os; sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from discord_tasks import dispatch_oracle_answer, dispatch_turn_resolved
 from typing import Annotated
 from uuid import UUID
 
@@ -15,7 +17,6 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse
 
 import store
-from store import notify_players_new_turn
 from engine import (
     add_exit,
     add_npc as eng_add_npc,
@@ -131,8 +132,7 @@ async def route_resolve(channel_id: str, narrative: Annotated[str, Form()]):
     if _bot:
         channel = _bot.get_channel(int(channel_id))
         if channel:
-            asyncio.create_task(store.repost_status(channel, state, narrative=narrative))
-            asyncio.create_task(notify_players_new_turn(channel, state))
+            asyncio.create_task(dispatch_turn_resolved(channel, state, narrative))
     return _respond(channel_id, flash="Turn resolved.", sync=False)
 
 
@@ -414,32 +414,7 @@ async def route_oracle_answer(
         return _respond(channel_id, error=result.error)
     store.save_session(state)
     if _bot:
-        # Edit the Discord oracle message in place
         channel = _bot.get_channel(int(channel_id))
-        if channel and oracle.message_id:
-            async def _edit():
-                try:
-                    msg = await channel.fetch_message(oracle.message_id)
-                    new_content = (
-                        f"**Oracle #{oracle.number}** \u2014 "
-                        f"{oracle.asker_name} asks: \"{oracle.question}\"\n"
-                        f"> {oracle.answer}"
-                    )
-                    await msg.edit(content=new_content)
-                except Exception:
-                    pass
-            asyncio.create_task(_edit())
-        # DM the player who asked
-        if oracle.asker_owner_id:
-            async def _dm_player():
-                try:
-                    user = await _bot.fetch_user(int(oracle.asker_owner_id))
-                    await user.send(
-                        f"**Oracle #{oracle.number}** \u2014 "
-                        f"The DM answered your question: \"{oracle.question}\"\n"
-                        f"> {oracle.answer}"
-                    )
-                except Exception:
-                    pass
-            asyncio.create_task(_dm_player())
+        if channel:
+            asyncio.create_task(dispatch_oracle_answer(_bot, channel, oracle))
     return _respond(channel_id, flash="Oracle answered.")

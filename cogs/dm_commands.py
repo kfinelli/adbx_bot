@@ -54,14 +54,13 @@ from engine import (
     start_session,
 )
 from models import SessionMode, TurnStatus
+from discord_tasks import dispatch_oracle_answer, dispatch_turn_resolved
 from store import (
     ack,
     ack_done,
     ack_err,
     delete_session,
     get_session,
-    notify_players_new_turn,
-    repost_status,
     update_status,
     require_session,
 )
@@ -218,8 +217,7 @@ class DMCog(commands.Cog):
         open_turn(state)
         # Post narrative visibly, then fresh status below it
         await ack_done(interaction)
-        await repost_status(interaction.channel, state, narrative=narrative)
-        await notify_players_new_turn(interaction.channel, state)
+        await dispatch_turn_resolved(interaction.channel, state, narrative)
 
     # ------------------------------------------------------------------
     # /dm_sethp
@@ -761,31 +759,7 @@ class DMCog(commands.Cog):
         if not result.ok:
             await ack_err(interaction, result.error)
             return
-        if oracle.message_id:
-            try:
-                msg = await interaction.channel.fetch_message(oracle.message_id)
-                new_content = (
-                    "**Oracle #" + str(oracle.number) + "** \u2014 "
-                    + oracle.asker_name + " asks: \"" + oracle.question + "\"\n"
-                    + "> " + oracle.answer
-                )
-                await msg.edit(content=new_content)
-            except (discord.NotFound, discord.Forbidden):
-                await interaction.channel.send(
-                    "**Oracle #" + str(oracle.number) + "** (answer): " + oracle.answer
-                )
-        # DM the player who asked if we know their Discord ID
-        if oracle.asker_owner_id:
-            try:
-                user = await self.bot.fetch_user(int(oracle.asker_owner_id))
-                dm_text = (
-                    "**Oracle #" + str(oracle.number) + "** \u2014 "
-                    "The DM answered your question: \"" + oracle.question + "\"\n"
-                    "> " + oracle.answer
-                )
-                await user.send(dm_text)
-            except (discord.Forbidden, discord.NotFound, discord.HTTPException):
-                pass  # user has DMs closed — silently skip
+        await dispatch_oracle_answer(self.bot, interaction.channel, oracle)
 
         from store import save_session
         save_session(state)
