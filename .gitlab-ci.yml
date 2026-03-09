@@ -59,4 +59,4 @@ coverage:
     paths:
       - htmlcov/                   # browsable HTML coverage report
     expire_in: 1 week
-  coverage: '/TOTAL.*\s+(\d+%)$'  # regex GitLab uses to show % on MR page
+  coverage: /^TOTAL.*\s+(\d+\%)/  # regex GitLab uses to show % on MR page
