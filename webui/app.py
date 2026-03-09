@@ -24,6 +24,8 @@ from engine import (
     add_npc as eng_add_npc,
     answer_oracle,
     import_dungeon,
+    move_party_to_room,
+    register_room,
     close_turn,
     hold_session,
     open_turn,
@@ -90,13 +92,39 @@ async def _sync_discord(channel_id: str) -> None:
     await store.update_status(channel, state)
 
 
-def _respond(channel_id: str, flash: str = "", error: str = "", sync: bool = True) -> HTMLResponse:
+def _respond(channel_id: str, flash: str = "", error: str = "", sync: bool = True, view_room_id: str = "") -> HTMLResponse:
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse('<div class="error">Session not found.</div>')
     if sync and _bot:
         asyncio.create_task(_sync_discord(channel_id))
-    return HTMLResponse(dashboard_fragment(state, flash=flash, error=error))
+    return HTMLResponse(dashboard_fragment(state, flash=flash, error=error, view_room_id=view_room_id))
+
+
+# ---------------------------------------------------------------------------
+# Room-view helpers
+# ---------------------------------------------------------------------------
+
+def _parse_uuid(s: str):
+    """Return a UUID if s is a valid UUID string, else None."""
+    if not s:
+        return None
+    try:
+        return UUID(s)
+    except ValueError:
+        return None
+
+
+def _resolve_view_room(state, view_room_id: str):
+    """Return the Room for view_room_id, falling back to current_room."""
+    from models import Room as _Room
+    if view_room_id and state.dungeon:
+        rid = _parse_uuid(view_room_id)
+        if rid:
+            room = state.dungeon.rooms.get(rid)
+            if room:
+                return room
+    return state.current_room
 
 
 # ---------------------------------------------------------------------------
@@ -109,11 +137,11 @@ async def index():
 
 
 @app.get("/session/{channel_id}", response_class=HTMLResponse)
-async def session_view(channel_id: str):
+async def session_view(channel_id: str, view_room: str = ""):
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse("<p>Session not found.</p>", status_code=404)
-    return session_page(state, _session_list())
+    return session_page(state, _session_list(), view_room_id=view_room)
 
 
 # ---------------------------------------------------------------------------
@@ -267,13 +295,36 @@ async def route_setroom(
     name: Annotated[str, Form()],
     description: Annotated[str, Form()],
     notes: Annotated[str, Form()] = "",
+    view_room_id: Annotated[str, Form()] = "",
 ):
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse("Session not found.", status_code=404)
     room = Room(name=name, description=description, notes=notes)
-    set_room(state, room)
-    return _respond(channel_id, flash=f"Room set: {name}.")
+    result = register_room(state, room)
+    store.save_session(state)
+    # After creating, switch the view to the new room but don't move the party
+    new_view_id = str(room.room_id)
+    return _respond(channel_id, flash=f"Room created: {name}.", view_room_id=new_view_id)
+
+
+@app.post("/session/{channel_id}/enterroom/{room_id}", response_class=HTMLResponse)
+async def route_enterroom(channel_id: str, room_id: str):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    rid = _parse_uuid(room_id)
+    if rid is None:
+        return _respond(channel_id, error=f"Invalid room ID: {room_id}")
+    result = move_party_to_room(state, rid)
+    if not result.ok:
+        return _respond(channel_id, error=result.error, view_room_id=room_id)
+    store.save_session(state)
+    if _bot:
+        channel = _bot.get_channel(int(channel_id))
+        if channel:
+            asyncio.create_task(store.update_status(channel, state))
+    return _respond(channel_id, flash=result.message, view_room_id=room_id)
 
 
 @app.post("/session/{channel_id}/addfeature", response_class=HTMLResponse)
@@ -282,16 +333,17 @@ async def route_addfeature(
     name: Annotated[str, Form()],
     description: Annotated[str, Form()],
     state_str: Annotated[str, Form()] = "intact",
+    view_room_id: Annotated[str, Form()] = "",
 ):
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse("Session not found.", status_code=404)
-    room = state.current_room
+    room = _resolve_view_room(state, view_room_id)
     if room is None:
-        return _respond(channel_id, error="No current room.")
+        return _respond(channel_id, error="No room selected.", view_room_id=view_room_id)
     room.features.append(RoomFeature(name=name, description=description, state=state_str))
     store.save_session(state)
-    return _respond(channel_id)
+    return _respond(channel_id, view_room_id=view_room_id)
 
 
 @app.post("/session/{channel_id}/feature/{feature_id}/setstate", response_class=HTMLResponse)
@@ -299,14 +351,17 @@ async def route_feature_setstate(
     channel_id: str,
     feature_id: str,
     state_str: Annotated[str, Form()],
+    view_room_id: Annotated[str, Form()] = "",
 ):
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse("Session not found.", status_code=404)
-    result = set_feature_state(state, UUID(feature_id), state_str)
+    rid = _parse_uuid(view_room_id)
+    result = set_feature_state(state, UUID(feature_id), state_str, room_id=rid)
     if not result.ok:
-        return _respond(channel_id, error=result.error)
-    return _respond(channel_id)
+        return _respond(channel_id, error=result.error, view_room_id=view_room_id)
+    store.save_session(state)
+    return _respond(channel_id, view_room_id=view_room_id)
 
 
 @app.post("/session/{channel_id}/addexit", response_class=HTMLResponse)
@@ -315,6 +370,7 @@ async def route_addexit(
     label: Annotated[str, Form()],
     description: Annotated[str, Form()],
     door_state: Annotated[str, Form()] = "open",
+    view_room_id: Annotated[str, Form()] = "",
 ):
     state = store.get_session(channel_id)
     if state is None:
@@ -322,11 +378,13 @@ async def route_addexit(
     try:
         ds = DoorState(door_state)
     except ValueError:
-        return _respond(channel_id, error=f"Unknown door state: {door_state}")
-    result = add_exit(state, label, description, ds)
+        return _respond(channel_id, error=f"Unknown door state: {door_state}", view_room_id=view_room_id)
+    rid = _parse_uuid(view_room_id)
+    result = add_exit(state, label, description, ds, room_id=rid)
     if not result.ok:
-        return _respond(channel_id, error=result.error)
-    return _respond(channel_id)
+        return _respond(channel_id, error=result.error, view_room_id=view_room_id)
+    store.save_session(state)
+    return _respond(channel_id, view_room_id=view_room_id)
 
 
 @app.post("/session/{channel_id}/exit/{exit_id}/setstate", response_class=HTMLResponse)
@@ -334,6 +392,7 @@ async def route_exit_setstate(
     channel_id: str,
     exit_id: str,
     door_state: Annotated[str, Form()],
+    view_room_id: Annotated[str, Form()] = "",
 ):
     state = store.get_session(channel_id)
     if state is None:
@@ -341,11 +400,13 @@ async def route_exit_setstate(
     try:
         ds = DoorState(door_state)
     except ValueError:
-        return _respond(channel_id, error=f"Unknown door state: {door_state}")
-    result = set_exit_state(state, UUID(exit_id), ds)
+        return _respond(channel_id, error=f"Unknown door state: {door_state}", view_room_id=view_room_id)
+    rid = _parse_uuid(view_room_id)
+    result = set_exit_state(state, UUID(exit_id), ds, room_id=rid)
     if not result.ok:
-        return _respond(channel_id, error=result.error)
-    return _respond(channel_id)
+        return _respond(channel_id, error=result.error, view_room_id=view_room_id)
+    store.save_session(state)
+    return _respond(channel_id, view_room_id=view_room_id)
 
 
 # ---------------------------------------------------------------------------

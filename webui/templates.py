@@ -170,37 +170,77 @@ def session_list_page(sessions: list[tuple[str, str]]) -> str:
     return page("DM Panel", body)
 
 
-def session_page(state: GameState, sessions: list[tuple[str, str]], flash: str = "", error: str = "") -> str:
+def session_page(
+    state: GameState,
+    sessions: list[tuple[str, str]],
+    flash: str = "",
+    error: str = "",
+    view_room_id: str = "",
+) -> str:
     channel_id = state.platform_channel_id
     body = f"""
 <div class="layout">
   {_sidebar(channel_id, sessions)}
   <div class="main">
     <div id="dashboard">
-      {dashboard_fragment(state, flash, error)}
+      {dashboard_fragment(state, flash, error, view_room_id)}
     </div>
   </div>
 </div>"""
     return page(f"DM Panel", body)
 
 
-def dashboard_fragment(state: GameState, flash: str = "", error: str = "") -> str:
+def dashboard_fragment(
+    state: GameState,
+    flash: str = "",
+    error: str = "",
+    view_room_id: str = "",
+) -> str:
     channel_id = state.platform_channel_id
     flash_html = f'<div class="flash">{flash}</div>' if flash else ""
     error_html = f'<div class="error">{error}</div>' if error else ""
-    dungeon_html = dungeon_panel(state)
+
+    # Resolve the room being viewed in the right column.
+    # Preference order: explicit view_room_id > party's current room > None
+    from uuid import UUID as _UUID
+    view_room = None
+    resolved_view_id = ""
+    if view_room_id and state.dungeon:
+        try:
+            _vid = _UUID(view_room_id)
+            view_room = state.dungeon.rooms.get(_vid)
+            if view_room:
+                resolved_view_id = view_room_id
+        except ValueError:
+            pass
+    if view_room is None and state.current_room_id and state.dungeon:
+        view_room = state.dungeon.rooms.get(state.current_room_id)
+        if view_room:
+            resolved_view_id = str(state.current_room_id)
+    if view_room is None:
+        # Fall back to the ad-hoc current_room path (no dungeon graph)
+        view_room = state.current_room
+        if view_room:
+            resolved_view_id = str(view_room.room_id)
+
+    is_party_room = (
+        view_room is not None
+        and state.current_room_id is not None
+        and view_room.room_id == state.current_room_id
+    )
+
     return f"""
 <div id="dashboard">
   {flash_html}{error_html}
   <div class="grid-2">
     <div>
       {turn_panel(state)}
-      {dungeon_html}
+      {dungeon_panel(state, resolved_view_id)}
       {oracle_panel(state)}
       {party_panel(state)}
     </div>
     <div>
-      {room_panel(state)}
+      {room_panel(state, view_room, is_party_room, resolved_view_id)}
       {npc_panel(state)}
     </div>
   </div>
@@ -406,28 +446,23 @@ def party_panel(state: GameState) -> str:
 # Room panel
 # ---------------------------------------------------------------------------
 
-def room_panel(state: GameState) -> str:
+def room_panel(
+    state: GameState,
+    room,                   # Room | None — the room being viewed
+    is_party_room: bool = False,
+    view_room_id: str = "",
+) -> str:
     channel_id = state.platform_channel_id
-    room = state.current_room
-
-    set_room_html = f"""
-<hr class="divider">
-<div class="section-header"><h3>Set / Update Room</h3></div>
-<form hx-post="/session/{channel_id}/setroom"
-      hx-target="#dashboard" hx-swap="outerHTML">
-  <label>Name</label>
-  <input type="text" name="name" value="{room.name if room else ''}" placeholder="Room name">
-  <label>Description</label>
-  <textarea name="description" placeholder="Player-visible description">{room.description if room else ''}</textarea>
-  <label>DM Notes</label>
-  <textarea name="notes" placeholder="DM-facing notes">{room.notes if room else ''}</textarea>
-  <button type="submit">Set Room</button>
-</form>"""
 
     if not room:
-        return f'<div class="card"><h3>Room</h3><p class="muted">No current room.</p>{set_room_html}</div>'
+        return '<div class="card"><h3>Room</h3><p class="muted">Select a room from the dungeon list, or create one.</p></div>'
 
-    # Features — each state update is its own form
+    party_badge = (
+        ' <span class="tag tag-open" style="font-size:0.7rem;vertical-align:middle">Party here</span>'
+        if is_party_room else ""
+    )
+
+    # Features
     features_html = ""
     for feat in room.features:
         fid = str(feat.feature_id)
@@ -438,6 +473,7 @@ def room_panel(state: GameState) -> str:
   <td>
     <form hx-post="/session/{channel_id}/feature/{fid}/setstate"
           hx-target="#dashboard" hx-swap="outerHTML">
+      <input type="hidden" name="view_room_id" value="{view_room_id}">
       <div class="row">
         <input type="text" name="state_str" value="{feat.state}">
         <button class="btn-sm" type="submit">Set</button>
@@ -451,6 +487,7 @@ def room_panel(state: GameState) -> str:
 <div class="section-header"><h3>Add Feature</h3></div>
 <form hx-post="/session/{channel_id}/addfeature"
       hx-target="#dashboard" hx-swap="outerHTML">
+  <input type="hidden" name="view_room_id" value="{view_room_id}">
   <div class="row">
     <div><label>Name</label><input type="text" name="name" placeholder="Chandelier"></div>
     <div><label>State</label><input type="text" name="state_str" value="intact"></div>
@@ -460,21 +497,27 @@ def room_panel(state: GameState) -> str:
   <button type="submit">Add Feature</button>
 </form>"""
 
-    # Exits — select triggers on change
+    # Exits
     exits_html = ""
     for i, ex in enumerate(room.exits, 1):
         eid = str(ex.exit_id)
-        options = ''.join(
+        dest_name = ""
+        if ex.destination_id and state.dungeon:
+            dest_room = state.dungeon.rooms.get(ex.destination_id)
+            if dest_room:
+                dest_name = f" \u2192 {dest_room.name}"
+        options = "".join(
             f'<option value="{d.value}" {"selected" if d == ex.door_state else ""}>{d.value}</option>'
             for d in DoorState
         )
         exits_html += f"""
 <tr>
-  <td><strong>{i}. {ex.label.capitalize()}</strong><br>
+  <td><strong>{i}. {ex.label.capitalize()}</strong>{dest_name}<br>
       <span class="muted">{ex.description}</span></td>
   <td>
     <form hx-post="/session/{channel_id}/exit/{eid}/setstate"
           hx-target="#dashboard" hx-swap="outerHTML">
+      <input type="hidden" name="view_room_id" value="{view_room_id}">
       <div class="row">
         <select name="door_state" onchange="this.form.requestSubmit()">
           {options}
@@ -489,11 +532,12 @@ def room_panel(state: GameState) -> str:
 <div class="section-header"><h3>Add Exit</h3></div>
 <form hx-post="/session/{channel_id}/addexit"
       hx-target="#dashboard" hx-swap="outerHTML">
+  <input type="hidden" name="view_room_id" value="{view_room_id}">
   <div class="row">
     <div><label>Label</label><input type="text" name="label" placeholder="north"></div>
     <div><label>Door State</label>
     <select name="door_state">
-      {''.join(f'<option value="{d.value}">{d.value}</option>' for d in DoorState)}
+      {"".join(f'<option value="{d.value}">{d.value}</option>' for d in DoorState)}
     </select></div>
   </div>
   <label>Description</label>
@@ -503,20 +547,20 @@ def room_panel(state: GameState) -> str:
 
     return f"""
 <div class="card">
-  <div class="section-header"><h3>Room: {room.name}</h3></div>
+  <div class="section-header">
+    <h3>Room: {room.name}{party_badge}</h3>
+  </div>
   <p class="muted">{room.description}</p>
   {f'<p class="muted"><em>DM notes: {room.notes}</em></p>' if room.notes else ''}
 
   <div class="section-header"><h3>Features</h3></div>
-  {'<table><tr><th>Feature</th><th>State</th></tr>' + features_html + '</table>' if features_html else '<p class="muted">No features.</p>'}
+  {"<table><tr><th>Feature</th><th>State</th></tr>" + features_html + "</table>" if features_html else '<p class="muted">No features.</p>'}
   {add_feature_html}
 
   <hr class="divider">
   <div class="section-header"><h3>Exits</h3></div>
-  {'<table><tr><th>Exit</th><th>Door State</th></tr>' + exits_html + '</table>' if exits_html else '<p class="muted">No exits.</p>'}
+  {"<table><tr><th>Exit</th><th>Door State</th></tr>" + exits_html + "</table>" if exits_html else '<p class="muted">No exits.</p>'}
   {add_exit_html}
-
-  {set_room_html}
 </div>"""
 
 
@@ -524,48 +568,91 @@ def room_panel(state: GameState) -> str:
 # Dungeon import / export panel (PRE_START only)
 # ---------------------------------------------------------------------------
 
-def dungeon_panel(state: GameState) -> str:
+def dungeon_panel(state: GameState, view_room_id: str = "") -> str:
     channel_id = state.platform_channel_id
     dungeon = state.dungeon
 
+    # --- Header summary + export
     if dungeon:
+        safe_name = dungeon.name.replace(" ", "_").lower()
         summary = (
             f"<p><strong>{dungeon.name}</strong> &mdash; "
-            f"{len(dungeon.rooms)} room(s) loaded.</p>"
+            f"{len(dungeon.rooms)} room(s)</p>"
         )
-        if dungeon.description:
-            summary += f'<p class="muted">{dungeon.description}</p>'
-        entrance = dungeon.rooms.get(dungeon.entrance_id) if dungeon.entrance_id else None
-        if entrance:
-            summary += f'<p class="muted">Entrance: {entrance.name}</p>'
-        safe_name = dungeon.name.replace(" ", "_").lower()
-        export_btn = f"""
-<a class="btn btn-sm"
-   href="/session/{channel_id}/dungeon/export"
-   download="{safe_name}.json">Export dungeon JSON</a>"""
+        export_btn = (
+            f'<a class="btn btn-sm" href="/session/{channel_id}/dungeon/export" '
+            f'download="{safe_name}.json">Export JSON</a>'
+        )
     else:
         summary = '<p class="muted">No dungeon loaded.</p>'
         export_btn = ""
 
-    # Import only available before the session starts
+    # --- Import form (PRE_START only)
     if state.mode == SessionMode.PRE_START:
         replace_note = (
-            '<p class="muted" style="margin-top:0.75rem">Import a new file to replace:</p>'
+            '<p class="muted" style="margin-top:0.75rem">Replace dungeon:</p>'
             if dungeon else ""
         )
         import_html = f"""
-  {replace_note}
-  <form id="dungeon-import-form"
-        hx-post="/session/{channel_id}/dungeon/import"
-        hx-target="#dashboard" hx-swap="outerHTML"
-        hx-encoding="multipart/form-data">
-    <label>Import dungeon JSON</label>
-    <input type="file" name="file" accept=".json"
-           onchange="this.form.requestSubmit()"
-           style="color:#e0e0e0; margin-top:4px">
-  </form>"""
+{replace_note}
+<form hx-post="/session/{channel_id}/dungeon/import"
+      hx-target="#dashboard" hx-swap="outerHTML"
+      hx-encoding="multipart/form-data">
+  <input type="file" name="file" accept=".json"
+         onchange="this.form.requestSubmit()"
+         style="color:#e0e0e0; margin-top:4px">
+</form>"""
     else:
         import_html = ""
+
+    # --- Room list
+    if dungeon and dungeon.rooms:
+        room_rows = ""
+        # Sort: party room first, then alphabetical
+        def _sort_key(r):
+            is_current = (state.current_room_id == r.room_id)
+            return (0 if is_current else 1, r.name.lower())
+        for room in sorted(dungeon.rooms.values(), key=_sort_key):
+            rid = str(room.room_id)
+            is_party = (state.current_room_id == room.room_id)
+            is_viewing = (rid == view_room_id)
+            party_mark = '<span title="Party is here" style="color:#c9a84c">&#9733;</span>' if is_party else '<span style="color:transparent">&#9733;</span>'
+            visited_note = '' if room.visited else ' <span class="muted" style="font-size:0.75rem">(unvisited)</span>'
+            row_style = 'background:#0f2a50;' if is_viewing else ''
+            # Enter-room button only available once session is active
+            if state.mode != SessionMode.PRE_START:
+                enter_btn = f"""<form style="display:inline" hx-post="/session/{channel_id}/enterroom/{rid}" hx-target="#dashboard" hx-swap="outerHTML"><button class="btn-sm" type="submit">Enter</button></form>"""
+            else:
+                enter_btn = ""
+            view_link = f'/session/{channel_id}?view_room={rid}'
+            room_rows += f"""
+<tr style="{row_style}">
+  <td style="width:1.2rem">{party_mark}</td>
+  <td><a href="{view_link}" style="color:#e0e0e0;text-decoration:none">{room.name}{visited_note}</a></td>
+  <td style="text-align:right">{enter_btn}</td>
+</tr>"""
+
+        room_list_html = f"""
+<hr class="divider">
+<div class="section-header" style="margin-bottom:0.4rem">
+  <h3 style="font-size:0.9rem">Rooms</h3>
+</div>
+<table style="font-size:0.85rem">{room_rows}</table>"""
+    else:
+        room_list_html = ""
+
+    # --- New room inline form
+    new_room_html = f"""
+<hr class="divider">
+<div class="section-header"><h3 style="font-size:0.9rem">New Room</h3></div>
+<form hx-post="/session/{channel_id}/setroom"
+      hx-target="#dashboard" hx-swap="outerHTML">
+  <input type="hidden" name="view_room_id" value="{view_room_id}">
+  <input type="text" name="name" placeholder="Room name" style="margin-bottom:4px">
+  <textarea name="description" rows="2" placeholder="Player-visible description"></textarea>
+  <textarea name="notes" rows="1" placeholder="DM notes (optional)"></textarea>
+  <button type="submit">Create Room</button>
+</form>"""
 
     return f"""
 <div class="card">
@@ -573,6 +660,8 @@ def dungeon_panel(state: GameState) -> str:
   {summary}
   {export_btn}
   {import_html}
+  {room_list_html}
+  {new_room_html}
 </div>"""
 
 
