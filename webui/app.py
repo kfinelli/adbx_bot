@@ -300,6 +300,8 @@ async def route_setroom(
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse("Session not found.", status_code=404)
+    if not name.strip():
+        return _respond(channel_id, error="Room name is required.", view_room_id=view_room_id)
     room = Room(name=name, description=description, notes=notes)
     result = register_room(state, room)
     store.save_session(state)
