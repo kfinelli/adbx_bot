@@ -534,6 +534,145 @@ def _find_npc(state: GameState, npc_id: UUID) -> Optional[NPC]:
 # DM mutations — rooms and features
 # ---------------------------------------------------------------------------
 
+def set_turn_number(state: GameState, turn_number: int) -> EngineResult:
+    """Directly set the session turn counter. DM correction tool."""
+    if turn_number < 0:
+        return _err(state, "Turn number cannot be negative.")
+    state.turn_number = turn_number
+    if state.current_turn:
+        state.current_turn.turn_number = turn_number
+    state.updated_at = _now()
+    return _ok(state, f"Turn number set to {turn_number}.")
+
+
+def update_room(
+    state:       GameState,
+    room_id:     UUID,
+    name:        str,
+    description: str,
+    notes:       str = "",
+) -> EngineResult:
+    """Edit the name, description, and DM notes of an existing room."""
+    if not name.strip():
+        return _err(state, "Room name cannot be empty.")
+    room = _resolve_room(state, room_id)
+    if room is None:
+        return _err(state, f"Room {room_id} not found.")
+    room.name        = name.strip()
+    room.description = description
+    room.notes       = notes
+    state.updated_at = _now()
+    return _ok(state, f"Room updated: {room.name}.")
+
+
+def delete_feature(
+    state:      GameState,
+    feature_id: UUID,
+    room_id:    Optional[UUID] = None,
+) -> EngineResult:
+    room = _resolve_room(state, room_id)
+    if room is None:
+        return _err(state, "No current room.")
+    before = len(room.features)
+    room.features = [f for f in room.features if f.feature_id != feature_id]
+    if len(room.features) == before:
+        return _err(state, f"Feature {feature_id} not found.")
+    state.updated_at = _now()
+    return _ok(state, "Feature deleted.")
+
+
+def update_feature(
+    state:       GameState,
+    feature_id:  UUID,
+    name:        str,
+    description: str,
+    state_str:   str,
+    notes:       str = "",
+    room_id:     Optional[UUID] = None,
+) -> EngineResult:
+    room = _resolve_room(state, room_id)
+    if room is None:
+        return _err(state, "No current room.")
+    feat = next((f for f in room.features if f.feature_id == feature_id), None)
+    if feat is None:
+        return _err(state, f"Feature {feature_id} not found.")
+    if not name.strip():
+        return _err(state, "Feature name cannot be empty.")
+    feat.name        = name.strip()
+    feat.description = description
+    feat.state       = state_str
+    feat.notes       = notes
+    state.updated_at = _now()
+    return _ok(state, f"Feature updated: {feat.name}.")
+
+
+def delete_exit(
+    state:   GameState,
+    exit_id: UUID,
+    room_id: Optional[UUID] = None,
+) -> EngineResult:
+    room = _resolve_room(state, room_id)
+    if room is None:
+        return _err(state, "No current room.")
+    before = len(room.exits)
+    room.exits = [e for e in room.exits if e.exit_id != exit_id]
+    if len(room.exits) == before:
+        return _err(state, f"Exit {exit_id} not found.")
+    state.updated_at = _now()
+    return _ok(state, "Exit deleted.")
+
+
+def update_exit(
+    state:          GameState,
+    exit_id:        UUID,
+    label:          str,
+    description:    str,
+    door_state,                       # DoorState
+    destination_id: Optional[UUID] = None,
+    notes:          str = "",
+    room_id:        Optional[UUID] = None,
+) -> EngineResult:
+    room = _resolve_room(state, room_id)
+    if room is None:
+        return _err(state, "No current room.")
+    ex = next((e for e in room.exits if e.exit_id == exit_id), None)
+    if ex is None:
+        return _err(state, f"Exit {exit_id} not found.")
+    if not label.strip():
+        return _err(state, "Exit label cannot be empty.")
+    ex.label          = label.strip()
+    ex.description    = description
+    ex.door_state     = door_state
+    ex.destination_id = destination_id
+    ex.notes          = notes
+    state.updated_at  = _now()
+    return _ok(state, f"Exit updated: {ex.label}.")
+
+
+def update_npc(
+    state:       GameState,
+    npc_id:      UUID,
+    name:        str,
+    description: str,
+    hp_max:      int,
+    hp_current:  int,
+    armor_class: int,
+    notes:       str = "",
+) -> EngineResult:
+    npc = _find_npc(state, npc_id)
+    if npc is None:
+        return _err(state, f"NPC {npc_id} not found.")
+    if not name.strip():
+        return _err(state, "NPC name cannot be empty.")
+    npc.name        = name.strip()
+    npc.description = description
+    npc.hp_max      = hp_max
+    npc.hp_current  = hp_current
+    npc.armor_class = armor_class
+    npc.notes       = notes
+    state.updated_at = _now()
+    return _ok(state, f"NPC updated: {npc.name}.")
+
 def register_room(state: GameState, room: Room) -> EngineResult:
     """
     Add a room to the dungeon graph without moving the party into it.

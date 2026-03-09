@@ -23,9 +23,17 @@ from engine import (
     add_exit,
     add_npc as eng_add_npc,
     answer_oracle,
+    delete_exit,
+    delete_feature,
     import_dungeon,
     move_party_to_room,
     register_room,
+    set_turn_number,
+    update_exit,
+    update_feature,
+    update_npc,
+    remove_npc,
+    update_room,
     close_turn,
     hold_session,
     open_turn,
@@ -92,13 +100,13 @@ async def _sync_discord(channel_id: str) -> None:
     await store.update_status(channel, state)
 
 
-def _respond(channel_id: str, flash: str = "", error: str = "", sync: bool = True, view_room_id: str = "") -> HTMLResponse:
+def _respond(channel_id: str, flash: str = "", error: str = "", sync: bool = True, view_room_id: str = "", edit_id: str = "") -> HTMLResponse:
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse('<div class="error">Session not found.</div>')
     if sync and _bot:
         asyncio.create_task(_sync_discord(channel_id))
-    return HTMLResponse(dashboard_fragment(state, flash=flash, error=error, view_room_id=view_room_id))
+    return HTMLResponse(dashboard_fragment(state, flash=flash, error=error, view_room_id=view_room_id, edit_id=edit_id))
 
 
 # ---------------------------------------------------------------------------
@@ -137,11 +145,11 @@ async def index():
 
 
 @app.get("/session/{channel_id}", response_class=HTMLResponse)
-async def session_view(channel_id: str, view_room: str = ""):
+async def session_view(channel_id: str, view_room: str = "", edit: str = ""):
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse("<p>Session not found.</p>", status_code=404)
-    return session_page(state, _session_list(), view_room_id=view_room)
+    return session_page(state, _session_list(), view_room_id=view_room, edit_id=edit)
 
 
 # ---------------------------------------------------------------------------
@@ -521,3 +529,180 @@ async def route_dungeon_export(channel_id: str):
         media_type="application/json",
         headers={"Content-Disposition": f'attachment; filename="{safe_name}.json"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# Turn number
+# ---------------------------------------------------------------------------
+
+@app.post("/session/{channel_id}/setturnumber", response_class=HTMLResponse)
+async def route_setturnumber(
+    channel_id: str,
+    turn_number: Annotated[int, Form()],
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    result = set_turn_number(state, turn_number)
+    if not result.ok:
+        return _respond(channel_id, error=result.error)
+    store.save_session(state)
+    return _respond(channel_id, flash=result.message)
+
+
+# ---------------------------------------------------------------------------
+# Room update
+# ---------------------------------------------------------------------------
+
+@app.post("/session/{channel_id}/room/{room_id}/update", response_class=HTMLResponse)
+async def route_room_update(
+    channel_id: str,
+    room_id: str,
+    name: Annotated[str, Form()],
+    description: Annotated[str, Form()],
+    notes: Annotated[str, Form()] = "",
+    view_room_id: Annotated[str, Form()] = "",
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    rid = _parse_uuid(room_id)
+    if rid is None:
+        return _respond(channel_id, error="Invalid room ID.", view_room_id=view_room_id)
+    result = update_room(state, rid, name, description, notes)
+    if not result.ok:
+        return _respond(channel_id, error=result.error, view_room_id=view_room_id)
+    store.save_session(state)
+    return _respond(channel_id, flash=result.message, view_room_id=view_room_id)
+
+
+# ---------------------------------------------------------------------------
+# Feature update / delete
+# ---------------------------------------------------------------------------
+
+@app.post("/session/{channel_id}/feature/{feature_id}/update", response_class=HTMLResponse)
+async def route_feature_update(
+    channel_id: str,
+    feature_id: str,
+    name: Annotated[str, Form()],
+    description: Annotated[str, Form()],
+    state_str: Annotated[str, Form()] = "intact",
+    notes: Annotated[str, Form()] = "",
+    view_room_id: Annotated[str, Form()] = "",
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    rid = _parse_uuid(view_room_id)
+    result = update_feature(state, UUID(feature_id), name, description, state_str, notes, room_id=rid)
+    if not result.ok:
+        return _respond(channel_id, error=result.error, view_room_id=view_room_id)
+    store.save_session(state)
+    return _respond(channel_id, flash=result.message, view_room_id=view_room_id)
+
+
+@app.post("/session/{channel_id}/feature/{feature_id}/delete", response_class=HTMLResponse)
+async def route_feature_delete(
+    channel_id: str,
+    feature_id: str,
+    view_room_id: Annotated[str, Form()] = "",
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    rid = _parse_uuid(view_room_id)
+    result = delete_feature(state, UUID(feature_id), room_id=rid)
+    if not result.ok:
+        return _respond(channel_id, error=result.error, view_room_id=view_room_id)
+    store.save_session(state)
+    return _respond(channel_id, view_room_id=view_room_id)
+
+
+# ---------------------------------------------------------------------------
+# Exit update / delete
+# ---------------------------------------------------------------------------
+
+@app.post("/session/{channel_id}/exit/{exit_id}/update", response_class=HTMLResponse)
+async def route_exit_update(
+    channel_id: str,
+    exit_id: str,
+    label: Annotated[str, Form()],
+    description: Annotated[str, Form()],
+    door_state: Annotated[str, Form()],
+    destination_id: Annotated[str, Form()] = "",
+    notes: Annotated[str, Form()] = "",
+    view_room_id: Annotated[str, Form()] = "",
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    try:
+        ds = DoorState(door_state)
+    except ValueError:
+        return _respond(channel_id, error=f"Unknown door state: {door_state}", view_room_id=view_room_id)
+    rid = _parse_uuid(view_room_id)
+    dest = _parse_uuid(destination_id)
+    result = update_exit(state, UUID(exit_id), label, description, ds, destination_id=dest, notes=notes, room_id=rid)
+    if not result.ok:
+        return _respond(channel_id, error=result.error, view_room_id=view_room_id)
+    store.save_session(state)
+    return _respond(channel_id, flash=result.message, view_room_id=view_room_id)
+
+
+@app.post("/session/{channel_id}/exit/{exit_id}/delete", response_class=HTMLResponse)
+async def route_exit_delete(
+    channel_id: str,
+    exit_id: str,
+    view_room_id: Annotated[str, Form()] = "",
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    rid = _parse_uuid(view_room_id)
+    result = delete_exit(state, UUID(exit_id), room_id=rid)
+    if not result.ok:
+        return _respond(channel_id, error=result.error, view_room_id=view_room_id)
+    store.save_session(state)
+    return _respond(channel_id, view_room_id=view_room_id)
+
+
+# ---------------------------------------------------------------------------
+# NPC update / delete
+# ---------------------------------------------------------------------------
+
+@app.post("/session/{channel_id}/npc/{npc_id}/update", response_class=HTMLResponse)
+async def route_npc_update(
+    channel_id: str,
+    npc_id: str,
+    name: Annotated[str, Form()],
+    description: Annotated[str, Form()],
+    hp_max: Annotated[int, Form()],
+    hp_current: Annotated[int, Form()],
+    armor_class: Annotated[int, Form()],
+    notes: Annotated[str, Form()] = "",
+    view_room_id: Annotated[str, Form()] = "",
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    result = update_npc(state, UUID(npc_id), name, description, hp_max, hp_current, armor_class, notes)
+    if not result.ok:
+        return _respond(channel_id, error=result.error, view_room_id=view_room_id)
+    store.save_session(state)
+    return _respond(channel_id, flash=result.message, view_room_id=view_room_id)
+
+
+@app.post("/session/{channel_id}/npc/{npc_id}/delete", response_class=HTMLResponse)
+async def route_npc_delete(
+    channel_id: str,
+    npc_id: str,
+    view_room_id: Annotated[str, Form()] = "",
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    result = remove_npc(state, UUID(npc_id))
+    if not result.ok:
+        return _respond(channel_id, error=result.error, view_room_id=view_room_id)
+    store.save_session(state)
+    return _respond(channel_id, view_room_id=view_room_id)
