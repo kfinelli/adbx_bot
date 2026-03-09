@@ -7,11 +7,10 @@ import os
 import tempfile
 
 import pytest
-import pytest_asyncio  # needed for async fixtures
-from models import GameState, Party
-from engine import create_character, CharacterClass, start_session
-from persistence import Database
 
+from engine import CharacterClass, create_character, start_session
+from models import GameState, Party
+from persistence import Database
 
 # ---------------------------------------------------------------------------
 # Fixture: temporary database per test

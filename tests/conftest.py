@@ -5,16 +5,16 @@ All fixtures operate purely on the engine + models layer.
 No Discord, no FastAPI, no SQLite — those are tested separately.
 """
 
-import sys
 import os
+import sys
 
 # Make the project root importable regardless of where pytest is invoked from.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
-from models import GameState, Party
-from engine import create_character, CharacterClass, open_turn, start_session
 
+from engine import CharacterClass, create_character, start_session
+from models import GameState, Party
 
 # ---------------------------------------------------------------------------
 # Bare state — no party, no characters

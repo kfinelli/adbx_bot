@@ -2,8 +2,6 @@
 test_session.py — Session lifecycle: start, hold, resume, rounds mode.
 """
 
-import pytest
-from models import SessionMode, TurnStatus
 from engine import (
     enter_rounds,
     exit_rounds,
@@ -12,6 +10,7 @@ from engine import (
     set_turn_number,
     start_session,
 )
+from models import SessionMode, TurnStatus
 
 
 class TestStartSession:

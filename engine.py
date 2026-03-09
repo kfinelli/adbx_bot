@@ -12,30 +12,25 @@ Convention:
 
 from __future__ import annotations
 
-import copy
 import random
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Optional
-from uuid import UUID, uuid4
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from uuid import UUID
 
 from models import (
+    NPC,
     AbilityScores,
     Character,
     CharacterClass,
     CharacterStatus,
-    Dungeon,
     DoorState,
+    Dungeon,
     Exit,
     GameState,
     InventoryItem,
     LightSource,
-    NPC,
-    Party,
     PlayerTurnSubmission,
-    PreparedSpell,
     Room,
-    RoomFeature,
     SessionMode,
     SpellBook,
     TurnRecord,
@@ -51,13 +46,12 @@ from tables import (
     get_spell_slots,
 )
 
-
 # ---------------------------------------------------------------------------
 # Timezone-aware UTC now (replaces deprecated _now())
 # ---------------------------------------------------------------------------
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 # ---------------------------------------------------------------------------
@@ -69,7 +63,7 @@ class EngineResult:
     ok:        bool             = True
     message:   str              = ""   # narrative / confirmation text for the platform to display
     error:     str              = ""   # human-readable error if ok=False
-    state:     Optional[GameState] = None
+    state:     GameState | None = None
     notify_dm: bool             = False  # platform should notify DM to resolve
 
 
@@ -138,9 +132,9 @@ def create_character(
     name:            str,
     character_class: CharacterClass,
     equipment_package: str,
-    owner_id:        Optional[str] = None,
-    ability_scores:  Optional[AbilityScores] = None,   # pre-rolled, or we roll
-    prerolled_stats: Optional[dict] = None,             # from roll_stats() dict
+    owner_id:        str | None = None,
+    ability_scores:  AbilityScores | None = None,   # pre-rolled, or we roll
+    prerolled_stats: dict | None = None,             # from roll_stats() dict
 ) -> EngineResult:
     """
     Create a new level-1 character, add them to the session, and return the result.
@@ -180,7 +174,7 @@ def create_character(
     saves = get_saving_throws(character_class, 1)
 
     # --- Spell book (spellcasters only, determined by class rules)
-    spellbook: Optional[SpellBook] = None
+    spellbook: SpellBook | None = None
     if rules.is_spellcaster:
         slots = get_spell_slots(character_class, 1)
         spellbook = SpellBook(
@@ -243,7 +237,7 @@ def create_character(
 
 def open_turn(
     state:  GameState,
-    due_at: Optional[datetime] = None,
+    due_at: datetime | None = None,
 ) -> EngineResult:
     """
     Open a new dungeon turn (or combat round).
@@ -418,7 +412,7 @@ def _tick_light(state: GameState) -> None:
 def set_light_source(
     state:           GameState,
     label:           str,
-    turns_remaining: Optional[int],
+    turns_remaining: int | None,
 ) -> EngineResult:
     """
     DM command: set the active light source.
@@ -523,7 +517,7 @@ def remove_npc(state: GameState, npc_id: UUID) -> EngineResult:
     return _ok(state, f"{npc.name} removed from room.")
 
 
-def _find_npc(state: GameState, npc_id: UUID) -> Optional[NPC]:
+def _find_npc(state: GameState, npc_id: UUID) -> NPC | None:
     for n in state.npcs:
         if n.npc_id == npc_id:
             return n
@@ -568,7 +562,7 @@ def update_room(
 def delete_feature(
     state:      GameState,
     feature_id: UUID,
-    room_id:    Optional[UUID] = None,
+    room_id:    UUID | None = None,
 ) -> EngineResult:
     room = _resolve_room(state, room_id)
     if room is None:
@@ -588,7 +582,7 @@ def update_feature(
     description: str,
     state_str:   str,
     notes:       str = "",
-    room_id:     Optional[UUID] = None,
+    room_id:     UUID | None = None,
 ) -> EngineResult:
     room = _resolve_room(state, room_id)
     if room is None:
@@ -609,7 +603,7 @@ def update_feature(
 def delete_exit(
     state:   GameState,
     exit_id: UUID,
-    room_id: Optional[UUID] = None,
+    room_id: UUID | None = None,
 ) -> EngineResult:
     room = _resolve_room(state, room_id)
     if room is None:
@@ -628,9 +622,9 @@ def update_exit(
     label:          str,
     description:    str,
     door_state,                       # DoorState
-    destination_id: Optional[UUID] = None,
+    destination_id: UUID | None = None,
     notes:          str = "",
-    room_id:        Optional[UUID] = None,
+    room_id:        UUID | None = None,
 ) -> EngineResult:
     room = _resolve_room(state, room_id)
     if room is None:
@@ -722,7 +716,7 @@ def move_party_to_room(state: GameState, room_id: UUID) -> EngineResult:
     return _ok(state, f"Entered: {room.name}.")
 
 
-def _resolve_room(state: GameState, room_id: Optional[UUID]) -> Optional[object]:
+def _resolve_room(state: GameState, room_id: UUID | None) -> object | None:
     """Return the room for room_id if given, else the party's current room."""
     if room_id is not None:
         if state.dungeon is None:
@@ -735,7 +729,7 @@ def set_feature_state(
     state:      GameState,
     feature_id: UUID,
     new_state:  str,
-    room_id:    Optional[UUID] = None,
+    room_id:    UUID | None = None,
 ) -> EngineResult:
     """Update the state string of a room feature.
     If room_id is provided, operates on that room; otherwise uses the current room."""
@@ -754,7 +748,7 @@ def set_exit_state(
     state:    GameState,
     exit_id:  UUID,
     new_state,            # DoorState
-    room_id:  Optional[UUID] = None,
+    room_id:  UUID | None = None,
 ) -> EngineResult:
     """If room_id is provided, operates on that room; otherwise uses the current room."""
     room = _resolve_room(state, room_id)
@@ -774,7 +768,7 @@ def add_exit(
     description: str,
     door_state=DoorState.OPEN,
     notes:       str = "",
-    room_id:     Optional[UUID] = None,
+    room_id:     UUID | None = None,
 ) -> EngineResult:
     """DM adds a new exit. If room_id is provided, adds to that room; else current room."""
     room = _resolve_room(state, room_id)
@@ -908,7 +902,7 @@ def ask_oracle(
     asker_name:     str,
     question:       str,
     asker_owner_id: str = None,
-) -> "tuple[EngineResult, object]":
+) -> tuple[EngineResult, object]:
     """
     Create a new oracle entry. Returns (result, oracle) so the platform
     layer can post the Discord message and store the message_id back.
@@ -930,7 +924,7 @@ def answer_oracle(
     state:     GameState,
     number:    int,
     answer:    str,
-) -> "tuple[EngineResult, object | None]":
+) -> tuple[EngineResult, object | None]:
     """
     DM answers an oracle by number. Returns (result, oracle) so the
     platform layer can edit the Discord message in place.
@@ -1044,7 +1038,7 @@ def render_status_header(state: GameState) -> str:
     if state.current_turn and state.current_turn.due_at:
         due = state.current_turn.due_at
         if due.tzinfo is None:
-            due = due.replace(tzinfo=timezone.utc)
+            due = due.replace(tzinfo=UTC)
         unix_ts = int(due.timestamp())
         turn_label += f" (deadline <t:{unix_ts}:f>)"
     return turn_label

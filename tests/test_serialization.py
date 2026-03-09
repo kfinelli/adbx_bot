@@ -6,16 +6,27 @@ which is the most critical property for persistence correctness.
 """
 
 import json
+
 import pytest
-from uuid import UUID
-from models import (
-    CharacterStatus, DoorState, Dungeon, GameState, NPC,
-    Party, Room, RoomFeature, Exit, SessionMode,
-)
+
 from engine import (
-    add_exit, add_npc, close_turn, create_character,
-    register_room, resolve_turn, set_light_source, set_room,
-    start_session, CharacterClass,
+    CharacterClass,
+    close_turn,
+    create_character,
+    register_room,
+    resolve_turn,
+    set_light_source,
+)
+from models import (
+    NPC,
+    CharacterStatus,
+    DoorState,
+    Dungeon,
+    Exit,
+    GameState,
+    Room,
+    RoomFeature,
+    SessionMode,
 )
 from serialization import (
     deserialize_dungeon_file,
@@ -23,7 +34,6 @@ from serialization import (
     serialize_dungeon_file,
     serialize_state,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

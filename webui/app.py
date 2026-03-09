@@ -8,36 +8,28 @@ names in these routes directly. No hx-include id-based lookups.
 from __future__ import annotations
 
 import asyncio
-import sys, os; sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from discord_tasks import dispatch_oracle_answer, dispatch_turn_resolved
+import sys; import os; sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from datetime import UTC
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import FastAPI, Form, Request, UploadFile, File
-from fastapi.responses import Response
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, File, Form, UploadFile
+from fastapi.responses import HTMLResponse, Response
 
 import store
-from store import archive_session, delete_session, repost_status, save_session_async
-from serialization import deserialize_dungeon_file, serialize_dungeon_file
+from discord_tasks import dispatch_oracle_answer, dispatch_turn_resolved
 from engine import (
     add_exit,
-    add_npc as eng_add_npc,
     answer_oracle,
+    close_turn,
     delete_exit,
     delete_feature,
+    hold_session,
     import_dungeon,
     move_party_to_room,
-    register_room,
-    set_turn_number,
-    update_exit,
-    update_feature,
-    update_npc,
-    remove_npc,
-    update_room,
-    close_turn,
-    hold_session,
     open_turn,
+    register_room,
+    remove_npc,
     resolve_turn,
     resume_session,
     set_character_hp,
@@ -47,16 +39,25 @@ from engine import (
     set_light_source,
     set_npc_hp,
     set_npc_status,
-    set_room,
+    set_turn_number,
     start_session,
+    update_exit,
+    update_feature,
+    update_npc,
+    update_room,
+)
+from engine import (
+    add_npc as eng_add_npc,
 )
 from models import (
+    NPC,
     CharacterStatus,
     DoorState,
-    NPC,
     Room,
     RoomFeature,
 )
+from serialization import deserialize_dungeon_file, serialize_dungeon_file
+from store import archive_session, repost_status, save_session_async
 from webui.templates import (
     archive_page,
     dashboard_fragment,
@@ -128,7 +129,6 @@ def _parse_uuid(s: str):
 
 def _resolve_view_room(state, view_room_id: str):
     """Return the Room for view_room_id, falling back to current_room."""
-    from models import Room as _Room
     if view_room_id and state.dungeon:
         rid = _parse_uuid(view_room_id)
         if rid:
@@ -185,8 +185,8 @@ async def route_settimer(channel_id: str, hours: Annotated[float, Form()]):
         return HTMLResponse("Session not found.", status_code=404)
     if state.current_turn is None:
         return _respond(channel_id, error="No open turn.")
-    from datetime import datetime, timedelta, timezone
-    state.current_turn.due_at = datetime.now(timezone.utc) + timedelta(hours=hours)
+    from datetime import datetime, timedelta
+    state.current_turn.due_at = datetime.now(UTC) + timedelta(hours=hours)
     await save_session_async(state)
     return _respond(channel_id, flash=f"Timer set to {hours}h from now.")
 

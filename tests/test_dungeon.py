@@ -2,9 +2,8 @@
 test_dungeon.py — Dungeon graph, rooms, features, exits, NPCs, light sources.
 """
 
-import pytest
 from uuid import uuid4
-from models import DoorState, Dungeon, NPC, Room, RoomFeature, Exit
+
 from engine import (
     abscond,
     add_exit,
@@ -26,7 +25,7 @@ from engine import (
     update_npc,
     update_room,
 )
-
+from models import NPC, DoorState, Dungeon, Room, RoomFeature
 
 # ---------------------------------------------------------------------------
 # Helpers

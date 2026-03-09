@@ -2,7 +2,6 @@
 test_oracles_say.py — Say log, emote log, and oracle (Q&A) system.
 """
 
-import pytest
 from engine import answer_oracle, ask_oracle, emote, say
 
 

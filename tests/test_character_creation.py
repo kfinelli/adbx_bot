@@ -2,10 +2,9 @@
 test_character_creation.py — Character creation and stat generation tests.
 """
 
-import pytest
-from models import CharacterClass, CharacterStatus, GameState, Party
 from engine import create_character, roll_stats
-from tables import EQUIPMENT_PACKAGES, CREATION_RULES
+from models import CharacterClass, CharacterStatus, GameState, Party
+from tables import EQUIPMENT_PACKAGES
 
 
 class TestRollStats:

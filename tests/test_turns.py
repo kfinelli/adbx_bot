@@ -2,16 +2,14 @@
 test_turns.py — Turn lifecycle tests: open, submit, close, resolve, auto-close.
 """
 
-import pytest
-from models import CharacterStatus, SessionMode, TurnStatus
 from engine import (
     close_turn,
     open_turn,
     resolve_turn,
     set_character_status,
-    start_session,
     submit_turn,
 )
+from models import CharacterStatus, TurnStatus
 
 
 class TestOpenTurn:

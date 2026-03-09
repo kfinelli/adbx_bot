@@ -16,22 +16,21 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Any
 from uuid import UUID
 
 from models import (
+    NPC,
     AbilityScores,
     Character,
     CharacterClass,
     CharacterStatus,
-    Dungeon,
     DoorState,
+    Dungeon,
     Exit,
     ExitDirection,
     GameState,
     InventoryItem,
     LightSource,
-    NPC,
     Party,
     PlayerTurnSubmission,
     PreparedSpell,
@@ -42,7 +41,6 @@ from models import (
     TurnRecord,
     TurnStatus,
 )
-
 
 # ---------------------------------------------------------------------------
 # Serialization (GameState → dict → JSON string)

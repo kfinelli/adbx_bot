@@ -13,9 +13,9 @@ To adapt to a different ruleset:
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import Enum
-
 
 # ---------------------------------------------------------------------------
 # Character creation rules
@@ -120,7 +120,7 @@ CON_HP_MODIFIER = ABILITY_MODIFIERS
 # Saving throws by class and level
 # ---------------------------------------------------------------------------
 
-_ST = "death_poison wands paralysis_stone breath_weapon spells".split()
+_ST = ["death_poison", "wands", "paralysis_stone", "breath_weapon", "spells"]
 
 def _saves(*values):
     return dict(zip(_ST, values))
