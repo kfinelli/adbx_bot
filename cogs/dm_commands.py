@@ -62,6 +62,7 @@ from store import (
     ack_err,
     delete_session,
     get_session,
+    save_session_async,
     update_status,
     require_session,
 )
@@ -345,8 +346,7 @@ class DMCog(commands.Cog):
             await ack_err(interaction, result.error)
             return
 
-        from store import save_session
-        save_session(state)
+        await save_session_async(state)
         await ack_done(interaction)
         await update_status(interaction.channel, state)
 
@@ -648,8 +648,7 @@ class DMCog(commands.Cog):
             return
 
         state.default_turn_hours = hours
-        from store import save_session
-        save_session(state)
+        await save_session_async(state)
         await ack_done(interaction)
         await update_status(interaction.channel, state)
 
@@ -678,8 +677,7 @@ class DMCog(commands.Cog):
 
         from datetime import datetime, timedelta, timezone
         state.current_turn.due_at = datetime.now(timezone.utc) + timedelta(hours=hours)
-        from store import save_session
-        save_session(state)
+        await save_session_async(state)
         await ack_done(interaction)
         await update_status(interaction.channel, state)
 
@@ -785,8 +783,7 @@ class DMCog(commands.Cog):
             return
         await dispatch_oracle_answer(self.bot, interaction.channel, oracle)
 
-        from store import save_session
-        save_session(state)
+        await save_session_async(state)
         await ack_done(interaction)
 
 # Lookup helpers

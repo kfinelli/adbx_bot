@@ -18,6 +18,7 @@ from fastapi.responses import Response
 from fastapi.responses import HTMLResponse
 
 import store
+from store import save_session_async
 from serialization import deserialize_dungeon_file, serialize_dungeon_file
 from engine import (
     add_exit,
@@ -167,7 +168,7 @@ async def route_resolve(channel_id: str, narrative: Annotated[str, Form()]):
     if not result.ok:
         return _respond(channel_id, error=result.error, sync=False)
     open_turn(state)
-    store.save_session(state)
+    await save_session_async(state)
     if _bot:
         channel = _bot.get_channel(int(channel_id))
         if channel:
@@ -184,7 +185,7 @@ async def route_settimer(channel_id: str, hours: Annotated[float, Form()]):
         return _respond(channel_id, error="No open turn.")
     from datetime import datetime, timedelta, timezone
     state.current_turn.due_at = datetime.now(timezone.utc) + timedelta(hours=hours)
-    store.save_session(state)
+    await save_session_async(state)
     return _respond(channel_id, flash=f"Timer set to {hours}h from now.")
 
 
@@ -194,7 +195,7 @@ async def route_setturnlength(channel_id: str, hours: Annotated[float, Form()]):
     if state is None:
         return HTMLResponse("Session not found.", status_code=404)
     state.default_turn_hours = hours
-    store.save_session(state)
+    await save_session_async(state)
     return _respond(channel_id, flash=f"Default turn length set to {hours}h.")
 
 
@@ -268,7 +269,7 @@ async def route_setleader(channel_id: str, char_id: str):
     if cid not in state.characters:
         return _respond(channel_id, error="Character not found.")
     state.party.leader_id = cid
-    store.save_session(state)
+    await save_session_async(state)
     char = state.characters[cid]
     return _respond(channel_id, flash=f"{char.name} is now party leader.")
 
@@ -312,7 +313,7 @@ async def route_setroom(
         return _respond(channel_id, error="Room name is required.", view_room_id=view_room_id)
     room = Room(name=name, description=description, notes=notes)
     result = register_room(state, room)
-    store.save_session(state)
+    await save_session_async(state)
     # After creating, switch the view to the new room but don't move the party
     new_view_id = str(room.room_id)
     return _respond(channel_id, flash=f"Room created: {name}.", view_room_id=new_view_id)
@@ -329,7 +330,7 @@ async def route_enterroom(channel_id: str, room_id: str):
     result = move_party_to_room(state, rid)
     if not result.ok:
         return _respond(channel_id, error=result.error, view_room_id=room_id)
-    store.save_session(state)
+    await save_session_async(state)
     if _bot:
         channel = _bot.get_channel(int(channel_id))
         if channel:
@@ -352,7 +353,7 @@ async def route_addfeature(
     if room is None:
         return _respond(channel_id, error="No room selected.", view_room_id=view_room_id)
     room.features.append(RoomFeature(name=name, description=description, state=state_str))
-    store.save_session(state)
+    await save_session_async(state)
     return _respond(channel_id, view_room_id=view_room_id)
 
 
@@ -370,7 +371,7 @@ async def route_feature_setstate(
     result = set_feature_state(state, UUID(feature_id), state_str, room_id=rid)
     if not result.ok:
         return _respond(channel_id, error=result.error, view_room_id=view_room_id)
-    store.save_session(state)
+    await save_session_async(state)
     return _respond(channel_id, view_room_id=view_room_id)
 
 
@@ -393,7 +394,7 @@ async def route_addexit(
     result = add_exit(state, label, description, ds, room_id=rid)
     if not result.ok:
         return _respond(channel_id, error=result.error, view_room_id=view_room_id)
-    store.save_session(state)
+    await save_session_async(state)
     return _respond(channel_id, view_room_id=view_room_id)
 
 
@@ -415,7 +416,7 @@ async def route_exit_setstate(
     result = set_exit_state(state, UUID(exit_id), ds, room_id=rid)
     if not result.ok:
         return _respond(channel_id, error=result.error, view_room_id=view_room_id)
-    store.save_session(state)
+    await save_session_async(state)
     return _respond(channel_id, view_room_id=view_room_id)
 
 
@@ -486,7 +487,7 @@ async def route_oracle_answer(
     result, oracle = answer_oracle(state, number, answer)
     if not result.ok:
         return _respond(channel_id, error=result.error)
-    store.save_session(state)
+    await save_session_async(state)
     if _bot:
         channel = _bot.get_channel(int(channel_id))
         if channel:
@@ -511,7 +512,7 @@ async def route_dungeon_import(channel_id: str, file: UploadFile = File(...)):
     result = import_dungeon(state, dungeon)
     if not result.ok:
         return _respond(channel_id, error=result.error)
-    store.save_session(state)
+    await save_session_async(state)
     return _respond(channel_id, flash=result.message)
 
 
@@ -546,7 +547,7 @@ async def route_setturnumber(
     result = set_turn_number(state, turn_number)
     if not result.ok:
         return _respond(channel_id, error=result.error)
-    store.save_session(state)
+    await save_session_async(state)
     return _respond(channel_id, flash=result.message)
 
 
@@ -572,7 +573,7 @@ async def route_room_update(
     result = update_room(state, rid, name, description, notes)
     if not result.ok:
         return _respond(channel_id, error=result.error, view_room_id=view_room_id)
-    store.save_session(state)
+    await save_session_async(state)
     return _respond(channel_id, flash=result.message, view_room_id=view_room_id)
 
 
@@ -597,7 +598,7 @@ async def route_feature_update(
     result = update_feature(state, UUID(feature_id), name, description, state_str, notes, room_id=rid)
     if not result.ok:
         return _respond(channel_id, error=result.error, view_room_id=view_room_id)
-    store.save_session(state)
+    await save_session_async(state)
     return _respond(channel_id, flash=result.message, view_room_id=view_room_id)
 
 
@@ -614,7 +615,7 @@ async def route_feature_delete(
     result = delete_feature(state, UUID(feature_id), room_id=rid)
     if not result.ok:
         return _respond(channel_id, error=result.error, view_room_id=view_room_id)
-    store.save_session(state)
+    await save_session_async(state)
     return _respond(channel_id, view_room_id=view_room_id)
 
 
@@ -645,7 +646,7 @@ async def route_exit_update(
     result = update_exit(state, UUID(exit_id), label, description, ds, destination_id=dest, notes=notes, room_id=rid)
     if not result.ok:
         return _respond(channel_id, error=result.error, view_room_id=view_room_id)
-    store.save_session(state)
+    await save_session_async(state)
     return _respond(channel_id, flash=result.message, view_room_id=view_room_id)
 
 
@@ -662,7 +663,7 @@ async def route_exit_delete(
     result = delete_exit(state, UUID(exit_id), room_id=rid)
     if not result.ok:
         return _respond(channel_id, error=result.error, view_room_id=view_room_id)
-    store.save_session(state)
+    await save_session_async(state)
     return _respond(channel_id, view_room_id=view_room_id)
 
 
@@ -688,7 +689,7 @@ async def route_npc_update(
     result = update_npc(state, UUID(npc_id), name, description, hp_max, hp_current, armor_class, notes)
     if not result.ok:
         return _respond(channel_id, error=result.error, view_room_id=view_room_id)
-    store.save_session(state)
+    await save_session_async(state)
     return _respond(channel_id, flash=result.message, view_room_id=view_room_id)
 
 
@@ -704,5 +705,5 @@ async def route_npc_delete(
     result = remove_npc(state, UUID(npc_id))
     if not result.ok:
         return _respond(channel_id, error=result.error, view_room_id=view_room_id)
-    store.save_session(state)
+    await save_session_async(state)
     return _respond(channel_id, view_room_id=view_room_id)

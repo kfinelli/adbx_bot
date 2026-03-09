@@ -65,8 +65,16 @@ def has_session(channel_id: str) -> bool:
 
 
 def save_session(state: GameState) -> None:
-    """Persist the current state to disk. Call after every mutation."""
+    """
+    Sync save — safe for startup, tests, and contexts where no event loop is running.
+    In async handlers (slash commands, web routes, timer) use save_session_async().
+    """
     db.save(state)
+
+
+async def save_session_async(state: GameState) -> None:
+    """Async save — use this from all coroutines to go through the DB lock."""
+    await db.save_async(state)
 
 
 # ---------------------------------------------------------------------------
@@ -94,7 +102,7 @@ async def update_status(
     Used for most commands — no new message appears in the channel.
     Saves state to DB first.
     """
-    save_session(state)
+    await save_session_async(state)
     existing = _status_messages.get(str(channel.id))
     if existing is not None:
         try:
@@ -120,7 +128,7 @@ async def repost_status(
       ...
     Saves state to DB first.
     """
-    save_session(state)
+    await save_session_async(state)
     if narrative:
         await channel.send(narrative)
     await _post_fresh_status(channel, state)
