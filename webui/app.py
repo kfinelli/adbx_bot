@@ -18,7 +18,7 @@ from fastapi.responses import Response
 from fastapi.responses import HTMLResponse
 
 import store
-from store import delete_session, repost_status, save_session_async
+from store import archive_session, delete_session, repost_status, save_session_async
 from serialization import deserialize_dungeon_file, serialize_dungeon_file
 from engine import (
     add_exit,
@@ -58,6 +58,7 @@ from models import (
     RoomFeature,
 )
 from webui.templates import (
+    archive_page,
     dashboard_fragment,
     session_list_page,
     session_page,
@@ -735,13 +736,65 @@ async def route_endsession(channel_id: str):
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse("Session not found.", status_code=404)
-    delete_session(channel_id)
+    channel_name = ""
     if _bot:
-        channel = _bot.get_channel(int(channel_id))
-        if channel:
-            asyncio.create_task(
-                channel.send("Session ended via DM panel.")
-            )
-    # HX-Redirect triggers a full browser navigation from HTMX,
-    # rather than swapping the response into the dashboard target.
+        ch = _bot.get_channel(int(channel_id))
+        if ch:
+            channel_name = getattr(ch, "name", "")
+            asyncio.create_task(ch.send("Session archived via DM panel."))
+    await archive_session(channel_id, channel_name)
     return HTMLResponse("", headers={"HX-Redirect": "/"})
+
+
+# ---------------------------------------------------------------------------
+# Archive browser
+# ---------------------------------------------------------------------------
+
+@app.get("/archive", response_class=HTMLResponse)
+async def archive_index(flash: str = "", error: str = ""):
+    entries = await store.db.list_archive_async()
+    return archive_page(_session_list(), entries, flash=flash, error=error)
+
+
+@app.post("/archive/{session_id}/resurrect", response_class=HTMLResponse)
+async def archive_resurrect(
+    session_id: str,
+    channel_id: Annotated[str, Form()],
+):
+    async def _err(msg: str) -> HTMLResponse:
+        entries = await store.db.list_archive_async()
+        return HTMLResponse(archive_page(_session_list(), entries, error=msg))
+
+    channel_id = channel_id.strip()
+    if not channel_id.isdigit():
+        return await _err("Channel ID must be a numeric Discord channel ID.")
+
+    if store.has_session(channel_id):
+        return await _err(
+            f"Channel {channel_id} already has an active session. "
+            "End or archive it first, then retry."
+        )
+
+    # Verify the bot can actually see this channel (if bot is available)
+    if _bot:
+        ch = _bot.get_channel(int(channel_id))
+        if ch is None:
+            return await _err(
+                f"Channel {channel_id} is not visible to the bot. "
+                "Check the ID is correct and the bot is in that channel."
+            )
+
+    state = await store.db.resurrect_async(session_id, channel_id)
+    if state is None:
+        return await _err("Archive entry not found.")
+
+    # Register in the in-memory cache and redirect to the panel
+    store._sessions[channel_id] = state
+    return HTMLResponse("", headers={"HX-Redirect": f"/session/{channel_id}"})
+
+
+@app.post("/archive/{session_id}/delete", response_class=HTMLResponse)
+async def archive_delete(session_id: str):
+    await store.db.delete_archive_async(session_id)
+    entries = await store.db.list_archive_async()
+    return HTMLResponse(archive_page(_session_list(), entries, flash="Archive entry deleted."))

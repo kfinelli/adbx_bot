@@ -60,6 +60,7 @@ from store import (
     ack,
     ack_done,
     ack_err,
+    archive_session,
     delete_session,
     get_session,
     save_session_async,
@@ -106,9 +107,11 @@ class DMCog(commands.Cog):
             await ack_err(interaction, "Only the DM who created this session can reset it.")
             return
 
-        delete_session(channel_id)
+        channel_name = interaction.channel.name if hasattr(interaction.channel, "name") else ""
+        archived = await archive_session(channel_id, channel_name)
+        note = "archived" if archived else "cleared"
         await interaction.channel.send(
-            "Session ended. Use `/dm_newsession` to start a new lobby."
+            f"Session {note}. Use `/dm_newsession` to start a new lobby."
         )
 
     # ------------------------------------------------------------------

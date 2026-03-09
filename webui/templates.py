@@ -155,6 +155,8 @@ def _sidebar(channel_id: str | None, sessions: list[tuple[str, str]]) -> str:
   <h1 style="font-size:1.1rem; margin-bottom:1.5rem;">&#127922; DM Panel</h1>
   <h2>Sessions</h2>
   {links or '<p class="muted">No active sessions</p>'}
+  <hr class="divider" style="margin:1rem 0">
+  <a href="/archive">&#128196; Archive</a>
 </div>"""
 
 
@@ -938,3 +940,82 @@ def npc_panel(
   {'<table><tr><th>NPC</th><th>HP</th><th>Controls</th></tr>' + rows + '</table>' if rows else '<p class="muted">No NPCs in this room.</p>'}
   {add_npc_html}
 </div>"""
+
+
+# ---------------------------------------------------------------------------
+# Archive browser page
+# ---------------------------------------------------------------------------
+
+def archive_page(
+    sessions: list[tuple[str, str]],
+    entries: list[dict],
+    flash: str = "",
+    error: str = "",
+) -> str:
+    flash_html = f'<div class="flash">{flash}</div>' if flash else ""
+    error_html = f'<div class="error">{error}</div>' if error else ""
+
+    if not entries:
+        rows_html = '<p class="muted">No archived sessions yet.</p>'
+    else:
+        rows = ""
+        for e in entries:
+            sid       = e["session_id"]
+            cname     = e["channel_name"] or e["channel_id"]
+            dm        = e["dm_user_id"] or "—"
+            turns     = e["turn_number"]
+            created   = (e["created_at"]  or "")[:10]
+            archived  = (e["archived_at"] or "")[:10]
+            rows += f"""
+<tr>
+  <td>
+    <strong>#{cname}</strong><br>
+    <span class="muted" style="font-size:0.75rem">{sid}</span>
+  </td>
+  <td class="muted">{dm}</td>
+  <td style="text-align:center">{turns}</td>
+  <td class="muted">{created}</td>
+  <td class="muted">{archived}</td>
+  <td style="white-space:nowrap;min-width:220px">
+    <form hx-post="/archive/{sid}/resurrect"
+          hx-target="body" hx-swap="innerHTML">
+      <div class="row" style="margin-bottom:4px">
+        <input type="text" name="channel_id" value="{e["channel_id"]}"
+               placeholder="Discord channel ID"
+               style="font-size:0.8rem;width:160px"
+               title="Paste the target Discord channel ID. Original: {e["channel_id"]}">
+        <button class="btn-sm btn-success" type="submit">Resurrect</button>
+      </div>
+    </form>
+    <form hx-post="/archive/{sid}/delete"
+          hx-target="body" hx-swap="innerHTML"
+          hx-confirm="Permanently delete this archive entry? This cannot be undone.">
+      <button class="btn-sm btn-danger" type="submit">Delete</button>
+    </form>
+  </td>
+</tr>"""
+        rows_html = f"""
+<table>
+  <tr>
+    <th>Channel</th>
+    <th>DM</th>
+    <th>Turns</th>
+    <th>Started</th>
+    <th>Archived</th>
+    <th>Actions</th>
+  </tr>
+  {rows}
+</table>"""
+
+    body = f"""
+<div class="layout">
+  {_sidebar(None, sessions)}
+  <div class="main">
+    {flash_html}{error_html}
+    <div class="card">
+      <div class="section-header"><h3>&#128196; Session Archive</h3></div>
+      {rows_html}
+    </div>
+  </div>
+</div>"""
+    return page("Archive — DM Panel", body)
