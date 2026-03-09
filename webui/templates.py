@@ -339,17 +339,31 @@ def turn_panel(state: GameState, edit_id: str = "") -> str:
   </div>
 </form>"""
 
-    if state.session_active:
-        hold_html = f"""
+    if state.mode == SessionMode.PRE_START:
+        session_controls_html = f"""
+<button class="btn-success"
+        hx-post="/session/{channel_id}/embark"
+        hx-target="#dashboard" hx-swap="outerHTML"
+        hx-confirm="Embark? This starts the session and opens the first turn."
+        >Embark</button>"""
+    elif state.session_active:
+        session_controls_html = f"""
 <button class="btn-danger"
         hx-post="/session/{channel_id}/hold"
         hx-target="#dashboard" hx-swap="outerHTML"
         hx-confirm="Put session on hold?">Hold Session</button>"""
     else:
-        hold_html = f"""
+        session_controls_html = f"""
 <button class="btn-success"
         hx-post="/session/{channel_id}/resume"
         hx-target="#dashboard" hx-swap="outerHTML">Resume Session</button>"""
+
+    end_session_html = f"""
+<form hx-post="/session/{channel_id}/endsession"
+      hx-confirm="End session permanently? This deletes all session data and cannot be undone."
+      style="margin-top:0.5rem">
+  <button class="btn-danger" type="submit" style="width:100%">End Session</button>
+</form>"""
 
     return f"""
 <div class="card">
@@ -359,7 +373,8 @@ def turn_panel(state: GameState, edit_id: str = "") -> str:
   {resolve_html}
   {timer_html}
   <hr class="divider">
-  {hold_html}
+  {session_controls_html}
+  {end_session_html}
 </div>"""
 
 

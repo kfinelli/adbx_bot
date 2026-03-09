@@ -18,7 +18,7 @@ from fastapi.responses import Response
 from fastapi.responses import HTMLResponse
 
 import store
-from store import save_session_async
+from store import delete_session, repost_status, save_session_async
 from serialization import deserialize_dungeon_file, serialize_dungeon_file
 from engine import (
     add_exit,
@@ -48,6 +48,7 @@ from engine import (
     set_npc_hp,
     set_npc_status,
     set_room,
+    start_session,
 )
 from models import (
     CharacterStatus,
@@ -707,3 +708,40 @@ async def route_npc_delete(
         return _respond(channel_id, error=result.error, view_room_id=view_room_id)
     await save_session_async(state)
     return _respond(channel_id, view_room_id=view_room_id)
+
+
+# ---------------------------------------------------------------------------
+# Embark / End session
+# ---------------------------------------------------------------------------
+
+@app.post("/session/{channel_id}/embark", response_class=HTMLResponse)
+async def route_embark(channel_id: str):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    result = start_session(state)
+    if not result.ok:
+        return _respond(channel_id, error=result.error)
+    await save_session_async(state)
+    if _bot:
+        channel = _bot.get_channel(int(channel_id))
+        if channel:
+            asyncio.create_task(repost_status(channel, state))
+    return _respond(channel_id, flash="Session started. The adventure begins!")
+
+
+@app.post("/session/{channel_id}/endsession", response_class=HTMLResponse)
+async def route_endsession(channel_id: str):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    delete_session(channel_id)
+    if _bot:
+        channel = _bot.get_channel(int(channel_id))
+        if channel:
+            asyncio.create_task(
+                channel.send("Session ended via DM panel.")
+            )
+    # HX-Redirect triggers a full browser navigation from HTMX,
+    # rather than swapping the response into the dashboard target.
+    return HTMLResponse("", headers={"HX-Redirect": "/"})
