@@ -60,8 +60,10 @@ from store import (
     ack,
     ack_done,
     ack_err,
+    archive_session,
     delete_session,
     get_session,
+    save_session_async,
     update_status,
     require_session,
 )
@@ -105,9 +107,11 @@ class DMCog(commands.Cog):
             await ack_err(interaction, "Only the DM who created this session can reset it.")
             return
 
-        delete_session(channel_id)
+        channel_name = interaction.channel.name if hasattr(interaction.channel, "name") else ""
+        archived = await archive_session(channel_id, channel_name)
+        note = "archived" if archived else "cleared"
         await interaction.channel.send(
-            "Session ended. Use `/dm_newsession` to start a new lobby."
+            f"Session {note}. Use `/dm_newsession` to start a new lobby."
         )
 
     # ------------------------------------------------------------------
@@ -345,8 +349,7 @@ class DMCog(commands.Cog):
             await ack_err(interaction, result.error)
             return
 
-        from store import save_session
-        save_session(state)
+        await save_session_async(state)
         await ack_done(interaction)
         await update_status(interaction.channel, state)
 
@@ -648,8 +651,7 @@ class DMCog(commands.Cog):
             return
 
         state.default_turn_hours = hours
-        from store import save_session
-        save_session(state)
+        await save_session_async(state)
         await ack_done(interaction)
         await update_status(interaction.channel, state)
 
@@ -678,8 +680,7 @@ class DMCog(commands.Cog):
 
         from datetime import datetime, timedelta, timezone
         state.current_turn.due_at = datetime.now(timezone.utc) + timedelta(hours=hours)
-        from store import save_session
-        save_session(state)
+        await save_session_async(state)
         await ack_done(interaction)
         await update_status(interaction.channel, state)
 
@@ -785,8 +786,7 @@ class DMCog(commands.Cog):
             return
         await dispatch_oracle_answer(self.bot, interaction.channel, oracle)
 
-        from store import save_session
-        save_session(state)
+        await save_session_async(state)
         await ack_done(interaction)
 
 # Lookup helpers

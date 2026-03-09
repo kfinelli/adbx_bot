@@ -262,7 +262,7 @@ class SessionCog(commands.Cog):
         await ack_done(interaction)
         msg = await post_oracle_question(interaction.channel, oracle)
         oracle.message_id = msg.id
-        save_session(state)
+        await save_session_async(state)
 
     # ------------------------------------------------------------------
     # /strife

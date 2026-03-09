@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 
 from engine import close_turn
 from models import TurnStatus
-from store import db, get_session, update_status, save_session
+from store import db, get_session, update_status, save_session_async
 
 
 class TimerCog(commands.Cog):
@@ -58,7 +58,7 @@ class TimerCog(commands.Cog):
 
             # Timer has expired — close the turn
             close_turn(state)
-            save_session(state)
+            await save_session_async(state)
 
             channel = self.bot.get_channel(int(channel_id))
             if channel is None:
