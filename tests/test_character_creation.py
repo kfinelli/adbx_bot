@@ -29,7 +29,7 @@ class TestCreateCharacter:
         assert len(bare_state.characters) == 1
 
     def test_character_added_to_party(self, bare_state):
-        result = create_character(
+        create_character(
             bare_state, "Aldric", CharacterClass.FIGHTER, "Pack A", owner_id="u1"
         )
         char_id = list(bare_state.characters.keys())[0]

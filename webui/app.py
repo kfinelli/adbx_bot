@@ -8,7 +8,10 @@ names in these routes directly. No hx-include id-based lookups.
 from __future__ import annotations
 
 import asyncio
-import sys; import os; sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from datetime import UTC
 from typing import Annotated
 from uuid import UUID
@@ -314,7 +317,7 @@ async def route_setroom(
     if not name.strip():
         return _respond(channel_id, error="Room name is required.", view_room_id=view_room_id)
     room = Room(name=name, description=description, notes=notes)
-    result = register_room(state, room)
+    register_room(state, room)
     await save_session_async(state)
     # After creating, switch the view to the new room but don't move the party
     new_view_id = str(room.room_id)

@@ -200,7 +200,7 @@ class TestConcurrency:
 
     def test_concurrent_saves_do_not_corrupt(self, db):
         """Rapid repeated saves to the same channel should always yield the last write."""
-        s = _make_state("ch1")
+        _make_state("ch1")
 
         async def run():
             tasks = []

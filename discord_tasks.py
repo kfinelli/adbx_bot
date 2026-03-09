@@ -17,6 +17,8 @@ Convention:
 
 from __future__ import annotations
 
+import contextlib
+
 import discord
 
 from models import GameState, Oracle
@@ -56,12 +58,10 @@ async def dispatch_oracle_answer(
             await msg.edit(content=oracle.answer_text)
         except (discord.NotFound, discord.Forbidden, discord.HTTPException):
             # Message was deleted or bot lost permission — post a fallback
-            try:
+            with contextlib.suppress(discord.HTTPException):
                 await channel.send(
                     f"**Oracle #{oracle.number}** (answer): {oracle.answer}"
                 )
-            except discord.HTTPException:
-                pass
 
     # DM the player who asked
     if oracle.asker_owner_id:

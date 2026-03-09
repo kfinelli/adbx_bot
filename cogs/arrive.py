@@ -57,7 +57,7 @@ class LoadoutView(discord.ui.View):
         self.owner_id = owner_id
 
         for package_name in EQUIPMENT_PACKAGES:
-            desc = EQUIPMENT_PACKAGE_DESCRIPTIONS.get(package_name, "")
+            EQUIPMENT_PACKAGE_DESCRIPTIONS.get(package_name, "")
             btn = discord.ui.Button(
                 label=package_name,
                 style=discord.ButtonStyle.secondary,

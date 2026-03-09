@@ -4,6 +4,7 @@ Entry point. Run with: python bot.py
 """
 
 import asyncio
+import contextlib
 import os
 from datetime import UTC
 
@@ -52,11 +53,8 @@ async def on_message(message: discord.Message):
     # Only delete if this channel has an active session
     from store import has_session
     if has_session(str(message.channel.id)):
-        try:
+        with contextlib.suppress(discord.Forbidden, discord.NotFound):
             await message.delete()
-        except (discord.Forbidden, discord.NotFound):
-            pass  # missing permissions or already deleted — silently ignore
-
 
 @bot.event
 async def on_ready():

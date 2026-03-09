@@ -8,6 +8,7 @@ The Database is the source of truth on disk; the in-memory dict is a cache.
 
 from __future__ import annotations
 
+import contextlib
 from datetime import UTC, datetime, timedelta
 
 import discord
@@ -288,10 +289,9 @@ async def ack(interaction: discord.Interaction) -> None:
 
 async def ack_done(interaction: discord.Interaction) -> None:
     """Delete the 'Command received' ephemeral on successful completion."""
-    try:
+    with contextlib.suppress(discord.NotFound, discord.HTTPException):
+        # already gone or token expired — silently ignore
         await interaction.delete_original_response()
-    except (discord.NotFound, discord.HTTPException):
-        pass  # already gone or token expired — silently ignore
 
 
 async def ack_err(interaction: discord.Interaction, message: str) -> None:
@@ -300,10 +300,8 @@ async def ack_err(interaction: discord.Interaction, message: str) -> None:
         await interaction.edit_original_response(content=f"⚠ {message}")
     except (discord.NotFound, discord.HTTPException):
         # Token expired or message gone — fall back to a new followup
-        try:
+        with contextlib.suppress(discord.HTTPException):
             await interaction.followup.send(f"⚠ {message}", ephemeral=True)
-        except discord.HTTPException:
-            pass
 
 
 async def err(interaction: discord.Interaction, message: str) -> None:

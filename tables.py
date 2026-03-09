@@ -123,7 +123,7 @@ CON_HP_MODIFIER = ABILITY_MODIFIERS
 _ST = ["death_poison", "wands", "paralysis_stone", "breath_weapon", "spells"]
 
 def _saves(*values):
-    return dict(zip(_ST, values))
+    return dict(zip(_ST, values, strict=True))
 
 SAVING_THROWS: dict = {
     (CharacterClass.FIGHTER, 1):  _saves(12, 13, 14, 15, 16),
@@ -293,7 +293,7 @@ def get_saving_throws(cls, level: int) -> dict:
     key = (cls, level)
     if key in SAVING_THROWS:
         return dict(SAVING_THROWS[key])
-    available = [l for (c, l) in SAVING_THROWS if c == cls]
+    available = [q for (c, q) in SAVING_THROWS if c == cls]
     if not available:
         return dict(CREATION_RULES[cls].default_saves)
     return dict(SAVING_THROWS[(cls, max(available))])

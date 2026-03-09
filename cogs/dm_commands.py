@@ -18,6 +18,7 @@ Commands:
 
 from __future__ import annotations
 
+import contextlib
 from datetime import UTC
 
 import discord
@@ -64,6 +65,7 @@ from store import (
     ack_err,
     archive_session,
     get_session,
+    repost_status,
     require_session,
     save_session_async,
     update_status,
@@ -80,10 +82,10 @@ class DMCog(commands.Cog):
         if state is None:
             return None
         if state.dm_user_id != str(interaction.user.id):
-            await err(interaction, "Only the DM can use this command.")
+            await ack_err(interaction, "Only the DM can use this command.")
             return None
         if not state.session_active and not allow_on_hold:
-            await err(interaction, "Session is on hold. Use /dm_resume first.")
+            await ack_err(interaction, "Session is on hold. Use /dm_resume first.")
             return None
         return state
 
@@ -136,10 +138,8 @@ class DMCog(commands.Cog):
         state = create_session(channel_id, dm_user_id=str(interaction.user.id))
         if header:
             intro_msg = await interaction.channel.send(header)
-            try:
+            with contextlib.suppress(discord.Forbidden, discord.HTTPException):
                 await intro_msg.pin()
-            except (discord.Forbidden, discord.HTTPException):
-                pass  # pin is best-effort
         await ack_done(interaction)
         await update_status(interaction.channel, state)
 
