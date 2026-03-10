@@ -4,9 +4,7 @@ Entry point. Run with: python bot.py
 """
 
 import asyncio
-import contextlib
 import os
-from datetime import UTC
 
 import discord
 import uvicorn
@@ -53,8 +51,11 @@ async def on_message(message: discord.Message):
     # Only delete if this channel has an active session
     from store import has_session
     if has_session(str(message.channel.id)):
-        with contextlib.suppress(discord.Forbidden, discord.NotFound):
+        try:
             await message.delete()
+        except (discord.Forbidden, discord.NotFound):
+            pass  # missing permissions or already deleted — silently ignore
+
 
 @bot.event
 async def on_ready():
@@ -75,10 +76,9 @@ async def on_ready():
     set_bot(bot)
 
     # Restore status messages for all saved sessions
-    from datetime import datetime
-
+    from store import db, restore_status_message, save_session, get_session
     from engine import close_turn
-    from store import db, get_session, restore_status_message, save_session
+    from datetime import datetime, timezone
 
     channel_ids = db.list_channels()
     print(f"Restoring {len(channel_ids)} saved session(s)...")
@@ -96,8 +96,8 @@ async def on_ready():
             continue
         due = turn.due_at
         if due.tzinfo is None:
-            due = due.replace(tzinfo=UTC)
-        if datetime.now(UTC) >= due:
+            due = due.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) >= due:
             print(f"Channel {channel_id}: closing expired turn {turn.turn_number}")
             close_turn(state)
             save_session(state)
@@ -111,7 +111,7 @@ async def on_ready():
                 from store import update_status
                 await update_status(channel, state)
 
-    print("Sessions restored.")
+    print(f"Sessions restored.")
     print(f"DM panel available at http://localhost:{WEB_PORT}/")
 
 
@@ -134,6 +134,7 @@ async def main():
         await bot.load_extension("cogs.session")
         await bot.load_extension("cogs.dm_commands")
         await bot.load_extension("cogs.timer")
+        await bot.load_extension("cogs.action_buttons")
         # Run bot and web UI concurrently in the same event loop
         await asyncio.gather(
             bot.start(TOKEN),

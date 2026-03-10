@@ -8,14 +8,17 @@ The Database is the source of truth on disk; the in-memory dict is a cache.
 
 from __future__ import annotations
 
-import contextlib
-from datetime import UTC, datetime, timedelta
-
 import discord
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
-from engine import render_status, render_status_header
 from models import GameState, Party
+from engine import render_status, render_status_header
 from persistence import Database
+
+# build_action_view is imported lazily inside _build_view() to avoid a
+# circular import: action_buttons.py imports store.py at module level,
+# so store.py must not import action_buttons.py at module level.
 
 # ---------------------------------------------------------------------------
 # Database (single shared instance for the whole bot process)
@@ -34,7 +37,7 @@ _sessions: dict[str, GameState] = {}
 _status_messages: dict[str, discord.Message] = {}
 
 
-def get_session(channel_id: str) -> GameState | None:
+def get_session(channel_id: str) -> Optional[GameState]:
     if channel_id in _sessions:
         return _sessions[channel_id]
     state = db.load(channel_id)
@@ -102,9 +105,23 @@ def _build_content(state: GameState) -> str:
     return header + "\n```\n" + body + "\n```"
 
 
+def _build_view(state: GameState):
+    """
+    Return the action button view for the current session state, or None.
+    Lazily imports build_action_view to avoid a circular import
+    (action_buttons.py imports store.py at module level).
+    """
+    try:
+        from cogs.action_buttons import build_action_view
+        return build_action_view(state)
+    except ImportError:
+        return None
+
+
 async def _post_fresh_status(channel: discord.TextChannel, state: GameState) -> None:
     """Post a new status message at the bottom of the channel."""
-    msg = await channel.send(_build_content(state))
+    view = _build_view(state)
+    msg = await channel.send(_build_content(state), view=view)
     _status_messages[str(channel.id)] = msg
 
 
@@ -121,7 +138,7 @@ async def update_status(
     existing = _status_messages.get(str(channel.id))
     if existing is not None:
         try:
-            await existing.edit(content=_build_content(state))
+            await existing.edit(content=_build_content(state), view=_build_view(state))
             return
         except discord.NotFound:
             pass
@@ -171,7 +188,7 @@ async def restore_status_message(bot: discord.Client, channel_id: str) -> None:
     if state is None:
         return
 
-    cutoff = datetime.now(UTC) - timedelta(hours=_RESTORE_WINDOW_HOURS)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=_RESTORE_WINDOW_HOURS)
 
     try:
         candidates = []
@@ -182,14 +199,14 @@ async def restore_status_message(bot: discord.Client, channel_id: str) -> None:
                 continue
             msg_ts = msg.created_at
             if msg_ts.tzinfo is None:
-                msg_ts = msg_ts.replace(tzinfo=UTC)
+                msg_ts = msg_ts.replace(tzinfo=timezone.utc)
             if msg_ts >= cutoff:
                 candidates.append((msg_ts, msg))
 
         if candidates:
             _, best = max(candidates, key=lambda x: x[0])
             _status_messages[channel_id] = best
-            await best.edit(content=_build_content(state))
+            await best.edit(content=_build_content(state), view=_build_view(state))
             return
     except discord.Forbidden:
         pass
@@ -222,7 +239,7 @@ async def notify_players_new_turn(
         if not char.owner_id or char.owner_id in seen:
             continue
         seen.add(char.owner_id)
-        mentions.append(f"<@{char.owner_id}>")
+        mentions.append("<@{}>".format(char.owner_id))
     if not mentions:
         return
     mode = "Round" if state.mode.value == "rounds" else "Turn"
@@ -253,6 +270,7 @@ async def notify_dm_of_turn_close(bot_or_channel, state: GameState, turn_number:
 
     if state.dm_user_id:
         try:
+            import discord as _discord
             # Fetch user via the channel's guild
             dm_user = await channel.guild.fetch_member(int(state.dm_user_id))
             await dm_user.send(
@@ -267,7 +285,7 @@ async def notify_dm_of_turn_close(bot_or_channel, state: GameState, turn_number:
 # Interaction helpers
 # ---------------------------------------------------------------------------
 
-async def require_session(interaction: discord.Interaction) -> GameState | None:
+async def require_session(interaction: discord.Interaction) -> Optional[GameState]:
     state = get_session(str(interaction.channel_id))
     if state is None:
         await interaction.response.send_message(
@@ -289,9 +307,10 @@ async def ack(interaction: discord.Interaction) -> None:
 
 async def ack_done(interaction: discord.Interaction) -> None:
     """Delete the 'Command received' ephemeral on successful completion."""
-    with contextlib.suppress(discord.NotFound, discord.HTTPException):
-        # already gone or token expired — silently ignore
+    try:
         await interaction.delete_original_response()
+    except (discord.NotFound, discord.HTTPException):
+        pass  # already gone or token expired — silently ignore
 
 
 async def ack_err(interaction: discord.Interaction, message: str) -> None:
@@ -300,8 +319,10 @@ async def ack_err(interaction: discord.Interaction, message: str) -> None:
         await interaction.edit_original_response(content=f"⚠ {message}")
     except (discord.NotFound, discord.HTTPException):
         # Token expired or message gone — fall back to a new followup
-        with contextlib.suppress(discord.HTTPException):
+        try:
             await interaction.followup.send(f"⚠ {message}", ephemeral=True)
+        except discord.HTTPException:
+            pass
 
 
 async def err(interaction: discord.Interaction, message: str) -> None:
