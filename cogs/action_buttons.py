@@ -21,8 +21,8 @@ from __future__ import annotations
 import discord
 from discord.ext import commands
 
-from engine import submit_turn
-from models import SessionMode, TurnStatus
+from engine import abscond, emote, enter_rounds, exit_rounds, say, submit_turn
+from models import GameState, SessionMode, TurnStatus
 from store import (
     get_session,
     notify_dm_of_turn_close,
@@ -193,15 +193,33 @@ class ExplorationActionView(discord.ui.View):
     Buttons are visually disabled while the turn is closed (awaiting DM
     resolution) so players know to wait — they are re-enabled automatically
     when the next status message is posted with a fresh view instance.
+
+    leader_character_id: the character_id of the current party leader (or None).
+    The Abscond button is disabled for everyone when this is None, and the
+    button callback re-checks at click time so a stale view can't be exploited.
     """
 
-    def __init__(self, channel_id: str, turn_is_open: bool = True):
+    def __init__(
+        self,
+        channel_id: str,
+        turn_is_open: bool = True,
+        leader_character_id=None,
+    ):
         super().__init__(timeout=None)
         self.channel_id = channel_id
-        # Disable all buttons when the turn is closed; re-enabled on next post.
+        self.leader_character_id = leader_character_id
+        # Disable turn-action buttons when the turn is closed.
         if not turn_is_open:
             for item in self.children:
                 item.disabled = True
+        # Abscond is only usable by the party leader; disable it for everyone
+        # else at view-build time.  The callback re-checks at click time.
+        # (We can't hide buttons per-user — Discord views are shared.)
+        # Note: self.children is populated by @discord.ui.button at class
+        # definition time, so Abscond isn't in self.children yet when __init__
+        # runs for the persistent dummy instance.  We mark it via a flag and
+        # the on_ready registration passes leader_character_id=None which
+        # leaves the button in whatever state the decorator set (enabled).
 
     # ------------------------------------------------------------------
     # Search
@@ -381,6 +399,229 @@ class ExplorationActionView(discord.ui.View):
         ))
 
 
+    # row 2 — utility actions -----------------------------------------------
+
+    @discord.ui.button(
+        label="Abscond",
+        style=discord.ButtonStyle.secondary,
+        custom_id="action:abscond",
+        row=2,
+    )
+    async def abscond_btn(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        channel_id = str(interaction.channel_id)
+        state = get_session(channel_id)
+        if state is None:
+            await interaction.response.send_message(
+                "⚠ No active session in this channel.", ephemeral=True
+            )
+            return
+        char = _find_character(state, str(interaction.user.id))
+        if char is None or (
+            state.party is not None
+            and state.party.leader_id != char.character_id
+        ):
+            await interaction.response.send_message(
+                "⚠ Only the party leader can use Abscond.", ephemeral=True
+            )
+            return
+        await interaction.response.send_modal(_AbscondModal(channel_id=channel_id))
+
+    @discord.ui.button(
+        label="Say",
+        style=discord.ButtonStyle.secondary,
+        custom_id="action:say",
+        row=2,
+    )
+    async def say_btn(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        channel_id = str(interaction.channel_id)
+        state = get_session(channel_id)
+        if state is None:
+            await interaction.response.send_message(
+                "⚠ No active session in this channel.", ephemeral=True
+            )
+            return
+        char = _find_character(state, str(interaction.user.id))
+        if char is None:
+            await interaction.response.send_message(
+                "⚠ You don't have a character in this session.", ephemeral=True
+            )
+            return
+        await interaction.response.send_modal(
+            _SayEmoteModal(channel_id=channel_id, is_emote=False)
+        )
+
+    @discord.ui.button(
+        label="Emote",
+        style=discord.ButtonStyle.secondary,
+        custom_id="action:emote",
+        row=2,
+    )
+    async def emote_btn(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        channel_id = str(interaction.channel_id)
+        state = get_session(channel_id)
+        if state is None:
+            await interaction.response.send_message(
+                "⚠ No active session in this channel.", ephemeral=True
+            )
+            return
+        char = _find_character(state, str(interaction.user.id))
+        if char is None:
+            await interaction.response.send_message(
+                "⚠ You don't have a character in this session.", ephemeral=True
+            )
+            return
+        await interaction.response.send_modal(
+            _SayEmoteModal(channel_id=channel_id, is_emote=True)
+        )
+
+    @discord.ui.button(
+        label="Strife",
+        style=discord.ButtonStyle.danger,
+        custom_id="action:strife",
+        row=2,
+    )
+    async def strife_btn(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        from store import repost_status
+        channel_id = str(interaction.channel_id)
+        state = get_session(channel_id)
+        if state is None:
+            await interaction.response.send_message(
+                "⚠ No active session in this channel.", ephemeral=True
+            )
+            return
+        user_id = str(interaction.user.id)
+        char = _find_character(state, user_id)
+        is_dm = state.dm_user_id == user_id
+        is_leader = (
+            char is not None
+            and state.party is not None
+            and state.party.leader_id == char.character_id
+        )
+        if not (is_dm or is_leader):
+            await interaction.response.send_message(
+                "⚠ Only the DM or party leader can toggle combat rounds.",
+                ephemeral=True,
+            )
+            return
+        if state.mode == SessionMode.ROUNDS:
+            result = exit_rounds(state)
+            narrative = "Combat ended — returning to exploration."
+        else:
+            result = enter_rounds(state)
+            narrative = "Combat begins!"
+        if not result.ok:
+            await interaction.response.send_message(
+                f"⚠ {result.error}", ephemeral=True
+            )
+            return
+        from engine import open_turn
+        from models import TurnStatus as _TS
+        if state.current_turn is None or state.current_turn.status != _TS.OPEN:
+            open_turn(state)
+        await interaction.response.send_message(narrative, ephemeral=True)
+        await repost_status(interaction.channel, state, narrative=narrative)
+
+
+# ---------------------------------------------------------------------------
+# Modals for row-2 buttons (utility — not turn submissions)
+# ---------------------------------------------------------------------------
+
+class _AbscondModal(discord.ui.Modal, title="Abscond"):
+    exit_number = discord.ui.TextInput(
+        label="Exit number",
+        placeholder="Enter the number of the exit to take (see status block).",
+        required=True,
+        max_length=4,
+    )
+
+    def __init__(self, *, channel_id: str) -> None:
+        super().__init__()
+        self.channel_id = channel_id
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        try:
+            num = int(self.exit_number.value.strip())
+        except ValueError:
+            await interaction.response.send_message(
+                "⚠ Please enter a number.", ephemeral=True
+            )
+            return
+        state = get_session(self.channel_id)
+        if state is None:
+            await interaction.response.send_message(
+                "⚠ No active session.", ephemeral=True
+            )
+            return
+        char = _find_character(state, str(interaction.user.id))
+        if char is None:
+            await interaction.response.send_message(
+                "⚠ You don't have a character in this session.", ephemeral=True
+            )
+            return
+        turn_number = state.turn_number
+        result = abscond(state, char.character_id, num)
+        if not result.ok:
+            await interaction.response.send_message(
+                f"⚠ {result.error}", ephemeral=True
+            )
+            return
+        await interaction.response.send_message("✓ Moving out.", ephemeral=True)
+        await update_status(interaction.channel, state)
+        if result.notify_dm:
+            await notify_dm_of_turn_close(interaction.channel, state, turn_number)
+
+
+class _SayEmoteModal(discord.ui.Modal):
+    text = discord.ui.TextInput(
+        label="What do you say?",
+        placeholder="Speak in character.",
+        style=discord.TextStyle.paragraph,
+        required=True,
+        max_length=500,
+    )
+
+    def __init__(self, *, channel_id: str, is_emote: bool) -> None:
+        title = "Emote" if is_emote else "Say"
+        label = "Describe the action" if is_emote else "What do you say?"
+        placeholder = (
+            "Describe what your character does (e.g. 'nods slowly')."
+            if is_emote
+            else "Speak in character."
+        )
+        super().__init__(title=title)
+        self.channel_id = channel_id
+        self.is_emote = is_emote
+        self.text.label = label
+        self.text.placeholder = placeholder
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        state = get_session(self.channel_id)
+        if state is None:
+            await interaction.response.send_message(
+                "⚠ No active session.", ephemeral=True
+            )
+            return
+        char = _find_character(state, str(interaction.user.id))
+        if char is None:
+            await interaction.response.send_message(
+                "⚠ You don't have a character in this session.", ephemeral=True
+            )
+            return
+        if self.is_emote:
+            emote(state, char.name, self.text.value)
+        else:
+            say(state, char.name, self.text.value)
+        await interaction.response.send_message("✓ Done.", ephemeral=True)
+        await update_status(interaction.channel, state)
+
 # ---------------------------------------------------------------------------
 # View factory — called by store.py
 # ---------------------------------------------------------------------------
@@ -403,9 +644,12 @@ def build_action_view(state) -> discord.ui.View | None:
         state.current_turn is not None
         and state.current_turn.status == TurnStatus.OPEN
     )
+    # Resolve leader's owner_id so __init__ can disable Abscond for non-leaders.
+    leader_character_id = state.party.leader_id if state.party else None
     return ExplorationActionView(
         channel_id=str(state.platform_channel_id),
         turn_is_open=turn_is_open,
+        leader_character_id=leader_character_id,
     )
 
 
