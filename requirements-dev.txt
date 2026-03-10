@@ -1,0 +1,11 @@
+# Runtime deps (also needed at test time since there's no separate requirements.txt yet)
+# discord.py is NOT listed here — it requires a real Discord token to import cleanly.
+# The test suite is structured to never import discord, store, or bot at the module level.
+
+# Testing
+pytest>=8.0
+pytest-asyncio>=0.23
+pytest-cov>=5.0
+
+# Linting
+ruff>=0.4

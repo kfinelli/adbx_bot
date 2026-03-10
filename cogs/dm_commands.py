@@ -18,18 +18,14 @@ Commands:
 
 from __future__ import annotations
 
+import contextlib
+from datetime import UTC
+
 import discord
 from discord import app_commands
 from discord.ext import commands
 
-from models import (
-    CharacterStatus,
-    DoorState,
-    Exit,
-    NPC,
-    Room,
-    RoomFeature,
-)
+from discord_tasks import dispatch_oracle_answer, dispatch_turn_resolved
 from engine import (
     add_exit,
     add_npc,
@@ -39,6 +35,7 @@ from engine import (
     enter_rounds,
     exit_rounds,
     hold_session,
+    move_party_to_room,
     open_turn,
     resolve_turn,
     resume_session,
@@ -50,22 +47,28 @@ from engine import (
     set_light_source,
     set_npc_hp,
     set_npc_status,
-    move_party_to_room,
     set_room,
     start_session,
 )
-from models import SessionMode, TurnStatus
-from discord_tasks import dispatch_oracle_answer, dispatch_turn_resolved
+from models import (
+    NPC,
+    CharacterStatus,
+    DoorState,
+    Room,
+    RoomFeature,
+    SessionMode,
+    TurnStatus,
+)
 from store import (
     ack,
     ack_done,
     ack_err,
     archive_session,
-    delete_session,
     get_session,
+    repost_status,
+    require_session,
     save_session_async,
     update_status,
-    require_session,
 )
 
 
@@ -79,10 +82,10 @@ class DMCog(commands.Cog):
         if state is None:
             return None
         if state.dm_user_id != str(interaction.user.id):
-            await err(interaction, "Only the DM can use this command.")
+            await ack_err(interaction, "Only the DM can use this command.")
             return None
         if not state.session_active and not allow_on_hold:
-            await err(interaction, "Session is on hold. Use /dm_resume first.")
+            await ack_err(interaction, "Session is on hold. Use /dm_resume first.")
             return None
         return state
 
@@ -128,17 +131,15 @@ class DMCog(commands.Cog):
     async def dm_newsession(self, interaction: discord.Interaction, header: str = ""):
         await ack(interaction)
         channel_id = str(interaction.channel_id)
-        from store import has_session, create_session
+        from store import create_session, has_session
         if has_session(channel_id):
             await ack_err(interaction, "A session already exists in this channel.")
             return
         state = create_session(channel_id, dm_user_id=str(interaction.user.id))
         if header:
             intro_msg = await interaction.channel.send(header)
-            try:
+            with contextlib.suppress(discord.Forbidden, discord.HTTPException):
                 await intro_msg.pin()
-            except (discord.Forbidden, discord.HTTPException):
-                pass  # pin is best-effort
         await ack_done(interaction)
         await update_status(interaction.channel, state)
 
@@ -245,7 +246,7 @@ class DMCog(commands.Cog):
         else:
             npc = _find_npc_by_name(state, target_name)
             if npc is None:
-                await ack_err(interaction, "No character or NPC named '{}'".format(target_name))
+                await ack_err(interaction, f"No character or NPC named '{target_name}'")
                 return
             result = set_npc_hp(state, npc.npc_id, hp)
 
@@ -283,14 +284,14 @@ class DMCog(commands.Cog):
 
         char = _find_char_by_name(state, character_name)
         if char is None:
-            await ack_err(interaction, "No character named '{}'".format(character_name))
+            await ack_err(interaction, f"No character named '{character_name}'")
             return
 
         try:
             char_status = CharacterStatus(status.lower())
         except ValueError:
             valid = [s.value for s in CharacterStatus]
-            await ack_err(interaction, "Unknown status '{}'. Valid: {}".format(status, valid))
+            await ack_err(interaction, f"Unknown status '{status}'. Valid: {valid}")
             return
 
         result = set_character_status(state, char.character_id, char_status, notes)
@@ -419,7 +420,7 @@ class DMCog(commands.Cog):
             (f for f in room.features if f.name.lower() == feature_name.lower()), None
         )
         if feature is None:
-            await ack_err(interaction, "No feature named '{}' in this room.".format(feature_name))
+            await ack_err(interaction, f"No feature named '{feature_name}' in this room.")
             return
 
         result = set_feature_state(state, feature.feature_id, new_state)
@@ -496,7 +497,7 @@ class DMCog(commands.Cog):
 
         npc = _find_npc_by_name(state, npc_name)
         if npc is None:
-            await ack_err(interaction, "No NPC named '{}'".format(npc_name))
+            await ack_err(interaction, f"No NPC named '{npc_name}'")
             return
 
         result = set_npc_status(state, npc.npc_id, status.lower())
@@ -571,7 +572,7 @@ class DMCog(commands.Cog):
             ds = DoorState(door_state.lower())
         except ValueError:
             valid = [d.value for d in DoorState]
-            await ack_err(interaction, "Unknown door state '{}'. Valid: {}".format(door_state, valid))
+            await ack_err(interaction, f"Unknown door state '{door_state}'. Valid: {valid}")
             return
 
         result = add_exit(state, label, description, ds, notes)
@@ -612,14 +613,14 @@ class DMCog(commands.Cog):
 
         idx = exit_number - 1
         if idx < 0 or idx >= len(room.exits):
-            await ack_err(interaction, "Exit {} does not exist.".format(exit_number))
+            await ack_err(interaction, f"Exit {exit_number} does not exist.")
             return
 
         try:
             ds = DoorState(door_state.lower())
         except ValueError:
             valid = [d.value for d in DoorState]
-            await ack_err(interaction, "Unknown door state '{}'. Valid: {}".format(door_state, valid))
+            await ack_err(interaction, f"Unknown door state '{door_state}'. Valid: {valid}")
             return
 
         result = set_exit_state(state, room.exits[idx].exit_id, ds)
@@ -678,8 +679,8 @@ class DMCog(commands.Cog):
             await ack_err(interaction, "Duration must be greater than 0.")
             return
 
-        from datetime import datetime, timedelta, timezone
-        state.current_turn.due_at = datetime.now(timezone.utc) + timedelta(hours=hours)
+        from datetime import datetime, timedelta
+        state.current_turn.due_at = datetime.now(UTC) + timedelta(hours=hours)
         await save_session_async(state)
         await ack_done(interaction)
         await update_status(interaction.channel, state)

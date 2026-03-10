@@ -3,4 +3,3 @@ dungeon.db
 venv
 .env
 *.swp
-*.txt
