@@ -1,0 +1,24 @@
+target-version = "py311"
+line-length = 100
+
+[lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes (undefined names, unused imports, etc.)
+    "I",    # isort
+    "UP",   # pyupgrade (modernise syntax)
+    "B",    # flake8-bugbear (likely bugs and design issues)
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long — handled by formatter, not enforced here
+    "B008",   # do not perform function calls in default args (FastAPI pattern)
+    "SIM108", # ternary operator — sometimes less readable
+    "UP007",  # X | Y union syntax — keep Optional[] for clarity
+]
+
+[lint.per-file-ignores]
+# Test files: allow assert statements and magic values
+"tests/*" = ["S101", "PLR2004"]
