@@ -21,7 +21,8 @@ from __future__ import annotations
 import discord
 from discord.ext import commands
 
-from engine import abscond, emote, enter_rounds, exit_rounds, say, submit_turn
+from discord_tasks import post_oracle_question
+from engine import abscond, ask_oracle, emote, enter_rounds, exit_rounds, say, submit_turn
 from models import GameState, SessionMode, TurnStatus
 from store import (
     get_session,
@@ -384,19 +385,29 @@ class ExplorationActionView(discord.ui.View):
     async def oracle(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ) -> None:
-        state, char = await _check_turn(interaction)
+        # Oracle does NOT consume a turn action — uses ask_oracle(), not submit_turn().
+        # Guards are lighter: session must be active but turn doesn't need to be open.
+        channel_id = str(interaction.channel_id)
+        state = get_session(channel_id)
         if state is None:
+            await interaction.response.send_message(
+                "⚠ No active session in this channel.", ephemeral=True
+            )
             return
-        await interaction.response.send_modal(ActionModal(
-            title="Oracle",
-            input_label="Question or brief interaction",
-            placeholder=(
-                "Describe a short action that takes less than a full turn, "
-                "or ask a question"
-            ),
-            channel_id=str(interaction.channel_id),
-            action_prefix="Oracle: ",
-        ))
+        if not state.session_active:
+            await interaction.response.send_message(
+                "⚠ The session is on hold.", ephemeral=True
+            )
+            return
+        char = _find_character(state, str(interaction.user.id))
+        if char is None:
+            await interaction.response.send_message(
+                "⚠ You don't have a character in this session.", ephemeral=True
+            )
+            return
+        await interaction.response.send_modal(
+            _OracleModal(channel_id=channel_id)
+        )
 
 
     # row 2 — utility actions -----------------------------------------------
@@ -580,27 +591,23 @@ class _AbscondModal(discord.ui.Modal, title="Abscond"):
 
 
 class _SayEmoteModal(discord.ui.Modal):
-    text = discord.ui.TextInput(
-        label="What do you say?",
-        placeholder="Speak in character.",
-        style=discord.TextStyle.paragraph,
-        required=True,
-        max_length=500,
-    )
+    """Say or Emote modal. TextInput is built dynamically to avoid the
+    deprecated post-construction label/placeholder mutation."""
 
     def __init__(self, *, channel_id: str, is_emote: bool) -> None:
         title = "Emote" if is_emote else "Say"
-        label = "Describe the action" if is_emote else "What do you say?"
-        placeholder = (
-            "Describe what your character does (e.g. 'nods slowly')."
-            if is_emote
-            else "Speak in character."
-        )
         super().__init__(title=title)
         self.channel_id = channel_id
         self.is_emote = is_emote
-        self.text.label = label
-        self.text.placeholder = placeholder
+        self.text = discord.ui.TextInput(
+            label="Describe the action" if is_emote else "What do you say?",
+            placeholder="Describe what your character does (e.g. 'nods slowly')."
+                        if is_emote else "Speak in character.",
+            style=discord.TextStyle.paragraph,
+            required=True,
+            max_length=500,
+        )
+        self.add_item(self.text)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         state = get_session(self.channel_id)
@@ -620,6 +627,48 @@ class _SayEmoteModal(discord.ui.Modal):
         else:
             say(state, char.name, self.text.value)
         await interaction.response.send_message("✓ Done.", ephemeral=True)
+        await update_status(interaction.channel, state)
+
+
+class _OracleModal(discord.ui.Modal):
+    """Oracle modal — calls ask_oracle(), not submit_turn(). Does not consume a turn."""
+
+    def __init__(self, *, channel_id: str) -> None:
+        super().__init__(title="Oracle")
+        self.channel_id = channel_id
+        self.question = discord.ui.TextInput(
+            label="Question or brief interaction",
+            placeholder=(
+                "Describe a short action that takes less than a full turn, "
+                "or ask a question"
+            ),
+            style=discord.TextStyle.paragraph,
+            required=True,
+            max_length=500,
+        )
+        self.add_item(self.question)
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        state = get_session(self.channel_id)
+        if state is None:
+            await interaction.response.send_message(
+                "⚠ No active session.", ephemeral=True
+            )
+            return
+        char = _find_character(state, str(interaction.user.id))
+        asker = char.name if char else interaction.user.display_name
+        result, oracle = ask_oracle(
+            state, asker, self.question.value,
+            asker_owner_id=str(interaction.user.id),
+        )
+        if not result.ok:
+            await interaction.response.send_message(
+                f"⚠ {result.error}", ephemeral=True
+            )
+            return
+        await interaction.response.send_message("✓ Oracle submitted.", ephemeral=True)
+        msg = await post_oracle_question(interaction.channel, oracle)
+        oracle.message_id = msg.id
         await update_status(interaction.channel, state)
 
 # ---------------------------------------------------------------------------
