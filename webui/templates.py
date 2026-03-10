@@ -7,11 +7,14 @@ a `name` attribute matching what the server expects.
 """
 
 from __future__ import annotations
-from models import (
-    CharacterStatus, DoorState, GameState, NPC, Room,
-    RoomFeature, Exit, TurnStatus, SessionMode,
-)
 
+from models import (
+    CharacterStatus,
+    DoorState,
+    GameState,
+    SessionMode,
+    TurnStatus,
+)
 
 # ---------------------------------------------------------------------------
 # Page chrome
@@ -190,7 +193,7 @@ def session_page(
     </div>
   </div>
 </div>"""
-    return page(f"DM Panel", body)
+    return page("DM Panel", body)
 
 
 def dashboard_fragment(

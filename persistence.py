@@ -22,15 +22,15 @@ from __future__ import annotations
 
 import asyncio
 import sqlite3
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from models import GameState
 from serialization import deserialize_state, serialize_state
 
+
 # Use a UTC-aware now() throughout to avoid the deprecation warning.
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class Database:
@@ -104,7 +104,7 @@ class Database:
         )
         self._conn.commit()
 
-    def _load_sync(self, channel_id: str) -> Optional[GameState]:
+    def _load_sync(self, channel_id: str) -> GameState | None:
         row = self._conn.execute(
             "SELECT state_json FROM sessions WHERE channel_id = ?",
             (channel_id,),
@@ -185,7 +185,7 @@ class Database:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def _load_archive_sync(self, session_id: str) -> Optional[GameState]:
+    def _load_archive_sync(self, session_id: str) -> GameState | None:
         row = self._conn.execute(
             "SELECT state_json FROM archived_sessions WHERE session_id = ?",
             (session_id,),
@@ -202,7 +202,7 @@ class Database:
         )
         self._conn.commit()
 
-    def _resurrect_sync(self, session_id: str, channel_id: str) -> Optional[GameState]:
+    def _resurrect_sync(self, session_id: str, channel_id: str) -> GameState | None:
         """
         Copy an archived session back into the active sessions table under
         the given channel_id. Returns the loaded GameState, or None if the
@@ -241,7 +241,7 @@ class Database:
         async with self._lock:
             self._save_sync(state)
 
-    async def load_async(self, channel_id: str) -> Optional[GameState]:
+    async def load_async(self, channel_id: str) -> GameState | None:
         async with self._lock:
             return self._load_sync(channel_id)
 
@@ -261,7 +261,7 @@ class Database:
         async with self._lock:
             return self._list_archive_sync()
 
-    async def load_archive_async(self, session_id: str) -> Optional[GameState]:
+    async def load_archive_async(self, session_id: str) -> GameState | None:
         async with self._lock:
             return self._load_archive_sync(session_id)
 
@@ -269,7 +269,7 @@ class Database:
         async with self._lock:
             self._delete_archive_sync(session_id)
 
-    async def resurrect_async(self, session_id: str, channel_id: str) -> Optional[GameState]:
+    async def resurrect_async(self, session_id: str, channel_id: str) -> GameState | None:
         async with self._lock:
             return self._resurrect_sync(session_id, channel_id)
 
@@ -284,7 +284,7 @@ class Database:
         """
         self._save_sync(state)
 
-    def load(self, channel_id: str) -> Optional[GameState]:
+    def load(self, channel_id: str) -> GameState | None:
         return self._load_sync(channel_id)
 
     def delete(self, channel_id: str) -> None:
@@ -299,13 +299,13 @@ class Database:
     def list_archive(self) -> list[dict]:
         return self._list_archive_sync()
 
-    def load_archive(self, session_id: str) -> Optional[GameState]:
+    def load_archive(self, session_id: str) -> GameState | None:
         return self._load_archive_sync(session_id)
 
     def delete_archive(self, session_id: str) -> None:
         self._delete_archive_sync(session_id)
 
-    def resurrect(self, session_id: str, channel_id: str) -> Optional[GameState]:
+    def resurrect(self, session_id: str, channel_id: str) -> GameState | None:
         return self._resurrect_sync(session_id, channel_id)
 
     def close(self) -> None:

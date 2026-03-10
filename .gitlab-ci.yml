@@ -1,0 +1,62 @@
+# .gitlab-ci.yml
+
+# Default Docker image — used by every job unless it specifies its own.
+default:
+  image: python:3.12-slim
+
+# Stage order. Jobs in the same stage run in parallel.
+# If any job in 'lint' fails, 'test' is skipped.
+stages:
+  - lint
+  - test
+
+# Cache pip's download directory between pipeline runs.
+# Keyed on requirements-dev.txt: only re-fetched when that file changes.
+cache:
+  key:
+    files:
+      - requirements-dev.txt
+  paths:
+    - .pip-cache/
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
+
+
+# ── Stage: lint ──────────────────────────────────────────────────────
+
+ruff:lint:
+  stage: lint
+  script:
+    - pip install ruff --quiet
+    - ruff check .
+
+
+# ── Stage: test ──────────────────────────────────────────────────────
+
+pytest:3.11:
+  stage: test
+  image: python:3.11-slim
+  script:
+    - pip install -r requirements-dev.txt --quiet
+    - pytest tests/ --tb=short -q
+
+pytest:3.12:
+  stage: test
+  image: python:3.12-slim
+  script:
+    - pip install -r requirements-dev.txt --quiet
+    - pytest tests/ --tb=short -q
+
+coverage:
+  stage: test
+  image: python:3.12-slim
+  allow_failure: true              # won't block merges while suite is growing
+  script:
+    - pip install -r requirements-dev.txt --quiet
+    - pytest tests/ --cov=. --cov-report=term-missing --cov-report=html -q
+  artifacts:
+    paths:
+      - htmlcov/                   # browsable HTML coverage report
+    expire_in: 1 week
+  coverage: /^TOTAL.*\s+(\d+\%)/  # regex GitLab uses to show % on MR page

@@ -11,14 +11,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum, auto
-from typing import Optional
+from enum import Enum
 from uuid import UUID, uuid4
 
 # CharacterClass is generated in tables.py from _CLASS_DEFINITIONS.
 # Import it here so the rest of the codebase can import from models as before.
 from tables import CharacterClass
-
 
 # ---------------------------------------------------------------------------
 # Enumerations (non-ruleset — these don't change between game systems)
@@ -143,7 +141,7 @@ class InventoryItem:
 @dataclass
 class Character:
     character_id:    UUID              = field(default_factory=uuid4)
-    owner_id:        Optional[str]     = None   # platform user ID (opaque string)
+    owner_id:        str | None     = None   # platform user ID (opaque string)
     name:            str               = ""
     character_class: CharacterClass    = CharacterClass.FIGHTER
     level:           int               = 1
@@ -167,7 +165,7 @@ class Character:
     gold:            int               = 0
 
     # Spellcasters only; None for non-casters
-    spellbook:       Optional[SpellBook] = None
+    spellbook:       SpellBook | None = None
 
     # Metadata
     created_at:      datetime          = field(default_factory=datetime.utcnow)
@@ -183,8 +181,8 @@ class Exit:
     """A directional connection from one room to another."""
     exit_id:         UUID           = field(default_factory=uuid4)
     label:           str            = ""            # e.g. "north", "west", "ladder down"
-    direction:       Optional[ExitDirection] = None
-    destination_id:  Optional[UUID] = None          # None if room not yet authored
+    direction:       ExitDirection | None = None
+    destination_id:  UUID | None = None          # None if room not yet authored
     door_state:      DoorState      = DoorState.OPEN
     description:     str            = ""            # "A wooden door reinforced with iron bars"
     notes:           str            = ""            # DM-facing notes (traps, keys, etc.)
@@ -230,7 +228,7 @@ class Dungeon:
     name:         str                   = ""
     description:  str                   = ""
     rooms:        dict[UUID, Room]      = field(default_factory=dict)
-    entrance_id:  Optional[UUID]        = None   # starting room
+    entrance_id:  UUID | None        = None   # starting room
 
 
 # ---------------------------------------------------------------------------
@@ -283,9 +281,9 @@ class TurnRecord:
     mode:           SessionMode                   = SessionMode.EXPLORATION
     status:         TurnStatus                    = TurnStatus.OPEN
     opened_at:      datetime                      = field(default_factory=datetime.utcnow)
-    due_at:         Optional[datetime]            = None
-    closed_at:      Optional[datetime]            = None
-    resolved_at:    Optional[datetime]            = None
+    due_at:         datetime | None            = None
+    closed_at:      datetime | None            = None
+    resolved_at:    datetime | None            = None
 
     # All submissions for this turn (including superseded ones)
     submissions:    list[PlayerTurnSubmission]    = field(default_factory=list)
@@ -294,7 +292,7 @@ class TurnRecord:
     resolution:     str                           = ""
 
     # Snapshot of game state at resolution time for the history log
-    state_snapshot: Optional[dict]                = None  # serialized GameState
+    state_snapshot: dict | None                = None  # serialized GameState
 
 
 # ---------------------------------------------------------------------------
@@ -313,7 +311,7 @@ class LightSource:
         LightSource(label="Continual Light (Celes's shield)", turns_remaining=None)
     """
     label:           str           = ""
-    turns_remaining: Optional[int] = None   # None = permanent/magical, no countdown
+    turns_remaining: int | None = None   # None = permanent/magical, no countdown
     is_active:       bool          = True
 
 
@@ -323,10 +321,10 @@ class Oracle:
     oracle_id:       UUID           = field(default_factory=uuid4)
     number:          int            = 1       # resets each turn
     asker_name:      str            = ""
-    asker_owner_id:  Optional[str]  = None    # Discord user ID for DM notification
+    asker_owner_id:  str | None  = None    # Discord user ID for DM notification
     question:        str            = ""
-    answer:          Optional[str]  = None
-    message_id:      Optional[int]  = None    # Discord message ID for in-place editing
+    answer:          str | None  = None
+    message_id:      int | None  = None    # Discord message ID for in-place editing
 
     @property
     def question_text(self) -> str:
@@ -352,13 +350,13 @@ class Oracle:
 class Party:
     party_id:       UUID               = field(default_factory=uuid4)
     name:           str                = ""
-    leader_id:      Optional[UUID]     = None   # character_id of party leader
+    leader_id:      UUID | None     = None   # character_id of party leader
     member_ids:     list[UUID]         = field(default_factory=list)
     gold:           int                = 0
     light_sources:  list[LightSource]  = field(default_factory=list)
 
     @property
-    def active_light(self) -> Optional[LightSource]:
+    def active_light(self) -> LightSource | None:
         """Return the current active light source, if any."""
         for ls in self.light_sources:
             if ls.is_active:
@@ -373,24 +371,24 @@ class GameState:
     This is the single source of truth the engine reads and writes.
     """
     session_id:      UUID                    = field(default_factory=uuid4)
-    dungeon:         Optional[Dungeon]       = None
-    current_room_id: Optional[UUID]          = None
+    dungeon:         Dungeon | None       = None
+    current_room_id: UUID | None          = None
 
-    party:           Optional[Party]         = None
+    party:           Party | None         = None
     characters:      dict[UUID, Character]   = field(default_factory=dict)
     npcs:            list[NPC]               = field(default_factory=list)  # in current room
 
     mode:            SessionMode             = SessionMode.PRE_START
     turn_number:     int                     = 1
-    rounds_started_at_turn: Optional[int]    = None  # exploration turn when combat began
-    current_turn:    Optional[TurnRecord]    = None
+    rounds_started_at_turn: int | None    = None  # exploration turn when combat began
+    current_turn:    TurnRecord | None    = None
     turn_history:    list[TurnRecord]        = field(default_factory=list)
 
     # In-channel log (clears each turn)
     say_log:         list[str]               = field(default_factory=list)
 
     # Oracle posts (persist across turns, number resets each turn)
-    oracles:         list['Oracle']           = field(default_factory=list)
+    oracles:         list[Oracle]           = field(default_factory=list)
     oracle_counter:  int                     = 0  # increments per turn, resets on resolve
 
     # Session control
@@ -404,8 +402,8 @@ class GameState:
     updated_at:      datetime                = field(default_factory=datetime.utcnow)
 
     # Platform context (opaque — the engine doesn't interpret these)
-    platform_channel_id: Optional[str]      = None
-    dm_user_id:          Optional[str]      = None
+    platform_channel_id: str | None      = None
+    dm_user_id:          str | None      = None
 
 
     # ------------------------------------------------------------------
@@ -413,7 +411,7 @@ class GameState:
     # ------------------------------------------------------------------
 
     @property
-    def current_room(self) -> Optional[Room]:
+    def current_room(self) -> Room | None:
         if self.dungeon is None or self.current_room_id is None:
             return None
         return self.dungeon.rooms.get(self.current_room_id)
@@ -425,10 +423,10 @@ class GameState:
             if c.status == CharacterStatus.ACTIVE
         ]
 
-    def get_character(self, character_id: UUID) -> Optional[Character]:
+    def get_character(self, character_id: UUID) -> Character | None:
         return self.characters.get(character_id)
 
-    def latest_submission(self, character_id: UUID) -> Optional[PlayerTurnSubmission]:
+    def latest_submission(self, character_id: UUID) -> PlayerTurnSubmission | None:
         """Return the most recent active submission for a character in the current turn."""
         if self.current_turn is None:
             return None
