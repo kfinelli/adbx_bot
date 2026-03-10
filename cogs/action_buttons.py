@@ -137,6 +137,50 @@ class ActionModal(discord.ui.Modal):
 
 
 # ---------------------------------------------------------------------------
+# Guard helper
+# ---------------------------------------------------------------------------
+
+async def _check_turn(interaction: discord.Interaction):
+    """
+    Validate that a button click can proceed to show a modal.
+
+    Returns (state, char) on success, or (None, None) after sending an
+    ephemeral error if any guard fails.  All button callbacks call this
+    before interaction.response.send_modal() so the guard logic lives in
+    one place.
+    """
+    channel_id = str(interaction.channel_id)
+    state = get_session(channel_id)
+
+    if state is None:
+        await interaction.response.send_message(
+            "⚠ No active session in this channel.", ephemeral=True
+        )
+        return None, None
+
+    if not state.session_active:
+        await interaction.response.send_message(
+            "⚠ The session is on hold.", ephemeral=True
+        )
+        return None, None
+
+    if state.current_turn is None or state.current_turn.status != TurnStatus.OPEN:
+        await interaction.response.send_message(
+            "⚠ The turn is closed — waiting for DM resolution.", ephemeral=True
+        )
+        return None, None
+
+    char = _find_character(state, str(interaction.user.id))
+    if char is None:
+        await interaction.response.send_message(
+            "⚠ You don't have a character in this session.", ephemeral=True
+        )
+        return None, None
+
+    return state, char
+
+
+# ---------------------------------------------------------------------------
 # Exploration action view
 # ---------------------------------------------------------------------------
 
@@ -163,6 +207,8 @@ class ExplorationActionView(discord.ui.View):
     # Search
     # ------------------------------------------------------------------
 
+    # row 0 ----------------------------------------------------------------
+
     @discord.ui.button(
         label="Search",
         style=discord.ButtonStyle.secondary,
@@ -172,49 +218,167 @@ class ExplorationActionView(discord.ui.View):
     async def search(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ) -> None:
-        # Always derive channel_id from the interaction, not self.channel_id.
-        # self.channel_id is "__persistent__" on the re-registered view that
-        # handles button clicks on pre-existing messages after a bot restart.
-        channel_id = str(interaction.channel_id)
-
-        state = get_session(channel_id)
+        state, char = await _check_turn(interaction)
         if state is None:
-            await interaction.response.send_message(
-                "⚠ No active session in this channel.", ephemeral=True
-            )
             return
+        await interaction.response.send_modal(ActionModal(
+            title="Search",
+            input_label="Describe your search",
+            placeholder=(
+                "A 10×10 area. You can specify a feature from the list. "
+                "More detail can lead to automatic success."
+            ),
+            channel_id=str(interaction.channel_id),
+            action_prefix="Search: ",
+        ))
 
-        if not state.session_active:
-            await interaction.response.send_message(
-                "⚠ The session is on hold.", ephemeral=True
-            )
+    @discord.ui.button(
+        label="Disarm Trap",
+        style=discord.ButtonStyle.secondary,
+        custom_id="action:disarm_trap",
+        row=0,
+    )
+    async def disarm_trap(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        state, char = await _check_turn(interaction)
+        if state is None:
             return
+        await interaction.response.send_modal(ActionModal(
+            title="Disarm Trap",
+            input_label="Describe the trap and your approach",
+            placeholder="More detail may lead to automatic success.",
+            channel_id=str(interaction.channel_id),
+            action_prefix="Disarm Trap: ",
+        ))
 
-        if state.current_turn is None or state.current_turn.status != TurnStatus.OPEN:
-            await interaction.response.send_message(
-                "⚠ The turn is closed — waiting for DM resolution.", ephemeral=True
-            )
+    @discord.ui.button(
+        label="Listen",
+        style=discord.ButtonStyle.secondary,
+        custom_id="action:listen",
+        row=0,
+    )
+    async def listen(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        state, char = await _check_turn(interaction)
+        if state is None:
             return
+        await interaction.response.send_modal(ActionModal(
+            title="Listen",
+            input_label="What are you listening for or at?",
+            placeholder="Typically used to listen at doors",
+            channel_id=str(interaction.channel_id),
+            action_prefix="Listen: ",
+        ))
 
-        char = _find_character(state, str(interaction.user.id))
-        if char is None:
-            await interaction.response.send_message(
-                "⚠ You don't have a character in this session.", ephemeral=True
-            )
+    @discord.ui.button(
+        label="Force Open Door",
+        style=discord.ButtonStyle.secondary,
+        custom_id="action:force_door",
+        row=0,
+    )
+    async def force_open_door(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        state, char = await _check_turn(interaction)
+        if state is None:
             return
+        await interaction.response.send_modal(ActionModal(
+            title="Force Open Door",
+            input_label="Which door, and how?",
+            placeholder="Specify an exit number.",
+            channel_id=str(interaction.channel_id),
+            action_prefix="Force Open Door: ",
+        ))
 
-        await interaction.response.send_modal(
-            ActionModal(
-                title="Search",
-                input_label="Describe your search",
-                placeholder=(
-                    "A 10×10 area. You can specify a feature from the list. "
-                    "More detail can lead to automatic success."
-                ),
-                channel_id=channel_id,
-                action_prefix="Search: ",
-            )
-        )
+    # row 1 ----------------------------------------------------------------
+
+    @discord.ui.button(
+        label="Pick Lock",
+        style=discord.ButtonStyle.secondary,
+        custom_id="action:pick_lock",
+        row=1,
+    )
+    async def pick_lock(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        state, char = await _check_turn(interaction)
+        if state is None:
+            return
+        await interaction.response.send_modal(ActionModal(
+            title="Pick Lock",
+            input_label="Which lock?",
+            placeholder=(
+                "Specify an exit number or a room feature (e.g, a locked chest), "
+                "describe how you pick the lock"
+            ),
+            channel_id=str(interaction.channel_id),
+            action_prefix="Pick Lock: ",
+        ))
+
+    @discord.ui.button(
+        label="Craft",
+        style=discord.ButtonStyle.secondary,
+        custom_id="action:craft",
+        row=1,
+    )
+    async def craft(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        state, char = await _check_turn(interaction)
+        if state is None:
+            return
+        await interaction.response.send_modal(ActionModal(
+            title="Craft",
+            input_label="What are you making or repairing?",
+            placeholder="Describe your action",
+            channel_id=str(interaction.channel_id),
+            action_prefix="Craft: ",
+        ))
+
+    @discord.ui.button(
+        label="Other Turn Action",
+        style=discord.ButtonStyle.secondary,
+        custom_id="action:other_turn",
+        row=1,
+    )
+    async def other_turn_action(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        state, char = await _check_turn(interaction)
+        if state is None:
+            return
+        await interaction.response.send_modal(ActionModal(
+            title="Other Action",
+            input_label="Describe your action",
+            placeholder="Anything that takes a full 10-minute dungeon turn.",
+            channel_id=str(interaction.channel_id),
+            action_prefix="",
+        ))
+
+    @discord.ui.button(
+        label="Oracle",
+        style=discord.ButtonStyle.primary,
+        custom_id="action:oracle",
+        row=1,
+    )
+    async def oracle(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        state, char = await _check_turn(interaction)
+        if state is None:
+            return
+        await interaction.response.send_modal(ActionModal(
+            title="Oracle",
+            input_label="Question or brief interaction",
+            placeholder=(
+                "Describe a short action that takes less than a full turn, "
+                "or ask a question"
+            ),
+            channel_id=str(interaction.channel_id),
+            action_prefix="Oracle: ",
+        ))
 
 
 # ---------------------------------------------------------------------------
