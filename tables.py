@@ -34,7 +34,6 @@ class PlayerClass:
     Everything create_character needs to know about a class.
     Defaults are generic fantasy RPG values; override per class as needed.
     """
-    id: str
     max_level: int = 5
     display_name: str = "Unknown Class"
     hit_die: int = 4
@@ -42,7 +41,6 @@ class PlayerClass:
     base_save: int = 0
     stat: str = "PHY"
     abilities={}
-    """
     display_name:    str        # shown to players, e.g. "Magic-User"
     hit_die:         int = 8    # die size for HP rolls
     base_ac:         int = 9    # unarmored AC (descending; lower = better)
@@ -55,7 +53,6 @@ class PlayerClass:
         "death_poison": 14, "wands": 15, "paralysis_stone": 16,
         "breath_weapon": 17, "spells": 18,
     })
-"""
     # Class-specific bonus items for named equipment packs.
     # Maps pack_name -> (item_name, quantity, encumbrance).
     pack_bonus_items: dict = field(default_factory=dict)

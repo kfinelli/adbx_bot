@@ -111,7 +111,7 @@
       "desc": "Increase any stat by 1!"
     },
     "Slip": {
-      "id": "thief_disarm",
+      "id": "thief_slip",
       "source": "thief",
       "level": 3,
       "type": 4,
@@ -198,7 +198,7 @@
       "desc":"You may either:\n - Make a SVY check in place of another check.\n - Use your SVY save in place of another save.\nGain an additional use at level 3, and again at level 5. Regain all uses at the start of a combat encounter.\n"
     },
     "Weapon Forte": {
-      "id": "dilettante_knack",
+      "id": "dilettante_weapon_forte",
       "source": "dilettante",
       "level": 1,
       "type": 9,
