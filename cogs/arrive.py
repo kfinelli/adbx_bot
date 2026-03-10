@@ -17,11 +17,10 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from engine import create_character, roll_stats
 from models import CharacterClass, SessionMode
-from engine import create_character, open_turn, roll_stats
 from store import ack, get_session, update_status
-from tables import EQUIPMENT_PACKAGES, EQUIPMENT_PACKAGE_DESCRIPTIONS
-
+from tables import EQUIPMENT_PACKAGE_DESCRIPTIONS, EQUIPMENT_PACKAGES
 
 # ---------------------------------------------------------------------------
 # Stat display helper
@@ -58,7 +57,7 @@ class LoadoutView(discord.ui.View):
         self.owner_id = owner_id
 
         for package_name in EQUIPMENT_PACKAGES:
-            desc = EQUIPMENT_PACKAGE_DESCRIPTIONS.get(package_name, "")
+            EQUIPMENT_PACKAGE_DESCRIPTIONS.get(package_name, "")
             btn = discord.ui.Button(
                 label=package_name,
                 style=discord.ButtonStyle.secondary,

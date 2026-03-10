@@ -8,6 +8,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from discord_tasks import post_oracle_question
 from engine import (
     abscond,
     ask_oracle,
@@ -19,7 +20,6 @@ from engine import (
     submit_turn,
 )
 from models import SessionMode, TurnStatus
-from discord_tasks import post_oracle_question
 from store import (
     ack,
     ack_done,
@@ -27,7 +27,7 @@ from store import (
     get_session,
     notify_dm_of_turn_close,
     repost_status,
-    save_session,
+    save_session_async,
     update_status,
 )
 
@@ -77,25 +77,19 @@ class SessionCog(commands.Cog):
         sep = "\u2500" * 32
 
         inv_lines = "\n".join(
-            "  {}x {}".format(i.quantity, i.name) for i in char.inventory
+            f"  {i.quantity}x {i.name}" for i in char.inventory
         ) if char.inventory else "  (empty)"
 
         st = char.saving_throws
         sheet_lines = [
             sep,
-            "{name}  \u2014  {cls} Level {lvl}{leader}".format(
-                name=char.name, cls=char.character_class.value,
-                lvl=char.level, leader=leader_note,
-            ),
-            "HP: {cur}/{mx}   AC: {ac}   Move: {mv}'".format(
-                cur=char.hp_current, mx=char.hp_max,
-                ac=char.armor_class, mv=char.movement_speed,
-            ),
-            "XP: {}   Gold: {} gp".format(char.experience, char.gold),
+            f"{char.name}  \u2014  {char.character_class.value} Level {char.level}{leader_note}",
+            f"HP: {char.hp_current}/{char.hp_max}   AC: {char.armor_class}   Move: {char.movement_speed}'",
+            f"XP: {char.experience}   Gold: {char.gold} gp",
             sep,
-            "STR {:2d}   INT {:2d}".format(a.strength, a.intelligence),
-            "DEX {:2d}   WIS {:2d}".format(a.dexterity, a.wisdom),
-            "CON {:2d}   CHA {:2d}".format(a.constitution, a.charisma),
+            f"STR {a.strength:2d}   INT {a.intelligence:2d}",
+            f"DEX {a.dexterity:2d}   WIS {a.wisdom:2d}",
+            f"CON {a.constitution:2d}   CHA {a.charisma:2d}",
             sep,
             "Saves:",
             "  Death/Poison:    {}".format(st.get("death_poison", "?")),
@@ -109,7 +103,7 @@ class SessionCog(commands.Cog):
             sep,
         ]
         if char.status_notes:
-            sheet_lines.append("Status: {}".format(char.status_notes))
+            sheet_lines.append(f"Status: {char.status_notes}")
 
         await interaction.edit_original_response(
             content="```\n{}\n```".format("\n".join(sheet_lines))
