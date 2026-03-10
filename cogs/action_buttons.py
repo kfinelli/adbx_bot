@@ -21,14 +21,13 @@ from __future__ import annotations
 import discord
 from discord.ext import commands
 
+from engine import submit_turn
 from models import SessionMode, TurnStatus
 from store import (
     get_session,
     notify_dm_of_turn_close,
     update_status,
 )
-from engine import submit_turn
-
 
 # ---------------------------------------------------------------------------
 # Helper: find a character by Discord user ID
@@ -209,8 +208,8 @@ class ExplorationActionView(discord.ui.View):
                 title="Search",
                 input_label="Describe your search",
                 placeholder=(
-                    "A 10×10 area. You can specify a feature from the feature list. "
-                    "Providing detail about how you search can lead to automatic success."
+                    "A 10×10 area. You can specify a feature from the list. "
+                    "More detail can lead to automatic success."
                 ),
                 channel_id=channel_id,
                 action_prefix="Search: ",
