@@ -14,11 +14,9 @@ from __future__ import annotations
 
 import random
 import re
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Optional
-from uuid import UUID, uuid4
-
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from uuid import UUID
 
 from models import (
     NPC,
@@ -54,7 +52,7 @@ from tables import (
 # ---------------------------------------------------------------------------
 
 def _now() -> datetime:
-    return datetime.now(UTC)
+    return datetime.now(timezone.utc)
 
 
 # ---------------------------------------------------------------------------
@@ -97,7 +95,7 @@ def print_dice_results(results):
 #    'dice': list of all rolled dice
 #    'total': total of all rolled dice
 def roll_dice_expr(expr):
-    xyz = re.split('d|\+', expr)
+    xyz = re.split(r'd|\+', expr)
     x = int(xyz[0])
     if len(xyz) == 1:
         return {'dice':{x},'total':x, 'bonus':0}
@@ -1086,7 +1084,7 @@ def render_status_header(state: GameState) -> str:
     if state.current_turn and state.current_turn.due_at:
         due = state.current_turn.due_at
         if due.tzinfo is None:
-            due = due.replace(tzinfo=UTC)
+            due = due.replace(tzinfo=timezone.utc)
         unix_ts = int(due.timestamp())
         turn_label += f" (deadline <t:{unix_ts}:f>)"
     return turn_label
