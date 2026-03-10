@@ -1,0 +1,29 @@
+[coverage:run]
+source = .
+omit =
+    # Requires live Discord connection — tested manually / integration only
+    bot.py
+    store.py
+    discord_tasks.py
+    cogs/*
+    # Requires live FastAPI server — tested manually / integration only
+    webui/app.py
+    webui/templates.py
+    # Test files themselves
+    tests/*
+    # Legacy engine directory (not the active engine)
+    engine/*
+
+[coverage:report]
+# Informational threshold. Promote to fail_under when coverage is stabilized.
+# fail_under = 70
+show_missing = true
+skip_covered = false
+exclude_lines =
+    # Standard pragmas
+    pragma: no cover
+    # Abstract methods
+    @abstractmethod
+    # Defensive unreachable branches
+    raise NotImplementedError
+    if TYPE_CHECKING:

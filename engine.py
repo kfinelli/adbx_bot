@@ -12,7 +12,6 @@ Convention:
 
 from __future__ import annotations
 
-import copy
 import random
 import re
 from dataclasses import dataclass, field
@@ -20,23 +19,21 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID, uuid4
 
+
 from models import (
+    NPC,
     AbilityScores,
     Character,
     CharacterClass,
     CharacterStatus,
-    Dungeon,
     DoorState,
+    Dungeon,
     Exit,
     GameState,
     InventoryItem,
     LightSource,
-    NPC,
-    Party,
     PlayerTurnSubmission,
-    PreparedSpell,
     Room,
-    RoomFeature,
     SessionMode,
     SpellBook,
     TurnRecord,
@@ -52,13 +49,12 @@ from tables import (
     get_spell_slots,
 )
 
-
 # ---------------------------------------------------------------------------
 # Timezone-aware UTC now (replaces deprecated _now())
 # ---------------------------------------------------------------------------
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 # ---------------------------------------------------------------------------
@@ -70,7 +66,7 @@ class EngineResult:
     ok:        bool             = True
     message:   str              = ""   # narrative / confirmation text for the platform to display
     error:     str              = ""   # human-readable error if ok=False
-    state:     Optional[GameState] = None
+    state:     GameState | None = None
     notify_dm: bool             = False  # platform should notify DM to resolve
 
 
@@ -184,9 +180,9 @@ def create_character(
     name:            str,
     character_class: CharacterClass,
     equipment_package: str,
-    owner_id:        Optional[str] = None,
-    ability_scores:  Optional[AbilityScores] = None,   # pre-rolled, or we roll
-    prerolled_stats: Optional[dict] = None,             # from roll_stats() dict
+    owner_id:        str | None = None,
+    ability_scores:  AbilityScores | None = None,   # pre-rolled, or we roll
+    prerolled_stats: dict | None = None,             # from roll_stats() dict
 ) -> EngineResult:
     """
     Create a new level-1 character, add them to the session, and return the result.
@@ -226,7 +222,7 @@ def create_character(
     saves = get_saving_throws(character_class, 1)
 
     # --- Spell book (spellcasters only, determined by class rules)
-    spellbook: Optional[SpellBook] = None
+    spellbook: SpellBook | None = None
     if rules.is_spellcaster:
         slots = get_spell_slots(character_class, 1)
         spellbook = SpellBook(
@@ -289,7 +285,7 @@ def create_character(
 
 def open_turn(
     state:  GameState,
-    due_at: Optional[datetime] = None,
+    due_at: datetime | None = None,
 ) -> EngineResult:
     """
     Open a new dungeon turn (or combat round).
@@ -464,7 +460,7 @@ def _tick_light(state: GameState) -> None:
 def set_light_source(
     state:           GameState,
     label:           str,
-    turns_remaining: Optional[int],
+    turns_remaining: int | None,
 ) -> EngineResult:
     """
     DM command: set the active light source.
@@ -569,7 +565,7 @@ def remove_npc(state: GameState, npc_id: UUID) -> EngineResult:
     return _ok(state, f"{npc.name} removed from room.")
 
 
-def _find_npc(state: GameState, npc_id: UUID) -> Optional[NPC]:
+def _find_npc(state: GameState, npc_id: UUID) -> NPC | None:
     for n in state.npcs:
         if n.npc_id == npc_id:
             return n
@@ -580,14 +576,166 @@ def _find_npc(state: GameState, npc_id: UUID) -> Optional[NPC]:
 # DM mutations — rooms and features
 # ---------------------------------------------------------------------------
 
-def set_room(state: GameState, room: Room) -> EngineResult:
+def set_turn_number(state: GameState, turn_number: int) -> EngineResult:
+    """Directly set the session turn counter. DM correction tool."""
+    if turn_number < 0:
+        return _err(state, "Turn number cannot be negative.")
+    state.turn_number = turn_number
+    if state.current_turn:
+        state.current_turn.turn_number = turn_number
+    state.updated_at = _now()
+    return _ok(state, f"Turn number set to {turn_number}.")
+
+
+def update_room(
+    state:       GameState,
+    room_id:     UUID,
+    name:        str,
+    description: str,
+    notes:       str = "",
+) -> EngineResult:
+    """Edit the name, description, and DM notes of an existing room."""
+    if not name.strip():
+        return _err(state, "Room name cannot be empty.")
+    room = _resolve_room(state, room_id)
+    if room is None:
+        return _err(state, f"Room {room_id} not found.")
+    room.name        = name.strip()
+    room.description = description
+    room.notes       = notes
+    state.updated_at = _now()
+    return _ok(state, f"Room updated: {room.name}.")
+
+
+def delete_feature(
+    state:      GameState,
+    feature_id: UUID,
+    room_id:    UUID | None = None,
+) -> EngineResult:
+    room = _resolve_room(state, room_id)
+    if room is None:
+        return _err(state, "No current room.")
+    before = len(room.features)
+    room.features = [f for f in room.features if f.feature_id != feature_id]
+    if len(room.features) == before:
+        return _err(state, f"Feature {feature_id} not found.")
+    state.updated_at = _now()
+    return _ok(state, "Feature deleted.")
+
+
+def update_feature(
+    state:       GameState,
+    feature_id:  UUID,
+    name:        str,
+    description: str,
+    state_str:   str,
+    notes:       str = "",
+    room_id:     UUID | None = None,
+) -> EngineResult:
+    room = _resolve_room(state, room_id)
+    if room is None:
+        return _err(state, "No current room.")
+    feat = next((f for f in room.features if f.feature_id == feature_id), None)
+    if feat is None:
+        return _err(state, f"Feature {feature_id} not found.")
+    if not name.strip():
+        return _err(state, "Feature name cannot be empty.")
+    feat.name        = name.strip()
+    feat.description = description
+    feat.state       = state_str
+    feat.notes       = notes
+    state.updated_at = _now()
+    return _ok(state, f"Feature updated: {feat.name}.")
+
+
+def delete_exit(
+    state:   GameState,
+    exit_id: UUID,
+    room_id: UUID | None = None,
+) -> EngineResult:
+    room = _resolve_room(state, room_id)
+    if room is None:
+        return _err(state, "No current room.")
+    before = len(room.exits)
+    room.exits = [e for e in room.exits if e.exit_id != exit_id]
+    if len(room.exits) == before:
+        return _err(state, f"Exit {exit_id} not found.")
+    state.updated_at = _now()
+    return _ok(state, "Exit deleted.")
+
+
+def update_exit(
+    state:          GameState,
+    exit_id:        UUID,
+    label:          str,
+    description:    str,
+    door_state,                       # DoorState
+    destination_id: UUID | None = None,
+    notes:          str = "",
+    room_id:        UUID | None = None,
+) -> EngineResult:
+    room = _resolve_room(state, room_id)
+    if room is None:
+        return _err(state, "No current room.")
+    ex = next((e for e in room.exits if e.exit_id == exit_id), None)
+    if ex is None:
+        return _err(state, f"Exit {exit_id} not found.")
+    if not label.strip():
+        return _err(state, "Exit label cannot be empty.")
+    ex.label          = label.strip()
+    ex.description    = description
+    ex.door_state     = door_state
+    ex.destination_id = destination_id
+    ex.notes          = notes
+    state.updated_at  = _now()
+    return _ok(state, f"Exit updated: {ex.label}.")
+
+
+def update_npc(
+    state:       GameState,
+    npc_id:      UUID,
+    name:        str,
+    description: str,
+    hp_max:      int,
+    hp_current:  int,
+    armor_class: int,
+    notes:       str = "",
+) -> EngineResult:
+    npc = _find_npc(state, npc_id)
+    if npc is None:
+        return _err(state, f"NPC {npc_id} not found.")
+    if not name.strip():
+        return _err(state, "NPC name cannot be empty.")
+    npc.name        = name.strip()
+    npc.description = description
+    npc.hp_max      = hp_max
+    npc.hp_current  = hp_current
+    npc.armor_class = armor_class
+    npc.notes       = notes
+    state.updated_at = _now()
+    return _ok(state, f"NPC updated: {npc.name}.")
+
+def register_room(state: GameState, room: Room) -> EngineResult:
     """
-    DM sets the current room. Adds it to the dungeon graph if not present.
-    Clears NPCs (new room, new NPC list).
+    Add a room to the dungeon graph without moving the party into it.
+    Used by the web UI when authoring rooms before or during a session.
+    To also move the party in, call move_party_to_room() afterwards.
     """
     if state.dungeon is None:
         state.dungeon = Dungeon(name="The Dungeon")
     state.dungeon.rooms[room.room_id] = room
+    state.updated_at = _now()
+    return _ok(state, f"Room '{room.name}' added to dungeon.")
+
+
+def set_room(state: GameState, room: Room) -> EngineResult:
+    """
+    DM creates a new room on the fly and immediately moves the party in.
+    Adds it to the dungeon graph, sets it as current, and clears NPCs.
+    Used by the /dm_setroom slash command (no room_id) path.
+    For web UI room creation, use register_room() instead.
+    """
+    register_room(state, room)
     state.current_room_id = room.room_id
     room.visited = True
     state.npcs = []
@@ -595,13 +743,45 @@ def set_room(state: GameState, room: Room) -> EngineResult:
     return _ok(state, f"Entered: {room.name}.")
 
 
+def move_party_to_room(state: GameState, room_id: UUID) -> EngineResult:
+    """
+    Move the party into an already-authored room in the dungeon graph.
+
+    - Looks up the room by ID; fails if not found.
+    - Marks the room visited.
+    - Clears state.npcs (session-transient; DM repopulates as needed).
+    - Does NOT modify the room's features, exits, or any other authored data.
+    """
+    if state.dungeon is None:
+        return _err(state, "No dungeon loaded.")
+    room = state.dungeon.rooms.get(room_id)
+    if room is None:
+        return _err(state, f"Room {room_id} not found in dungeon.")
+    state.current_room_id = room_id
+    room.visited = True
+    state.npcs = []
+    state.updated_at = _now()
+    return _ok(state, f"Entered: {room.name}.")
+
+
+def _resolve_room(state: GameState, room_id: UUID | None) -> object | None:
+    """Return the room for room_id if given, else the party's current room."""
+    if room_id is not None:
+        if state.dungeon is None:
+            return None
+        return state.dungeon.rooms.get(room_id)
+    return state.current_room
+
+
 def set_feature_state(
     state:      GameState,
     feature_id: UUID,
     new_state:  str,
+    room_id:    UUID | None = None,
 ) -> EngineResult:
-    """Update the state string of a room feature."""
-    room = state.current_room
+    """Update the state string of a room feature.
+    If room_id is provided, operates on that room; otherwise uses the current room."""
+    room = _resolve_room(state, room_id)
     if room is None:
         return _err(state, "No current room.")
     for feat in room.features:
@@ -609,15 +789,17 @@ def set_feature_state(
             feat.state = new_state
             state.updated_at = _now()
             return _ok(state, f"{feat.name} → {new_state}.")
-    return _err(state, f"Feature {feature_id} not found in current room.")
+    return _err(state, f"Feature {feature_id} not found.")
 
 
 def set_exit_state(
     state:    GameState,
     exit_id:  UUID,
-    new_state,   # DoorState
+    new_state,            # DoorState
+    room_id:  UUID | None = None,
 ) -> EngineResult:
-    room = state.current_room
+    """If room_id is provided, operates on that room; otherwise uses the current room."""
+    room = _resolve_room(state, room_id)
     if room is None:
         return _err(state, "No current room.")
     for ex in room.exits:
@@ -625,7 +807,7 @@ def set_exit_state(
             ex.door_state = new_state
             state.updated_at = _now()
             return _ok(state, f"Exit '{ex.label}' → {new_state.value}.")
-    return _err(state, f"Exit {exit_id} not found in current room.")
+    return _err(state, f"Exit {exit_id} not found.")
 
 
 def add_exit(
@@ -634,9 +816,10 @@ def add_exit(
     description: str,
     door_state=DoorState.OPEN,
     notes:       str = "",
+    room_id:     UUID | None = None,
 ) -> EngineResult:
-    """DM adds a new exit to the current room."""
-    room = state.current_room
+    """DM adds a new exit. If room_id is provided, adds to that room; else current room."""
+    room = _resolve_room(state, room_id)
     if room is None:
         return _err(state, "No current room.")
     exit_ = Exit(
@@ -714,6 +897,35 @@ def abscond(
 
 
 # ---------------------------------------------------------------------------
+# Dungeon import
+# ---------------------------------------------------------------------------
+
+def import_dungeon(state: GameState, dungeon: Dungeon) -> EngineResult:
+    """
+    Load a pre-authored dungeon into the session.
+
+    Only permitted in PRE_START — the dungeon must be set before the
+    session begins so players arrive into a known map. Replaces any
+    previously loaded dungeon wholesale.
+
+    If the dungeon has an entrance_id, the current room is set to that
+    room so the DM can immediately see it in the status block. The room
+    is NOT marked visited — that happens when the party actually enters
+    via /embark + /dm_setroom or move_party_to_room.
+    """
+    if state.mode != SessionMode.PRE_START:
+        return _err(state, "Dungeons can only be imported before the session starts.")
+    state.dungeon = dungeon
+    # Point current_room_id at the entrance so the web UI has something
+    # to show, but leave visited=False until the party actually enters.
+    if dungeon.entrance_id and dungeon.entrance_id in dungeon.rooms:
+        state.current_room_id = dungeon.entrance_id
+    state.updated_at = _now()
+    room_count = len(dungeon.rooms)
+    return _ok(state, f"Dungeon '{dungeon.name}' loaded ({room_count} room(s)).")
+
+
+# ---------------------------------------------------------------------------
 # Say log and oracles
 # ---------------------------------------------------------------------------
 
@@ -738,7 +950,7 @@ def ask_oracle(
     asker_name:     str,
     question:       str,
     asker_owner_id: str = None,
-) -> "tuple[EngineResult, object]":
+) -> tuple[EngineResult, object]:
     """
     Create a new oracle entry. Returns (result, oracle) so the platform
     layer can post the Discord message and store the message_id back.
@@ -760,7 +972,7 @@ def answer_oracle(
     state:     GameState,
     number:    int,
     answer:    str,
-) -> "tuple[EngineResult, object | None]":
+) -> tuple[EngineResult, object | None]:
     """
     DM answers an oracle by number. Returns (result, oracle) so the
     platform layer can edit the Discord message in place.
@@ -874,7 +1086,7 @@ def render_status_header(state: GameState) -> str:
     if state.current_turn and state.current_turn.due_at:
         due = state.current_turn.due_at
         if due.tzinfo is None:
-            due = due.replace(tzinfo=timezone.utc)
+            due = due.replace(tzinfo=UTC)
         unix_ts = int(due.timestamp())
         turn_label += f" (deadline <t:{unix_ts}:f>)"
     return turn_label

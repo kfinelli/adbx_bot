@@ -7,11 +7,14 @@ a `name` attribute matching what the server expects.
 """
 
 from __future__ import annotations
-from models import (
-    CharacterStatus, DoorState, GameState, NPC, Room,
-    RoomFeature, Exit, TurnStatus, SessionMode,
-)
 
+from models import (
+    CharacterStatus,
+    DoorState,
+    GameState,
+    SessionMode,
+    TurnStatus,
+)
 
 # ---------------------------------------------------------------------------
 # Page chrome
@@ -155,6 +158,8 @@ def _sidebar(channel_id: str | None, sessions: list[tuple[str, str]]) -> str:
   <h1 style="font-size:1.1rem; margin-bottom:1.5rem;">&#127922; DM Panel</h1>
   <h2>Sessions</h2>
   {links or '<p class="muted">No active sessions</p>'}
+  <hr class="divider" style="margin:1rem 0">
+  <a href="/archive">&#128196; Archive</a>
 </div>"""
 
 
@@ -170,35 +175,80 @@ def session_list_page(sessions: list[tuple[str, str]]) -> str:
     return page("DM Panel", body)
 
 
-def session_page(state: GameState, sessions: list[tuple[str, str]], flash: str = "", error: str = "") -> str:
+def session_page(
+    state: GameState,
+    sessions: list[tuple[str, str]],
+    flash: str = "",
+    error: str = "",
+    view_room_id: str = "",
+    edit_id: str = "",
+) -> str:
     channel_id = state.platform_channel_id
     body = f"""
 <div class="layout">
   {_sidebar(channel_id, sessions)}
   <div class="main">
     <div id="dashboard">
-      {dashboard_fragment(state, flash, error)}
+      {dashboard_fragment(state, flash, error, view_room_id, edit_id)}
     </div>
   </div>
 </div>"""
-    return page(f"DM Panel", body)
+    return page("DM Panel", body)
 
 
-def dashboard_fragment(state: GameState, flash: str = "", error: str = "") -> str:
+def dashboard_fragment(
+    state: GameState,
+    flash: str = "",
+    error: str = "",
+    view_room_id: str = "",
+    edit_id: str = "",
+) -> str:
     channel_id = state.platform_channel_id
     flash_html = f'<div class="flash">{flash}</div>' if flash else ""
     error_html = f'<div class="error">{error}</div>' if error else ""
+
+    # Resolve the room being viewed in the right column.
+    # Preference order: explicit view_room_id > party's current room > None
+    from uuid import UUID as _UUID
+    view_room = None
+    resolved_view_id = ""
+    if view_room_id and state.dungeon:
+        try:
+            _vid = _UUID(view_room_id)
+            view_room = state.dungeon.rooms.get(_vid)
+            if view_room:
+                resolved_view_id = view_room_id
+        except ValueError:
+            pass
+    if view_room is None and state.current_room_id and state.dungeon:
+        view_room = state.dungeon.rooms.get(state.current_room_id)
+        if view_room:
+            resolved_view_id = str(state.current_room_id)
+    if view_room is None:
+        # Fall back to the ad-hoc current_room path (no dungeon graph)
+        view_room = state.current_room
+        if view_room:
+            resolved_view_id = str(view_room.room_id)
+
+    is_party_room = (
+        view_room is not None
+        and state.current_room_id is not None
+        and view_room.room_id == state.current_room_id
+    )
+
     return f"""
 <div id="dashboard">
   {flash_html}{error_html}
   <div class="grid-2">
     <div>
-      {turn_panel(state)}
+      {turn_panel(state, edit_id)}
+      {dungeon_panel(state, resolved_view_id)}
+      {oracle_panel(state)}
       {party_panel(state)}
     </div>
     <div>
-      {room_panel(state)}
-      {npc_panel(state)}
+      {room_panel(state, view_room, is_party_room, resolved_view_id, edit_id)}
+      {npc_panel(state, channel_id, resolved_view_id, edit_id)}
     </div>
   </div>
 </div>"""
@@ -208,7 +258,7 @@ def dashboard_fragment(state: GameState, flash: str = "", error: str = "") -> st
 # Turn panel
 # ---------------------------------------------------------------------------
 
-def turn_panel(state: GameState) -> str:
+def turn_panel(state: GameState, edit_id: str = "") -> str:
     channel_id = state.platform_channel_id
     turn = state.current_turn
 
@@ -228,6 +278,22 @@ def turn_panel(state: GameState) -> str:
     due_str = ""
     if turn and turn.due_at:
         due_str = f'<div class="muted" style="margin-bottom:0.5rem">Due: {turn.due_at.strftime("%Y-%m-%d %H:%M UTC")}</div>'
+
+    # Turn number — inline edit when edit_id == "turn_number"
+    if edit_id == "turn_number":
+        turn_number_html = f"""
+<form hx-post="/session/{channel_id}/setturnumber"
+      hx-target="#dashboard" hx-swap="outerHTML"
+      style="display:inline-flex;align-items:center;gap:0.4rem;margin-left:0.5rem">
+  <input type="number" name="turn_number" value="{state.turn_number}"
+         min="0" style="width:70px">
+  <button class="btn-sm" type="submit">Set</button>
+  <a href="/session/{channel_id}" style="font-size:0.8rem;color:#888">cancel</a>
+</form>"""
+        heading = f'<div class="section-header" style="flex-wrap:wrap"><h3>Turn{turn_number_html} &mdash; {mode}</h3>{status_tag}</div>'
+    else:
+        edit_link = f'<a href="/session/{channel_id}?edit=turn_number" title="Edit turn number" style="font-size:0.8rem;color:#666;margin-left:0.4rem">✎</a>'
+        heading = f'<div class="section-header"><h3>Turn {state.turn_number}{edit_link} &mdash; {mode}</h3>{status_tag}</div>'
 
     # Submissions table
     subs_html = ""
@@ -255,7 +321,6 @@ def turn_panel(state: GameState) -> str:
   <button class="btn-success" type="submit">Resolve Turn</button>
 </form>"""
 
-    # Timer controls — inputs inside forms so name attributes work cleanly
     timer_html = f"""
 <hr class="divider">
 <form hx-post="/session/{channel_id}/settimer"
@@ -279,30 +344,42 @@ def turn_panel(state: GameState) -> str:
   </div>
 </form>"""
 
-    if state.session_active:
-        hold_html = f"""
+    if state.mode == SessionMode.PRE_START:
+        session_controls_html = f"""
+<button class="btn-success"
+        hx-post="/session/{channel_id}/embark"
+        hx-target="#dashboard" hx-swap="outerHTML"
+        hx-confirm="Embark? This starts the session and opens the first turn."
+        >Embark</button>"""
+    elif state.session_active:
+        session_controls_html = f"""
 <button class="btn-danger"
         hx-post="/session/{channel_id}/hold"
         hx-target="#dashboard" hx-swap="outerHTML"
         hx-confirm="Put session on hold?">Hold Session</button>"""
     else:
-        hold_html = f"""
+        session_controls_html = f"""
 <button class="btn-success"
         hx-post="/session/{channel_id}/resume"
         hx-target="#dashboard" hx-swap="outerHTML">Resume Session</button>"""
 
+    end_session_html = f"""
+<form hx-post="/session/{channel_id}/endsession"
+      hx-confirm="End session permanently? This deletes all session data and cannot be undone."
+      style="margin-top:0.5rem">
+  <button class="btn-danger" type="submit" style="width:100%">End Session</button>
+</form>"""
+
     return f"""
 <div class="card">
-  <div class="section-header">
-    <h3>Turn {state.turn_number} &mdash; {mode}</h3>
-    {status_tag}
-  </div>
+  {heading}
   {due_str}
   {subs_html}
   {resolve_html}
   {timer_html}
   <hr class="divider">
-  {hold_html}
+  {session_controls_html}
+  {end_session_html}
 </div>"""
 
 
@@ -403,42 +480,96 @@ def party_panel(state: GameState) -> str:
 # Room panel
 # ---------------------------------------------------------------------------
 
-def room_panel(state: GameState) -> str:
+def room_panel(
+    state: GameState,
+    room,                   # Room | None
+    is_party_room: bool = False,
+    view_room_id: str = "",
+    edit_id: str = "",
+) -> str:
     channel_id = state.platform_channel_id
-    room = state.current_room
-
-    set_room_html = f"""
-<hr class="divider">
-<div class="section-header"><h3>Set / Update Room</h3></div>
-<form hx-post="/session/{channel_id}/setroom"
-      hx-target="#dashboard" hx-swap="outerHTML">
-  <label>Name</label>
-  <input type="text" name="name" value="{room.name if room else ''}" placeholder="Room name">
-  <label>Description</label>
-  <textarea name="description" placeholder="Player-visible description">{room.description if room else ''}</textarea>
-  <label>DM Notes</label>
-  <textarea name="notes" placeholder="DM-facing notes">{room.notes if room else ''}</textarea>
-  <button type="submit">Set Room</button>
-</form>"""
 
     if not room:
-        return f'<div class="card"><h3>Room</h3><p class="muted">No current room.</p>{set_room_html}</div>'
+        return '<div class="card"><h3>Room</h3><p class="muted">Select a room from the dungeon list, or create one.</p></div>'
 
-    # Features — each state update is its own form
+    rid = str(room.room_id)
+    party_badge = (
+        ' <span class="tag tag-open" style="font-size:0.7rem;vertical-align:middle">Party here</span>'
+        if is_party_room else ""
+    )
+
+    # --- Room header: inline edit or static display
+    base_url = f"/session/{channel_id}?view_room={view_room_id}"
+    if edit_id == f"room_{rid}":
+        room_header_html = f"""
+<form hx-post="/session/{channel_id}/room/{rid}/update"
+      hx-target="#dashboard" hx-swap="outerHTML">
+  <input type="hidden" name="view_room_id" value="{view_room_id}">
+  <label>Name</label>
+  <input type="text" name="name" value="{room.name}" required>
+  <label>Description</label>
+  <textarea name="description" rows="2">{room.description}</textarea>
+  <label>DM Notes</label>
+  <textarea name="notes" rows="1">{room.notes}</textarea>
+  <div class="row" style="margin-top:0.5rem">
+    <button type="submit">Save</button>
+    <a href="{base_url}" style="align-self:center;font-size:0.85rem;color:#888">cancel</a>
+  </div>
+</form>"""
+    else:
+        edit_link = f'<a href="{base_url}&edit=room_{rid}" title="Edit room" style="font-size:0.8rem;color:#666;margin-left:0.4rem">✎</a>'
+        room_header_html = f"""
+<p class="muted">{room.description}</p>
+{f'<p class="muted"><em>DM notes: {room.notes}</em></p>' if room.notes else ''}"""
+        party_badge = party_badge + edit_link  # attach edit pencil to heading
+
+    # --- Features
     features_html = ""
     for feat in room.features:
         fid = str(feat.feature_id)
-        features_html += f"""
+        feat_base = f"{base_url}&edit={fid}"
+        if edit_id == fid:
+            features_html += f"""
 <tr>
-  <td><strong>{feat.name}</strong><br>
-      <span class="muted">{feat.description}</span></td>
-  <td>
-    <form hx-post="/session/{channel_id}/feature/{fid}/setstate"
+  <td colspan="2">
+    <form hx-post="/session/{channel_id}/feature/{fid}/update"
           hx-target="#dashboard" hx-swap="outerHTML">
+      <input type="hidden" name="view_room_id" value="{view_room_id}">
       <div class="row">
-        <input type="text" name="state_str" value="{feat.state}">
+        <div><label>Name</label><input type="text" name="name" value="{feat.name}" required></div>
+        <div><label>State</label><input type="text" name="state_str" value="{feat.state}"></div>
+      </div>
+      <label>Description</label>
+      <textarea name="description" rows="2">{feat.description}</textarea>
+      <label>Notes</label>
+      <input type="text" name="notes" value="{feat.notes or ''}">
+      <div class="row" style="margin-top:0.5rem">
+        <button type="submit">Save</button>
+        <a href="{base_url}" style="align-self:center;font-size:0.85rem;color:#888">cancel</a>
+      </div>
+    </form>
+  </td>
+</tr>"""
+        else:
+            features_html += f"""
+<tr>
+  <td><strong>{feat.name}</strong> <span class="muted">[{feat.state}]</span><br>
+      <span class="muted">{feat.description}</span></td>
+  <td style="white-space:nowrap">
+    <form style="display:inline" hx-post="/session/{channel_id}/feature/{fid}/setstate"
+          hx-target="#dashboard" hx-swap="outerHTML">
+      <input type="hidden" name="view_room_id" value="{view_room_id}">
+      <div class="row">
+        <input type="text" name="state_str" value="{feat.state}" style="width:90px">
         <button class="btn-sm" type="submit">Set</button>
       </div>
+    </form>
+    <a href="{feat_base}" class="btn-sm" style="margin-left:2px">Edit</a>
+    <form style="display:inline" hx-post="/session/{channel_id}/feature/{fid}/delete"
+          hx-target="#dashboard" hx-swap="outerHTML"
+          hx-confirm="Delete feature '{feat.name}'?">
+      <input type="hidden" name="view_room_id" value="{view_room_id}">
+      <button class="btn-sm btn-danger" type="submit">Del</button>
     </form>
   </td>
 </tr>"""
@@ -448,6 +579,7 @@ def room_panel(state: GameState) -> str:
 <div class="section-header"><h3>Add Feature</h3></div>
 <form hx-post="/session/{channel_id}/addfeature"
       hx-target="#dashboard" hx-swap="outerHTML">
+  <input type="hidden" name="view_room_id" value="{view_room_id}">
   <div class="row">
     <div><label>Name</label><input type="text" name="name" placeholder="Chandelier"></div>
     <div><label>State</label><input type="text" name="state_str" value="intact"></div>
@@ -457,26 +589,71 @@ def room_panel(state: GameState) -> str:
   <button type="submit">Add Feature</button>
 </form>"""
 
-    # Exits — select triggers on change
+    # --- Exits
     exits_html = ""
     for i, ex in enumerate(room.exits, 1):
         eid = str(ex.exit_id)
-        options = ''.join(
-            f'<option value="{d.value}" {"selected" if d == ex.door_state else ""}>{d.value}</option>'
-            for d in DoorState
-        )
-        exits_html += f"""
+        dest_name = ""
+        if ex.destination_id and state.dungeon:
+            dest_room = state.dungeon.rooms.get(ex.destination_id)
+            if dest_room:
+                dest_name = f" \u2192 {dest_room.name}"
+        exit_base = f"{base_url}&edit={eid}"
+        if edit_id == eid:
+            # Build destination options for all dungeon rooms
+            dest_options = '<option value="">— none —</option>'
+            if state.dungeon:
+                for dr in sorted(state.dungeon.rooms.values(), key=lambda r: r.name):
+                    sel = 'selected' if ex.destination_id == dr.room_id else ''
+                    dest_options += f'<option value="{dr.room_id}" {sel}>{dr.name}</option>'
+            door_options = "".join(
+                f'<option value="{d.value}" {"selected" if d == ex.door_state else ""}>{d.value}</option>'
+                for d in DoorState
+            )
+            exits_html += f"""
 <tr>
-  <td><strong>{i}. {ex.label.capitalize()}</strong><br>
-      <span class="muted">{ex.description}</span></td>
-  <td>
-    <form hx-post="/session/{channel_id}/exit/{eid}/setstate"
+  <td colspan="2">
+    <form hx-post="/session/{channel_id}/exit/{eid}/update"
           hx-target="#dashboard" hx-swap="outerHTML">
+      <input type="hidden" name="view_room_id" value="{view_room_id}">
       <div class="row">
-        <select name="door_state" onchange="this.form.requestSubmit()">
-          {options}
-        </select>
+        <div><label>Label</label><input type="text" name="label" value="{ex.label}" required></div>
+        <div><label>Door State</label><select name="door_state">{door_options}</select></div>
       </div>
+      <label>Destination</label>
+      <select name="destination_id" style="width:100%">{dest_options}</select>
+      <label>Description</label>
+      <textarea name="description" rows="2">{ex.description}</textarea>
+      <div class="row" style="margin-top:0.5rem">
+        <button type="submit">Save</button>
+        <a href="{base_url}" style="align-self:center;font-size:0.85rem;color:#888">cancel</a>
+      </div>
+    </form>
+  </td>
+</tr>"""
+        else:
+            door_options = "".join(
+                f'<option value="{d.value}" {"selected" if d == ex.door_state else ""}>{d.value}</option>'
+                for d in DoorState
+            )
+            exits_html += f"""
+<tr>
+  <td><strong>{i}. {ex.label.capitalize()}</strong>{dest_name}<br>
+      <span class="muted">{ex.description}</span></td>
+  <td style="white-space:nowrap">
+    <form style="display:inline" hx-post="/session/{channel_id}/exit/{eid}/setstate"
+          hx-target="#dashboard" hx-swap="outerHTML">
+      <input type="hidden" name="view_room_id" value="{view_room_id}">
+      <div class="row">
+        <select name="door_state" onchange="this.form.requestSubmit()">{door_options}</select>
+      </div>
+    </form>
+    <a href="{exit_base}" class="btn-sm" style="margin-top:4px;display:inline-block">Edit</a>
+    <form style="display:inline" hx-post="/session/{channel_id}/exit/{eid}/delete"
+          hx-target="#dashboard" hx-swap="outerHTML"
+          hx-confirm="Delete exit '{ex.label}'?">
+      <input type="hidden" name="view_room_id" value="{view_room_id}">
+      <button class="btn-sm btn-danger" type="submit">Del</button>
     </form>
   </td>
 </tr>"""
@@ -486,11 +663,12 @@ def room_panel(state: GameState) -> str:
 <div class="section-header"><h3>Add Exit</h3></div>
 <form hx-post="/session/{channel_id}/addexit"
       hx-target="#dashboard" hx-swap="outerHTML">
+  <input type="hidden" name="view_room_id" value="{view_room_id}">
   <div class="row">
     <div><label>Label</label><input type="text" name="label" placeholder="north"></div>
     <div><label>Door State</label>
     <select name="door_state">
-      {''.join(f'<option value="{d.value}">{d.value}</option>' for d in DoorState)}
+      {"".join(f'<option value="{d.value}">{d.value}</option>' for d in DoorState)}
     </select></div>
   </div>
   <label>Description</label>
@@ -500,41 +678,222 @@ def room_panel(state: GameState) -> str:
 
     return f"""
 <div class="card">
-  <div class="section-header"><h3>Room: {room.name}</h3></div>
-  <p class="muted">{room.description}</p>
-  {f'<p class="muted"><em>DM notes: {room.notes}</em></p>' if room.notes else ''}
+  <div class="section-header">
+    <h3>Room: {room.name}{party_badge}</h3>
+  </div>
+  {room_header_html}
 
   <div class="section-header"><h3>Features</h3></div>
-  {'<table><tr><th>Feature</th><th>State</th></tr>' + features_html + '</table>' if features_html else '<p class="muted">No features.</p>'}
+  {"<table><tr><th>Feature</th><th>Controls</th></tr>" + features_html + "</table>" if features_html else '<p class="muted">No features.</p>'}
   {add_feature_html}
 
   <hr class="divider">
   <div class="section-header"><h3>Exits</h3></div>
-  {'<table><tr><th>Exit</th><th>Door State</th></tr>' + exits_html + '</table>' if exits_html else '<p class="muted">No exits.</p>'}
+  {"<table><tr><th>Exit</th><th>Controls</th></tr>" + exits_html + "</table>" if exits_html else '<p class="muted">No exits.</p>'}
   {add_exit_html}
-
-  {set_room_html}
 </div>"""
 
 
 # ---------------------------------------------------------------------------
-# NPC panel
+# Dungeon import / export panel (PRE_START only)
 # ---------------------------------------------------------------------------
 
-def npc_panel(state: GameState) -> str:
+def dungeon_panel(state: GameState, view_room_id: str = "") -> str:
     channel_id = state.platform_channel_id
+    dungeon = state.dungeon
+
+    # --- Header summary + export
+    if dungeon:
+        safe_name = dungeon.name.replace(" ", "_").lower()
+        summary = (
+            f"<p><strong>{dungeon.name}</strong> &mdash; "
+            f"{len(dungeon.rooms)} room(s)</p>"
+        )
+        export_btn = (
+            f'<a class="btn btn-sm" href="/session/{channel_id}/dungeon/export" '
+            f'download="{safe_name}.json">Export JSON</a>'
+        )
+    else:
+        summary = '<p class="muted">No dungeon loaded.</p>'
+        export_btn = ""
+
+    # --- Import form (PRE_START only)
+    if state.mode == SessionMode.PRE_START:
+        replace_note = (
+            '<p class="muted" style="margin-top:0.75rem">Replace dungeon:</p>'
+            if dungeon else ""
+        )
+        import_html = f"""
+{replace_note}
+<form hx-post="/session/{channel_id}/dungeon/import"
+      hx-target="#dashboard" hx-swap="outerHTML"
+      hx-encoding="multipart/form-data">
+  <input type="file" name="file" accept=".json"
+         onchange="this.form.requestSubmit()"
+         style="color:#e0e0e0; margin-top:4px">
+</form>"""
+    else:
+        import_html = ""
+
+    # --- Room list
+    if dungeon and dungeon.rooms:
+        room_rows = ""
+        # Sort: party room first, then alphabetical
+        def _sort_key(r):
+            is_current = (state.current_room_id == r.room_id)
+            return (0 if is_current else 1, r.name.lower())
+        for room in sorted(dungeon.rooms.values(), key=_sort_key):
+            rid = str(room.room_id)
+            is_party = (state.current_room_id == room.room_id)
+            is_viewing = (rid == view_room_id)
+            party_mark = '<span title="Party is here" style="color:#c9a84c">&#9733;</span>' if is_party else '<span style="color:transparent">&#9733;</span>'
+            visited_note = '' if room.visited else ' <span class="muted" style="font-size:0.75rem">(unvisited)</span>'
+            row_style = 'background:#0f2a50;' if is_viewing else ''
+            # Enter-room button only available once session is active
+            if state.mode != SessionMode.PRE_START:
+                enter_btn = f"""<form style="display:inline" hx-post="/session/{channel_id}/enterroom/{rid}" hx-target="#dashboard" hx-swap="outerHTML"><button class="btn-sm" type="submit">Enter</button></form>"""
+            else:
+                enter_btn = ""
+            view_link = f'/session/{channel_id}?view_room={rid}'
+            room_rows += f"""
+<tr style="{row_style}">
+  <td style="width:1.2rem">{party_mark}</td>
+  <td><a href="{view_link}" style="color:#e0e0e0;text-decoration:none">{room.name}{visited_note}</a></td>
+  <td style="text-align:right">{enter_btn}</td>
+</tr>"""
+
+        room_list_html = f"""
+<hr class="divider">
+<div class="section-header" style="margin-bottom:0.4rem">
+  <h3 style="font-size:0.9rem">Rooms</h3>
+</div>
+<table style="font-size:0.85rem">{room_rows}</table>"""
+    else:
+        room_list_html = ""
+
+    # --- New room inline form
+    new_room_html = f"""
+<hr class="divider">
+<div class="section-header"><h3 style="font-size:0.9rem">New Room</h3></div>
+<form hx-post="/session/{channel_id}/setroom"
+      hx-target="#dashboard" hx-swap="outerHTML">
+  <input type="hidden" name="view_room_id" value="{view_room_id}">
+  <input type="text" name="name" placeholder="Room name" style="margin-bottom:4px">
+  <textarea name="description" rows="2" placeholder="Player-visible description"></textarea>
+  <textarea name="notes" rows="1" placeholder="DM notes (optional)"></textarea>
+  <button type="submit">Create Room</button>
+</form>"""
+
+    return f"""
+<div class="card">
+  <div class="section-header"><h3>&#128506; Dungeon</h3></div>
+  {summary}
+  {export_btn}
+  {import_html}
+  {room_list_html}
+  {new_room_html}
+</div>"""
+
+
+# ---------------------------------------------------------------------------
+# Oracle panel
+# ---------------------------------------------------------------------------
+
+def oracle_panel(state: GameState) -> str:
+    channel_id = state.platform_channel_id
+
+    # Show oracles from the current turn (oracle_counter > 0 means some exist)
+    # Unanswered ones are most urgent; show all current-turn oracles.
+    current_turn_oracles = [o for o in state.oracles if o.answer is None]
+    answered = [o for o in state.oracles if o.answer is not None]
+
+    unanswered_html = ""
+    for o in current_turn_oracles:
+        unanswered_html += f"""
+<div style="margin-bottom:1rem; padding:0.75rem; background:#0f2040; border-radius:6px; border-left:3px solid #c9a84c">
+  <div style="margin-bottom:0.4rem">
+    <strong>#{o.number}</strong>
+    <span class="muted" style="margin-left:0.5rem">{o.asker_name} asks:</span>
+  </div>
+  <div style="margin-bottom:0.6rem; color:#e0e0e0">{o.question}</div>
+  <form hx-post="/session/{channel_id}/oracle/{o.number}/answer"
+        hx-target="#dashboard" hx-swap="outerHTML">
+    <div class="row">
+      <input type="text" name="answer" placeholder="Your answer..." autofocus>
+      <button class="btn-success btn-sm" type="submit">Answer</button>
+    </div>
+  </form>
+</div>"""
+
+    answered_html = ""
+    for o in answered[-5:]:  # show last 5 answered for reference
+        answered_html += f"""
+<div class="muted" style="margin-bottom:0.4rem; font-size:0.82rem">
+  <strong>#{o.number} {o.asker_name}:</strong> {o.question}<br>
+  <span style="color:#4caf50">&rsaquo; {o.answer}</span>
+</div>"""
+
+    body = unanswered_html or '<p class="muted">No pending oracles.</p>'
+    if answered_html:
+        body += f'<hr class="divider"><p class="muted" style="font-size:0.8rem;margin-bottom:0.4rem">ANSWERED</p>{answered_html}'
+
+    return f"""
+<div class="card">
+  <div class="section-header"><h3>&#128302; Oracles</h3></div>
+  {body}
+</div>"""
+
+
+
+
+def npc_panel(
+    state: GameState,
+    channel_id: str = "",
+    view_room_id: str = "",
+    edit_id: str = "",
+) -> str:
+    if not channel_id:
+        channel_id = state.platform_channel_id
+    base_url = f"/session/{channel_id}?view_room={view_room_id}"
 
     rows = ""
     for npc in state.npcs:
         nid = str(npc.npc_id)
-        rows += f"""
+        npc_base = f"{base_url}&edit={nid}"
+        if edit_id == nid:
+            rows += f"""
+<tr>
+  <td colspan="3">
+    <form hx-post="/session/{channel_id}/npc/{nid}/update"
+          hx-target="#dashboard" hx-swap="outerHTML">
+      <input type="hidden" name="view_room_id" value="{view_room_id}">
+      <div class="row">
+        <div><label>Name</label><input type="text" name="name" value="{npc.name}" required></div>
+        <div><label>HP Max</label><input type="number" name="hp_max" value="{npc.hp_max}" min="1" style="width:60px"></div>
+        <div><label>HP Now</label><input type="number" name="hp_current" value="{npc.hp_current}" min="0" style="width:60px"></div>
+        <div><label>AC</label><input type="number" name="armor_class" value="{npc.armor_class}" min="1" style="width:55px"></div>
+      </div>
+      <label>Description</label>
+      <input type="text" name="description" value="{npc.description}">
+      <label>Notes</label>
+      <input type="text" name="notes" value="{npc.notes or ''}">
+      <div class="row" style="margin-top:0.5rem">
+        <button type="submit">Save</button>
+        <a href="{base_url}" style="align-self:center;font-size:0.85rem;color:#888">cancel</a>
+      </div>
+    </form>
+  </td>
+</tr>"""
+        else:
+            rows += f"""
 <tr>
   <td><strong>{npc.name}</strong><br>
       <span class="muted">{npc.description}</span></td>
   <td class="hp-bar">{npc.hp_current}/{npc.hp_max}</td>
-  <td>
+  <td style="white-space:nowrap">
     <form hx-post="/session/{channel_id}/npc/{nid}/sethp"
           hx-target="#dashboard" hx-swap="outerHTML" style="margin-bottom:4px">
+      <input type="hidden" name="view_room_id" value="{view_room_id}">
       <div class="row">
         <input type="number" name="hp" value="{npc.hp_current}"
                min="0" max="{npc.hp_max}" style="width:60px;flex:0">
@@ -542,11 +901,19 @@ def npc_panel(state: GameState) -> str:
       </div>
     </form>
     <form hx-post="/session/{channel_id}/npc/{nid}/setstatus"
-          hx-target="#dashboard" hx-swap="outerHTML">
+          hx-target="#dashboard" hx-swap="outerHTML" style="margin-bottom:4px">
+      <input type="hidden" name="view_room_id" value="{view_room_id}">
       <div class="row">
         <input type="text" name="status" value="{npc.status}" placeholder="status">
         <button class="btn-sm" type="submit">Status</button>
       </div>
+    </form>
+    <a href="{npc_base}" class="btn-sm">Edit</a>
+    <form style="display:inline" hx-post="/session/{channel_id}/npc/{nid}/delete"
+          hx-target="#dashboard" hx-swap="outerHTML"
+          hx-confirm="Remove {npc.name}?">
+      <input type="hidden" name="view_room_id" value="{view_room_id}">
+      <button class="btn-sm btn-danger" type="submit">Del</button>
     </form>
   </td>
 </tr>"""
@@ -576,3 +943,82 @@ def npc_panel(state: GameState) -> str:
   {'<table><tr><th>NPC</th><th>HP</th><th>Controls</th></tr>' + rows + '</table>' if rows else '<p class="muted">No NPCs in this room.</p>'}
   {add_npc_html}
 </div>"""
+
+
+# ---------------------------------------------------------------------------
+# Archive browser page
+# ---------------------------------------------------------------------------
+
+def archive_page(
+    sessions: list[tuple[str, str]],
+    entries: list[dict],
+    flash: str = "",
+    error: str = "",
+) -> str:
+    flash_html = f'<div class="flash">{flash}</div>' if flash else ""
+    error_html = f'<div class="error">{error}</div>' if error else ""
+
+    if not entries:
+        rows_html = '<p class="muted">No archived sessions yet.</p>'
+    else:
+        rows = ""
+        for e in entries:
+            sid       = e["session_id"]
+            cname     = e["channel_name"] or e["channel_id"]
+            dm        = e["dm_user_id"] or "—"
+            turns     = e["turn_number"]
+            created   = (e["created_at"]  or "")[:10]
+            archived  = (e["archived_at"] or "")[:10]
+            rows += f"""
+<tr>
+  <td>
+    <strong>#{cname}</strong><br>
+    <span class="muted" style="font-size:0.75rem">{sid}</span>
+  </td>
+  <td class="muted">{dm}</td>
+  <td style="text-align:center">{turns}</td>
+  <td class="muted">{created}</td>
+  <td class="muted">{archived}</td>
+  <td style="white-space:nowrap;min-width:220px">
+    <form hx-post="/archive/{sid}/resurrect"
+          hx-target="body" hx-swap="innerHTML">
+      <div class="row" style="margin-bottom:4px">
+        <input type="text" name="channel_id" value="{e["channel_id"]}"
+               placeholder="Discord channel ID"
+               style="font-size:0.8rem;width:160px"
+               title="Paste the target Discord channel ID. Original: {e["channel_id"]}">
+        <button class="btn-sm btn-success" type="submit">Resurrect</button>
+      </div>
+    </form>
+    <form hx-post="/archive/{sid}/delete"
+          hx-target="body" hx-swap="innerHTML"
+          hx-confirm="Permanently delete this archive entry? This cannot be undone.">
+      <button class="btn-sm btn-danger" type="submit">Delete</button>
+    </form>
+  </td>
+</tr>"""
+        rows_html = f"""
+<table>
+  <tr>
+    <th>Channel</th>
+    <th>DM</th>
+    <th>Turns</th>
+    <th>Started</th>
+    <th>Archived</th>
+    <th>Actions</th>
+  </tr>
+  {rows}
+</table>"""
+
+    body = f"""
+<div class="layout">
+  {_sidebar(None, sessions)}
+  <div class="main">
+    {flash_html}{error_html}
+    <div class="card">
+      <div class="section-header"><h3>&#128196; Session Archive</h3></div>
+      {rows_html}
+    </div>
+  </div>
+</div>"""
+    return page("Archive — DM Panel", body)

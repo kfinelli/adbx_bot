@@ -11,13 +11,14 @@ On expiry:
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import discord
 from discord.ext import commands, tasks
-from datetime import datetime, timezone
 
 from engine import close_turn
 from models import TurnStatus
-from store import db, get_session, update_status, save_session
+from store import db, get_session, save_session_async, update_status
 
 
 class TimerCog(commands.Cog):
@@ -30,7 +31,7 @@ class TimerCog(commands.Cog):
 
     @tasks.loop(seconds=60)
     async def check_timers(self):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         for channel_id in db.list_channels():
             state = get_session(channel_id)
@@ -51,14 +52,14 @@ class TimerCog(commands.Cog):
             # Ensure due_at is timezone-aware for comparison
             due = turn.due_at
             if due.tzinfo is None:
-                due = due.replace(tzinfo=timezone.utc)
+                due = due.replace(tzinfo=UTC)
 
             if now < due:
                 continue
 
             # Timer has expired — close the turn
             close_turn(state)
-            save_session(state)
+            await save_session_async(state)
 
             channel = self.bot.get_channel(int(channel_id))
             if channel is None:
