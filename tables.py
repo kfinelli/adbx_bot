@@ -20,12 +20,27 @@ from enum import Enum
 # ---------------------------------------------------------------------------
 # Character creation rules
 # ---------------------------------------------------------------------------
+@dataclass
+class Ability:
+    source: str
+    desc: str
+    source_level: int = 0
+    name: str = "Unnamed Ability"
 
 @dataclass
-class CharacterCreationRules:
+class PlayerClass:
     """
     Everything create_character needs to know about a class.
     Defaults are generic fantasy RPG values; override per class as needed.
+    """
+    id: str
+    max_level: int = 5
+    display_name: str = "Unknown Class"
+    hit_die: int = 4
+    weapon_rank: str='E'
+    base_save: int = 0
+    stat: str = "PHY"
+    abilities={}
     """
     display_name:    str        # shown to players, e.g. "Magic-User"
     hit_die:         int = 8    # die size for HP rolls
@@ -39,7 +54,7 @@ class CharacterCreationRules:
         "death_poison": 14, "wands": 15, "paralysis_stone": 16,
         "breath_weapon": 17, "spells": 18,
     })
-
+"""
     # Class-specific bonus items for named equipment packs.
     # Maps pack_name -> (item_name, quantity, encumbrance).
     pack_bonus_items: dict = field(default_factory=dict)
@@ -52,39 +67,39 @@ class CharacterCreationRules:
 # ---------------------------------------------------------------------------
 
 _CLASS_DEFINITIONS: dict = {
-    "FIGHTER": CharacterCreationRules(
+    "FIGHTER": PlayerClass(
         display_name="Fighter", hit_die=8, base_movement=120,
         default_saves={"death_poison": 12, "wands": 13, "paralysis_stone": 14,
                        "breath_weapon": 15, "spells": 16},
     ),
-    "THIEF": CharacterCreationRules(
+    "THIEF": PlayerClass(
         display_name="Thief", hit_die=4, base_movement=120,
         default_saves={"death_poison": 13, "wands": 14, "paralysis_stone": 13,
                        "breath_weapon": 16, "spells": 15},
         pack_bonus_items={"Pack C": ("Thief's Tools", 1, 0.5)},
     ),
-    "CLERIC": CharacterCreationRules(
+    "CLERIC": PlayerClass(
         display_name="Cleric", hit_die=6, base_movement=120, is_spellcaster=True,
         default_saves={"death_poison": 11, "wands": 12, "paralysis_stone": 14,
                        "breath_weapon": 16, "spells": 15},
         pack_bonus_items={"Pack C": ("Holy Symbol", 1, 0.0)},
     ),
-    "MAGIC_USER": CharacterCreationRules(
+    "MAGIC_USER": PlayerClass(
         display_name="Magic-User", hit_die=4, base_movement=120, is_spellcaster=True,
         default_saves={"death_poison": 13, "wands": 14, "paralysis_stone": 13,
                        "breath_weapon": 16, "spells": 15},
     ),
-    "ELF": CharacterCreationRules(
+    "ELF": PlayerClass(
         display_name="Elf", hit_die=6, base_movement=120, is_spellcaster=True,
         default_saves={"death_poison": 12, "wands": 13, "paralysis_stone": 13,
                        "breath_weapon": 15, "spells": 15},
     ),
-    "DWARF": CharacterCreationRules(
+    "DWARF": PlayerClass(
         display_name="Dwarf", hit_die=8, base_movement=60,
         default_saves={"death_poison": 12, "wands": 13, "paralysis_stone": 14,
                        "breath_weapon": 15, "spells": 16},
     ),
-    "HALFLING": CharacterCreationRules(
+    "HALFLING": PlayerClass(
         display_name="Halfling", hit_die=6, base_movement=60,
         default_saves={"death_poison": 10, "wands": 13, "paralysis_stone": 12,
                        "breath_weapon": 13, "spells": 15},
