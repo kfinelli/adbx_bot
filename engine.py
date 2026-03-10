@@ -13,9 +13,12 @@ Convention:
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
-from uuid import UUID
+import re
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+from uuid import UUID, uuid4
+
 
 from models import (
     NPC,
@@ -77,6 +80,51 @@ def _err(state: GameState, error: str) -> EngineResult:
 # ---------------------------------------------------------------------------
 # Dice helpers
 # ---------------------------------------------------------------------------
+
+def print_dice_results(results):
+  diceOutput = ""
+  for die in results['dice']:
+    diceOutput += str(die)+", "
+  diceOutput= diceOutput.rstrip(", ")
+  print("Dice: ", diceOutput)
+  print("Bonus: ", results['bonus'])
+  print("Total: ", results['total'])
+
+#  Rolls a XdY+Z expression (strict order)
+#  or returns a number if a number is given
+#    Returns a dictionary with the following keys:
+#    'bonus': bonus applied to the roll
+#    'dice': list of all rolled dice
+#    'total': total of all rolled dice
+def roll_dice_expr(expr):
+    xyz = re.split('d|\+', expr)
+    x = int(xyz[0])
+    if len(xyz) == 1:
+        return {'dice':{x},'total':x, 'bonus':0}
+    if "d" not in expr:
+        z = int(xyz[1])
+        return {'dice': {x}, 'total': x + z, 'bonus': z}
+    y = int(xyz[1])
+    if len(xyz) == 2 and y != 0:
+        return roll_expr(x, y)
+    z = 0
+    if len(xyz) > 2:
+        z = int(xyz[2])
+    if y == 0:
+        return {'dice': {x}, 'total': x+z, 'bonus': z}
+    return roll_expr(x,y,z)
+
+def roll_expr(dCount, dSize, bonus=0):
+    result = {'dice':[],'bonus':bonus,'total':bonus}
+    list = [0] * dCount
+    for i in range(int(dCount)):
+        list[i] = d(dSize)
+        result['total'] += list[i]
+    result['dice'] = list
+    return result
+
+def d(x):
+    return random.randint(1, int(x))
 
 def roll(n: int, sides: int) -> list[int]:
     """Roll n dice of `sides` sides, return individual results."""
