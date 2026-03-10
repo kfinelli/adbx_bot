@@ -15,7 +15,7 @@ from __future__ import annotations
 import random
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from uuid import UUID
 
 from models import (
@@ -52,7 +52,7 @@ from tables import (
 # ---------------------------------------------------------------------------
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 # ---------------------------------------------------------------------------
@@ -1084,7 +1084,7 @@ def render_status_header(state: GameState) -> str:
     if state.current_turn and state.current_turn.due_at:
         due = state.current_turn.due_at
         if due.tzinfo is None:
-            due = due.replace(tzinfo=timezone.utc)
+            due = due.replace(tzinfo=UTC)
         unix_ts = int(due.timestamp())
         turn_label += f" (deadline <t:{unix_ts}:f>)"
     return turn_label
