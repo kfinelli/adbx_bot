@@ -23,7 +23,7 @@ from discord.ext import commands
 
 from discord_tasks import post_oracle_question
 from engine import abscond, ask_oracle, emote, enter_rounds, exit_rounds, say, submit_turn
-from models import GameState, SessionMode, TurnStatus
+from models import SessionMode, TurnStatus
 from store import (
     get_session,
     notify_dm_of_turn_close,

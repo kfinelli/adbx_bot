@@ -9,7 +9,7 @@ tuples for consistent error handling.
 from __future__ import annotations
 
 import re
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 T = TypeVar('T')
 
@@ -20,21 +20,21 @@ T = TypeVar('T')
 
 class ValidationResult:
     """Result of a validation check."""
-    
+
     def __init__(self, is_valid: bool = True, error: str = "", value: Any = None):
         self.is_valid = is_valid
         self.error = error
         self.value = value if value is not None else None
-    
+
     def __bool__(self) -> bool:
         return self.is_valid
-    
+
     @classmethod
-    def ok(cls, value: Any = None) -> 'ValidationResult':
+    def ok(cls, value: Any = None) -> ValidationResult:
         return cls(is_valid=True, value=value)
-    
+
     @classmethod
-    def fail(cls, error: str) -> 'ValidationResult':
+    def fail(cls, error: str) -> ValidationResult:
         return cls(is_valid=False, error=error)
 
 
@@ -51,14 +51,14 @@ def validate_non_empty_string(
     """Validate that a value is a non-empty string within length bounds."""
     if not isinstance(value, str):
         return ValidationResult.fail(f"{field_name} must be a string.")
-    
+
     stripped = value.strip()
     if len(stripped) < min_length:
         return ValidationResult.fail(f"{field_name} cannot be empty.")
-    
+
     if max_length and len(stripped) > max_length:
         return ValidationResult.fail(f"{field_name} exceeds maximum length of {max_length} characters.")
-    
+
     return ValidationResult.ok(stripped)
 
 
@@ -71,13 +71,13 @@ def validate_identifier(
     result = validate_non_empty_string(value, field_name, max_length=max_length)
     if not result:
         return result
-    
+
     # Allow letters, numbers, spaces, underscores, hyphens, and basic punctuation
     if not re.match(r'^[\w\s\-\'\.]+$', result.value):
         return ValidationResult.fail(
             f"{field_name} contains invalid characters. Use only letters, numbers, spaces, hyphens, and apostrophes."
         )
-    
+
     return result
 
 
@@ -110,14 +110,14 @@ def validate_description(
     """Validate a description field."""
     if not isinstance(value, str):
         return ValidationResult.fail(f"{field_name} must be a string.")
-    
+
     stripped = value.strip()
     if not allow_empty and len(stripped) == 0:
         return ValidationResult.fail(f"{field_name} cannot be empty.")
-    
+
     if len(stripped) > max_length:
         return ValidationResult.fail(f"{field_name} exceeds maximum length of {max_length} characters.")
-    
+
     return ValidationResult.ok(stripped)
 
 
@@ -137,13 +137,13 @@ def validate_positive_int(
             value = int(value)
         except (TypeError, ValueError):
             return ValidationResult.fail(f"{field_name} must be a whole number.")
-    
+
     if value < min_value:
         return ValidationResult.fail(f"{field_name} must be at least {min_value}.")
-    
+
     if max_value is not None and value > max_value:
         return ValidationResult.fail(f"{field_name} cannot exceed {max_value}.")
-    
+
     return ValidationResult.ok(value)
 
 
@@ -155,13 +155,13 @@ def validate_hp_value(value: Any, max_hp: int | None = None) -> ValidationResult
             value = int(value)
         except (TypeError, ValueError):
             return ValidationResult.fail(f"{field_name} must be a whole number.")
-    
+
     if value < 0:
         return ValidationResult.fail(f"{field_name} cannot be negative.")
-    
+
     if max_hp is not None and value > max_hp:
         return ValidationResult.fail(f"{field_name} cannot exceed {max_hp}.")
-    
+
     return ValidationResult.ok(value)
 
 
@@ -170,11 +170,11 @@ def validate_ac_value(value: Any) -> ValidationResult:
     result = validate_positive_int(value, "Armor class", min_value=1, max_value=20)
     if not result:
         return result
-    
+
     if result.value > 10:
         # Warning but not failure - some systems use ascending AC
         pass  # Could add a warning field if needed
-    
+
     return result
 
 
@@ -185,13 +185,13 @@ def validate_turn_hours(value: Any) -> ValidationResult:
             value = float(value)
         except (TypeError, ValueError):
             return ValidationResult.fail("Turn length must be a number.")
-    
+
     if value <= 0:
         return ValidationResult.fail("Turn length must be greater than 0.")
-    
+
     if value > 168:  # 1 week max
         return ValidationResult.fail("Turn length cannot exceed 168 hours (1 week).")
-    
+
     return ValidationResult.ok(value)
 
 
@@ -206,10 +206,10 @@ def validate_enum_choice(
 ) -> ValidationResult:
     """Validate that a value is a valid enum member or string value."""
     from enum import Enum
-    
+
     if isinstance(value, Enum) and isinstance(value, enum_class):
         return ValidationResult.ok(value)
-    
+
     if isinstance(value, str):
         try:
             return ValidationResult.ok(enum_class(value.lower()))
@@ -218,7 +218,7 @@ def validate_enum_choice(
             return ValidationResult.fail(
                 f"Invalid {field_name.lower()}. Valid options: {', '.join(valid_values)}"
             )
-    
+
     return ValidationResult.fail(f"{field_name} must be one of: {[e.value for e in enum_class]}")
 
 
@@ -241,10 +241,10 @@ def validate_character_status(value: Any) -> ValidationResult:
 def validate_uuid_string(value: Any, field_name: str = "ID") -> ValidationResult:
     """Validate a UUID string format."""
     from uuid import UUID
-    
+
     if not isinstance(value, str):
         return ValidationResult.fail(f"{field_name} must be a valid UUID string.")
-    
+
     try:
         uuid_obj = UUID(value)
         return ValidationResult.ok(uuid_obj)
@@ -266,14 +266,14 @@ def validate_npc_creation(
 ) -> dict[str, ValidationResult]:
     """Validate all parameters for NPC creation."""
     results = {}
-    
+
     results['name'] = validate_npc_name(name)
     results['hp'] = validate_hp_value(hp)
     results['ac'] = validate_ac_value(ac)
     results['description'] = validate_description(description, "NPC description", allow_empty=True)
     results['damage_dice'] = validate_non_empty_string(damage_dice, "Damage dice", max_length=20)
     results['notes'] = validate_description(notes, "NPC notes", max_length=500, allow_empty=True)
-    
+
     return results
 
 
@@ -284,11 +284,11 @@ def validate_room_creation(
 ) -> dict[str, ValidationResult]:
     """Validate all parameters for room creation."""
     results = {}
-    
+
     results['name'] = validate_room_name(name)
     results['description'] = validate_description(description, "Room description", allow_empty=True)
     results['notes'] = validate_description(notes, "Room notes", max_length=1000, allow_empty=True)
-    
+
     return results
 
 
@@ -299,11 +299,11 @@ def validate_feature_creation(
 ) -> dict[str, ValidationResult]:
     """Validate all parameters for room feature creation."""
     results = {}
-    
+
     results['name'] = validate_feature_name(name)
     results['description'] = validate_description(description, "Feature description")
     results['state'] = validate_non_empty_string(state_str, "Feature state", max_length=100)
-    
+
     return results
 
 
@@ -315,12 +315,12 @@ def validate_exit_creation(
 ) -> dict[str, ValidationResult]:
     """Validate all parameters for exit creation."""
     results = {}
-    
+
     results['label'] = validate_non_empty_string(label, "Exit label", max_length=50)
     results['description'] = validate_description(description, "Exit description")
     results['door_state'] = validate_door_state(door_state)
     results['notes'] = validate_description(notes, "Exit notes", max_length=500, allow_empty=True)
-    
+
     return results
 
 
@@ -336,13 +336,13 @@ def aggregate_validation_results(
     Returns (all_valid, combined_error_message).
     """
     errors = []
-    for field_name, result in results.items():
+    for result in results.values():
         if not result:
             errors.append(result.error)
-    
+
     if errors:
         return False, "; ".join(errors)
-    
+
     return True, ""
 
 

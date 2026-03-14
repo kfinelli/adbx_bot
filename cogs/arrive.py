@@ -13,15 +13,16 @@ Flow:
 
 from __future__ import annotations
 
+import contextlib
+
 import discord
 from discord import app_commands
 from discord.ext import commands
 
+from engine import create_character, roll_stats
 from models import CharacterClass, SessionMode
-from engine import create_character, open_turn, roll_stats
 from store import ack, get_session, save_session, update_status
-from tables import EQUIPMENT_PACKAGES, EQUIPMENT_PACKAGE_DESCRIPTIONS
-
+from tables import EQUIPMENT_PACKAGE_DESCRIPTIONS, EQUIPMENT_PACKAGES
 
 # ---------------------------------------------------------------------------
 # Stat display helper
@@ -132,12 +133,10 @@ class LoadoutView(discord.ui.View):
 
             except Exception as exc:
                 # Surface any unexpected error to the player rather than silently failing.
-                try:
+                with contextlib.suppress(discord.HTTPException):
                     await interaction.followup.send(
                         f"⚠ Something went wrong: {exc}", ephemeral=True
                     )
-                except discord.HTTPException:
-                    pass
                 raise  # re-raise so the traceback still hits bot stderr
 
         return callback

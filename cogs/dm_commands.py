@@ -72,7 +72,6 @@ from store import (
 )
 from validation import (
     validate_turn_hours,
-    validate_non_empty_string,
 )
 
 
