@@ -657,7 +657,7 @@ class _OracleModal(discord.ui.Modal):
             return
         char = _find_character(state, str(interaction.user.id))
         asker = char.name if char else interaction.user.display_name
-        result, oracle = ask_oracle(
+        result = ask_oracle(
             state, asker, self.question.value,
             asker_owner_id=str(interaction.user.id),
         )
@@ -666,6 +666,7 @@ class _OracleModal(discord.ui.Modal):
                 f"⚠ {result.error}", ephemeral=True
             )
             return
+        oracle = result.data
         await interaction.response.send_message("✓ Oracle submitted.", ephemeral=True)
         msg = await post_oracle_question(interaction.channel, oracle)
         oracle.message_id = msg.id

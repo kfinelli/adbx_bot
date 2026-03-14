@@ -489,9 +489,10 @@ async def route_oracle_answer(
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse("Session not found.", status_code=404)
-    result, oracle = answer_oracle(state, number, answer)
+    result = answer_oracle(state, number, answer)
     if not result.ok:
         return _respond(channel_id, error=result.error)
+    oracle = result.data
     await save_session_async(state)
     if _bot:
         channel = _bot.get_channel(int(channel_id))

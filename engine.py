@@ -75,6 +75,7 @@ class EngineResult:
     error:     str              = ""   # human-readable error if ok=False
     state:     GameState | None = None
     notify_dm: bool             = False  # platform should notify DM to resolve
+    data:      any              = None  # optional additional data (e.g., Oracle object for platform layer)
 
 
 def _ok(state: GameState, message: str = "", notify_dm: bool = False) -> EngineResult:
@@ -1070,10 +1071,10 @@ def ask_oracle(
     asker_name:     str,
     question:       str,
     asker_owner_id: str = None,
-) -> tuple[EngineResult, object]:
+) -> EngineResult:
     """
-    Create a new oracle entry. Returns (result, oracle) so the platform
-    layer can post the Discord message and store the message_id back.
+    Create a new oracle entry. Returns EngineResult with .data containing the Oracle object
+    so the platform layer can post the Discord message and store the message_id back.
     """
     from models import Oracle
     state.oracle_counter += 1
@@ -1085,27 +1086,33 @@ def ask_oracle(
     )
     state.oracles.append(oracle)
     state.updated_at = _now()
-    return _ok(state, f"Oracle #{oracle.number} posted."), oracle
+    result = _ok(state, f"Oracle #{oracle.number} posted.")
+    result.data = oracle
+    return result
 
 
 def answer_oracle(
     state:     GameState,
     number:    int,
     answer:    str,
-) -> tuple[EngineResult, object | None]:
+) -> EngineResult:
     """
-    DM answers an oracle by number. Returns (result, oracle) so the
-    platform layer can edit the Discord message in place.
+    DM answers an oracle by number. Returns EngineResult with .data containing the Oracle object
+    so the platform layer can edit the Discord message in place.
     """
     # Match the *last* oracle with this number — oracles reset to #1 each turn
     # so there may be multiple oracles with the same number across turns.
     matches = [o for o in state.oracles if o.number == number]
     oracle = matches[-1] if matches else None
     if oracle is None:
-        return _err(state, f"Oracle #{number} not found."), None
+        result = _err(state, f"Oracle #{number} not found.")
+        result.data = None
+        return result
     oracle.answer = answer
     state.updated_at = _now()
-    return _ok(state, f"Oracle #{number} answered."), oracle
+    result = _ok(state, f"Oracle #{number} answered.")
+    result.data = oracle
+    return result
 
 
 # ---------------------------------------------------------------------------

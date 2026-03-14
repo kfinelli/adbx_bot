@@ -789,10 +789,11 @@ class DMCog(commands.Cog):
         state = await self._require_dm(interaction)
         if state is None:
             return
-        result, oracle = answer_oracle(state, number, answer)
+        result = answer_oracle(state, number, answer)
         if not result.ok:
             await ack_err(interaction, result.error)
             return
+        oracle = result.data
         await dispatch_oracle_answer(self.bot, interaction.channel, oracle)
 
         await save_session_async(state)
