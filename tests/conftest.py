@@ -13,8 +13,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
 
-from engine import CharacterClass, create_character, start_session
-from models import GameState, Party
+from models import CharacterClass, GameState, Party
+from engine import create_character, start_session
 
 # ---------------------------------------------------------------------------
 # Bare state — no party, no characters
