@@ -70,6 +70,10 @@ from store import (
     save_session_async,
     update_status,
 )
+from validation import (
+    validate_turn_hours,
+    validate_non_empty_string,
+)
 
 
 class DMCog(commands.Cog):
@@ -647,11 +651,13 @@ class DMCog(commands.Cog):
         if state is None:
             return
 
-        if hours <= 0:
-            await ack_err(interaction, "Turn length must be greater than 0.")
+        # Validate turn hours using shared validator
+        hours_result = validate_turn_hours(hours)
+        if not hours_result:
+            await ack_err(interaction, hours_result.error)
             return
 
-        state.default_turn_hours = hours
+        state.default_turn_hours = hours_result.value
         await save_session_async(state)
         await ack_done(interaction)
         await update_status(interaction.channel, state)
@@ -675,12 +681,14 @@ class DMCog(commands.Cog):
             await ack_err(interaction, "No open turn.")
             return
 
-        if hours <= 0:
-            await ack_err(interaction, "Duration must be greater than 0.")
+        # Validate turn hours using shared validator
+        hours_result = validate_turn_hours(hours)
+        if not hours_result:
+            await ack_err(interaction, hours_result.error)
             return
 
         from datetime import datetime, timedelta
-        state.current_turn.due_at = datetime.now(UTC) + timedelta(hours=hours)
+        state.current_turn.due_at = datetime.now(UTC) + timedelta(hours=hours_result.value)
         await save_session_async(state)
         await ack_done(interaction)
         await update_status(interaction.channel, state)
