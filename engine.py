@@ -46,6 +46,15 @@ from tables import (
     get_saving_throws,
     get_spell_slots,
 )
+from validation import (
+    validate_hp_value,
+    validate_non_empty_string,
+    validate_description,
+    validate_turn_hours,
+    validate_door_state,
+    validate_uuid_string,
+    validate_positive_int,
+)
 
 # ---------------------------------------------------------------------------
 # Timezone-aware UTC now (replaces deprecated _now())
@@ -466,17 +475,30 @@ def set_light_source(
     """
     if state.party is None:
         return _err(state, "No active party.")
+    
+    # Validate label
+    label_result = validate_non_empty_string(label, "Light source label", max_length=50)
+    if not label_result:
+        return _err(state, label_result.error)
+    
+    # Validate turns_remaining if provided (allow 0 for exhausted lights)
+    if turns_remaining is not None and turns_remaining >= 0:
+        if turns_remaining < 0:
+            return _err(state, "Turns remaining cannot be negative.")
+        if turns_remaining > 1000:
+            return _err(state, "Turns remaining cannot exceed 1000.")
+    
     for ls in state.party.light_sources:
         ls.is_active = False
     new_light = LightSource(
-        label=label,
+        label=label_result.value,
         turns_remaining=turns_remaining,
         is_active=True,
     )
     state.party.light_sources.append(new_light)
     state.updated_at = _now()
     duration = f"{turns_remaining} turns" if turns_remaining is not None else "permanent"
-    return _ok(state, f"Light source set: {label} ({duration}).")
+    return _ok(state, f"Light source set: {label_result.value} ({duration}).")
 
 
 # ---------------------------------------------------------------------------
@@ -491,8 +513,14 @@ def set_character_hp(
     char = state.characters.get(character_id)
     if char is None:
         return _err(state, f"Character {character_id} not found.")
+    
+    # Validate HP value
+    hp_result = validate_hp_value(new_hp, max_hp=char.hp_max)
+    if not hp_result:
+        return _err(state, hp_result.error)
+    
     old = char.hp_current
-    char.hp_current = max(0, min(new_hp, char.hp_max))
+    char.hp_current = hp_result.value
     if char.hp_current == 0:
         char.status = CharacterStatus.DEAD
     state.updated_at = _now()
@@ -508,10 +536,16 @@ def set_character_status(
     char = state.characters.get(character_id)
     if char is None:
         return _err(state, f"Character {character_id} not found.")
+    
+    # Validate notes length
+    notes_result = validate_description(notes, "Status notes", max_length=200, allow_empty=True)
+    if not notes_result:
+        return _err(state, notes_result.error)
+    
     char.status = status
-    char.status_notes = notes
+    char.status_notes = notes_result.value
     state.updated_at = _now()
-    return _ok(state, f"{char.name} status → {status.value}. {notes}".strip())
+    return _ok(state, f"{char.name} status → {status.value}. {notes_result.value}".strip())
 
 
 # ---------------------------------------------------------------------------
@@ -519,7 +553,7 @@ def set_character_status(
 # ---------------------------------------------------------------------------
 
 def add_npc(state: GameState, npc: NPC) -> EngineResult:
-    """Add an NPC to the current room."""
+    """Add an NPC to the current room. NPC should already be validated before calling."""
     state.npcs.append(npc)
     state.updated_at = _now()
     return _ok(state, f"{npc.name} appears.")
@@ -533,8 +567,14 @@ def set_npc_hp(
     npc = _find_npc(state, npc_id)
     if npc is None:
         return _err(state, f"NPC {npc_id} not found.")
+    
+    # Validate HP value
+    hp_result = validate_hp_value(new_hp)
+    if not hp_result:
+        return _err(state, hp_result.error)
+    
     old = npc.hp_current
-    npc.hp_current = max(0, new_hp)
+    npc.hp_current = hp_result.value
     if npc.hp_current == 0:
         npc.status = "dead"
     state.updated_at = _now()
@@ -549,9 +589,15 @@ def set_npc_status(
     npc = _find_npc(state, npc_id)
     if npc is None:
         return _err(state, f"NPC {npc_id} not found.")
-    npc.status = status
+    
+    # Validate status string
+    status_result = validate_non_empty_string(status, "NPC status", max_length=50)
+    if not status_result:
+        return _err(state, status_result.error)
+    
+    npc.status = status_result.value
     state.updated_at = _now()
-    return _ok(state, f"{npc.name} status → {status}.")
+    return _ok(state, f"{npc.name} status → {status_result.value}.")
 
 
 def remove_npc(state: GameState, npc_id: UUID) -> EngineResult:
@@ -702,14 +748,41 @@ def update_npc(
     npc = _find_npc(state, npc_id)
     if npc is None:
         return _err(state, f"NPC {npc_id} not found.")
-    if not name.strip():
-        return _err(state, "NPC name cannot be empty.")
-    npc.name        = name.strip()
-    npc.description = description
-    npc.hp_max      = hp_max
-    npc.hp_current  = hp_current
-    npc.armor_class = armor_class
-    npc.notes       = notes
+    
+    # Validate name
+    name_result = validate_non_empty_string(name, "NPC name", max_length=50)
+    if not name_result:
+        return _err(state, name_result.error)
+    
+    # Validate HP values
+    hp_max_result = validate_hp_value(hp_max)
+    if not hp_max_result:
+        return _err(state, hp_max_result.error)
+    
+    hp_current_result = validate_hp_value(hp_current, max_hp=hp_max_result.value)
+    if not hp_current_result:
+        return _err(state, hp_current_result.error)
+    
+    # Validate AC
+    ac_result = validate_positive_int(armor_class, "Armor class", min_value=1, max_value=20)
+    if not ac_result:
+        return _err(state, ac_result.error)
+    
+    # Validate description and notes
+    desc_result = validate_description(description, "NPC description", max_length=500, allow_empty=True)
+    if not desc_result:
+        return _err(state, desc_result.error)
+    
+    notes_result = validate_description(notes, "NPC notes", max_length=500, allow_empty=True)
+    if not notes_result:
+        return _err(state, notes_result.error)
+    
+    npc.name        = name_result.value
+    npc.description = desc_result.value
+    npc.hp_max      = hp_max_result.value
+    npc.hp_current  = hp_current_result.value
+    npc.armor_class = ac_result.value
+    npc.notes       = notes_result.value
     state.updated_at = _now()
     return _ok(state, f"NPC updated: {npc.name}.")
 
@@ -721,6 +794,19 @@ def register_room(state: GameState, room: Room) -> EngineResult:
     """
     if state.dungeon is None:
         state.dungeon = Dungeon(name="The Dungeon")
+    
+    # Validate room name
+    if not room.name or not room.name.strip():
+        return _err(state, "Room name cannot be empty.")
+    
+    # Validate room description length
+    if room.description and len(room.description) > 1000:
+        return _err(state, "Room description exceeds maximum length of 1000 characters.")
+    
+    # Validate room notes length
+    if room.notes and len(room.notes) > 2000:
+        return _err(state, "Room notes exceed maximum length of 2000 characters.")
+    
     state.dungeon.rooms[room.room_id] = room
     state.updated_at = _now()
     return _ok(state, f"Room '{room.name}' added to dungeon.")
@@ -733,7 +819,10 @@ def set_room(state: GameState, room: Room) -> EngineResult:
     Used by the /dm_setroom slash command (no room_id) path.
     For web UI room creation, use register_room() instead.
     """
-    register_room(state, room)
+    result = register_room(state, room)
+    if not result.ok:
+        return result
+    
     state.current_room_id = room.room_id
     room.visited = True
     state.npcs = []
@@ -782,11 +871,17 @@ def set_feature_state(
     room = _resolve_room(state, room_id)
     if room is None:
         return _err(state, "No current room.")
+    
+    # Validate new state
+    state_result = validate_non_empty_string(new_state, "Feature state", max_length=100)
+    if not state_result:
+        return _err(state, state_result.error)
+    
     for feat in room.features:
         if feat.feature_id == feature_id:
-            feat.state = new_state
+            feat.state = state_result.value
             state.updated_at = _now()
-            return _ok(state, f"{feat.name} → {new_state}.")
+            return _ok(state, f"{feat.name} → {state_result.value}.")
     return _err(state, f"Feature {feature_id} not found.")
 
 
@@ -800,11 +895,17 @@ def set_exit_state(
     room = _resolve_room(state, room_id)
     if room is None:
         return _err(state, "No current room.")
+    
+    # Validate door state
+    state_result = validate_door_state(new_state)
+    if not state_result:
+        return _err(state, state_result.error)
+    
     for ex in room.exits:
         if ex.exit_id == exit_id:
-            ex.door_state = new_state
+            ex.door_state = state_result.value
             state.updated_at = _now()
-            return _ok(state, f"Exit '{ex.label}' → {new_state.value}.")
+            return _ok(state, f"Exit '{ex.label}' → {state_result.value.value}.")
     return _err(state, f"Exit {exit_id} not found.")
 
 
@@ -820,16 +921,37 @@ def add_exit(
     room = _resolve_room(state, room_id)
     if room is None:
         return _err(state, "No current room.")
+    
+    # Validate label
+    label_result = validate_non_empty_string(label, "Exit label", max_length=50)
+    if not label_result:
+        return _err(state, label_result.error)
+    
+    # Validate description
+    desc_result = validate_description(description, "Exit description", max_length=200)
+    if not desc_result:
+        return _err(state, desc_result.error)
+    
+    # Validate door state
+    door_result = validate_door_state(door_state)
+    if not door_result:
+        return _err(state, door_result.error)
+    
+    # Validate notes
+    notes_result = validate_description(notes, "Exit notes", max_length=500, allow_empty=True)
+    if not notes_result:
+        return _err(state, notes_result.error)
+    
     exit_ = Exit(
-        label=label,
-        description=description,
-        door_state=door_state,
-        notes=notes,
+        label=label_result.value,
+        description=desc_result.value,
+        door_state=door_result.value,
+        notes=notes_result.value,
     )
     room.exits.append(exit_)
     n = len(room.exits)
     state.updated_at = _now()
-    return _ok(state, f"Exit {n} added: {label}.")
+    return _ok(state, f"Exit {n} added: {label_result.value}.")
 
 
 def abscond(
