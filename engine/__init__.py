@@ -14,8 +14,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+from datetime import UTC
 
-from models import GameState, DoorState
+from models import GameState, DoorState, SessionMode, TurnStatus, PlayerTurnSubmission
 
 
 @dataclass
@@ -368,8 +369,6 @@ def abscond(
       sees it as ready to resolve.
     - Does NOT resolve the turn — DM still uses /dm_resolve.
     """
-    from models import DoorState, PlayerTurnSubmission, SessionMode, TurnStatus
-    
     if state.party is None:
         return _err(state, "No active party.")
     if state.mode == SessionMode.PRE_START:
@@ -553,7 +552,7 @@ def render_status(state: GameState) -> str:
 
 def _now():
     """Get current UTC datetime."""
-    from datetime import UTC, datetime
+    from datetime import datetime
     return datetime.now(UTC)
 
 
