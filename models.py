@@ -353,6 +353,7 @@ class Party:
     leader_id:      UUID | None     = None   # character_id of party leader
     member_ids:     list[UUID]         = field(default_factory=list)
     gold:           int                = 0
+    experience:     int                = 0
     light_sources:  list[LightSource]  = field(default_factory=list)
 
     @property

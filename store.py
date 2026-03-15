@@ -289,7 +289,7 @@ async def require_session(interaction: discord.Interaction) -> GameState | None:
     state = get_session(str(interaction.channel_id))
     if state is None:
         await interaction.response.send_message(
-            "No active session in this channel. Use /embark to start one.",
+            "No active session in this channel. Use embark (via the web interface) to start one.",
             ephemeral=True,
         )
         return None

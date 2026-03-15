@@ -169,7 +169,7 @@ def session_list_page(sessions: list[tuple[str, str]]) -> str:
   {_sidebar(None, sessions)}
   <div class="main">
     <h1>DM Control Panel</h1>
-    <p class="muted">Select a session from the sidebar, or start one in Discord with /embark.</p>
+    <p class="muted">Select a session from the sidebar, or start one in Discord with Embark.</p>
   </div>
 </div>"""
     return page("DM Panel", body)
@@ -305,7 +305,14 @@ def turn_panel(state: GameState, edit_id: str = "") -> str:
                 continue
             sub = state.latest_submission(cid)
             sub_text = f'<em>"{sub.action_text}"</em>' if sub else '<span class="muted">—</span>'
-            rows += f"<tr><td>{char.name}</td><td>{sub_text}</td></tr>"
+            unsubmit_btn = ""
+            if sub and turn.status == TurnStatus.OPEN:
+                cid_str = str(cid)
+                unsubmit_btn = f""" <button class="btn-sm btn-danger"
+                    hx-post="/session/{channel_id}/turn/{cid_str}/unsubmit"
+                    hx-target="#dashboard" hx-swap="outerHTML"
+                    hx-confirm="Send this turn back to {char.name} for revision?">Return</button>"""
+            rows += f"<tr><td>{char.name}</td><td>{sub_text}{unsubmit_btn}</td></tr>"
         if rows:
             subs_html = f'<table><tr><th>Character</th><th>Submitted Action</th></tr>{rows}</table>'
 
@@ -466,8 +473,24 @@ def party_panel(state: GameState) -> str:
 <div class="card">
   <div class="section-header">
     <h3>Party</h3>
-    <span class="muted">Gold: {state.party.gold}</span>
+    <span class="muted">Gold: {state.party.gold} | XP: {state.party.experience}</span>
   </div>
+  <form hx-post="/session/{channel_id}/party/addgold"
+        hx-target="#dashboard" hx-swap="outerHTML" style="margin-bottom:0.5rem">
+    <div class="row">
+      <div><label>Add Gold</label>
+      <input type="number" name="amount" value="0" min="0"></div>
+      <button type="submit">Add Gold</button>
+    </div>
+  </form>
+  <form hx-post="/session/{channel_id}/party/addxp"
+        hx-target="#dashboard" hx-swap="outerHTML" style="margin-bottom:0.5rem">
+    <div class="row">
+      <div><label>Add XP</label>
+      <input type="number" name="amount" value="0" min="0"></div>
+      <button type="submit">Add XP</button>
+    </div>
+  </form>
   <table>
     <tr><th>Character</th><th>HP</th><th>Status</th><th>Controls</th></tr>
     {rows}
