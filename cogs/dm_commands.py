@@ -75,6 +75,28 @@ from validation import (
 )
 
 
+@contextlib.asynccontextmanager
+async def dm_command_context(interaction: discord.Interaction, cog, allow_on_hold: bool = False):
+    """Context manager for DM command boilerplate.
+    
+    Yields the session state if the user is authorized, else None.
+    On successful completion, acknowledges done and updates/reposts status.
+    On error, sends an ephemeral error message.
+    """
+    state = await cog._require_dm(interaction, allow_on_hold)
+    if state is None:
+        yield None
+        return
+    
+    try:
+        yield state
+        await ack_done(interaction)
+        # Default to update_status; callers can override by reposting themselves
+    except Exception as e:
+        await ack_err(interaction, str(e))
+        raise
+
+
 class DMCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -156,15 +178,13 @@ class DMCog(commands.Cog):
     )
     async def embark(self, interaction: discord.Interaction):
         await ack(interaction)
-        state = await self._require_dm(interaction, allow_on_hold=True)
-        if state is None:
-            return
-        result = start_session(state)
-        if not result.ok:
-            await ack_err(interaction, result.error)
-            return
-        await ack_done(interaction)
-        await repost_status(interaction.channel, state)
+        async with dm_command_context(interaction, self, allow_on_hold=True) as state:
+            if state is None:
+                return
+            result = start_session(state)
+            if not result.ok:
+                raise ValueError(result.error)
+            await repost_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
     # /dm_strife
@@ -176,27 +196,25 @@ class DMCog(commands.Cog):
     )
     async def dm_strife(self, interaction: discord.Interaction):
         await ack(interaction)
-        state = await self._require_dm(interaction)
-        if state is None:
-            return
+        async with dm_command_context(interaction, self) as state:
+            if state is None:
+                return
 
-        if state.mode == SessionMode.ROUNDS:
-            result = exit_rounds(state)
-            label = "Combat ended — returning to exploration."
-        else:
-            result = enter_rounds(state)
-            label = "Combat begins!"
+            if state.mode == SessionMode.ROUNDS:
+                result = exit_rounds(state)
+                label = "Combat ended — returning to exploration."
+            else:
+                result = enter_rounds(state)
+                label = "Combat begins!"
 
-        if not result.ok:
-            await ack_err(interaction, result.error)
-            return
+            if not result.ok:
+                raise ValueError(result.error)
 
-        # Open a fresh turn in the new mode
-        if state.current_turn is None or state.current_turn.status != TurnStatus.OPEN:
-            open_turn(state)
+            # Open a fresh turn in the new mode
+            if state.current_turn is None or state.current_turn.status != TurnStatus.OPEN:
+                open_turn(state)
 
-        await ack_done(interaction)
-        await repost_status(interaction.channel, state, narrative=label)
+            await repost_status(interaction.channel, state, narrative=label)
 
     # ------------------------------------------------------------------
     # /dm_resolve
@@ -209,24 +227,21 @@ class DMCog(commands.Cog):
     @app_commands.describe(narrative="What happens as a result of the players' actions.")
     async def dm_resolve(self, interaction: discord.Interaction, narrative: str):
         await ack(interaction)
-        state = await self._require_dm(interaction)
-        if state is None:
-            return
+        async with dm_command_context(interaction, self) as state:
+            if state is None:
+                return
 
-        if state.current_turn is None:
-            await ack_err(interaction, "No open turn to resolve.")
-            return
+            if state.current_turn is None:
+                raise ValueError("No open turn to resolve.")
 
-        close_turn(state)
-        result = resolve_turn(state, narrative)
-        if not result.ok:
-            await ack_err(interaction, result.error)
-            return
+            close_turn(state)
+            result = resolve_turn(state, narrative)
+            if not result.ok:
+                raise ValueError(result.error)
 
-        open_turn(state)
-        # Post narrative visibly, then fresh status below it
-        await ack_done(interaction)
-        await dispatch_turn_resolved(interaction.channel, state, narrative)
+            open_turn(state)
+            # Post narrative visibly, then fresh status below it
+            await dispatch_turn_resolved(interaction.channel, state, narrative)
 
     # ------------------------------------------------------------------
     # /dm_sethp
@@ -239,26 +254,23 @@ class DMCog(commands.Cog):
     @app_commands.describe(target_name="Name of the character or NPC", hp="New HP value")
     async def dm_sethp(self, interaction: discord.Interaction, target_name: str, hp: int):
         await ack(interaction)
-        state = await self._require_dm(interaction)
-        if state is None:
-            return
-
-        char = _find_char_by_name(state, target_name)
-        if char is not None:
-            result = set_character_hp(state, char.character_id, hp)
-        else:
-            npc = _find_npc_by_name(state, target_name)
-            if npc is None:
-                await ack_err(interaction, f"No character or NPC named '{target_name}'")
+        async with dm_command_context(interaction, self) as state:
+            if state is None:
                 return
-            result = set_npc_hp(state, npc.npc_id, hp)
 
-        if not result.ok:
-            await ack_err(interaction, result.error)
-            return
+            char = _find_char_by_name(state, target_name)
+            if char is not None:
+                result = set_character_hp(state, char.character_id, hp)
+            else:
+                npc = _find_npc_by_name(state, target_name)
+                if npc is None:
+                    raise ValueError(f"No character or NPC named '{target_name}'")
+                result = set_npc_hp(state, npc.npc_id, hp)
 
-        await ack_done(interaction)
-        await update_status(interaction.channel, state)
+            if not result.ok:
+                raise ValueError(result.error)
+
+            await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
     # /dm_setstatus
@@ -281,29 +293,25 @@ class DMCog(commands.Cog):
         notes: str = "",
     ):
         await ack(interaction)
-        state = await self._require_dm(interaction)
-        if state is None:
-            return
+        async with dm_command_context(interaction, self) as state:
+            if state is None:
+                return
 
-        char = _find_char_by_name(state, character_name)
-        if char is None:
-            await ack_err(interaction, f"No character named '{character_name}'")
-            return
+            char = _find_char_by_name(state, character_name)
+            if char is None:
+                raise ValueError(f"No character named '{character_name}'")
 
-        try:
-            char_status = CharacterStatus(status.lower())
-        except ValueError:
-            valid = [s.value for s in CharacterStatus]
-            await ack_err(interaction, f"Unknown status '{status}'. Valid: {valid}")
-            return
+            try:
+                char_status = CharacterStatus(status.lower())
+            except ValueError:
+                valid = [s.value for s in CharacterStatus]
+                raise ValueError(f"Unknown status '{status}'. Valid: {valid}")
 
-        result = set_character_status(state, char.character_id, char_status, notes)
-        if not result.ok:
-            await ack_err(interaction, result.error)
-            return
+            result = set_character_status(state, char.character_id, char_status, notes)
+            if not result.ok:
+                raise ValueError(result.error)
 
-        await ack_done(interaction)
-        await update_status(interaction.channel, state)
+            await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
     # /dm_setroom
@@ -328,34 +336,30 @@ class DMCog(commands.Cog):
         notes: str = "",
     ):
         await ack(interaction)
-        state = await self._require_dm(interaction)
-        if state is None:
-            return
-
-        if room_id:
-            # Navigate to an existing authored room
-            try:
-                from uuid import UUID as _UUID
-                rid = _UUID(room_id)
-            except ValueError:
-                await ack_err(interaction, f"Invalid room ID: {room_id!r}")
+        async with dm_command_context(interaction, self) as state:
+            if state is None:
                 return
-            result = move_party_to_room(state, rid)
-        else:
-            # Create a new room on the fly
-            if not name.strip():
-                await ack_err(interaction, "Provide either a room_id (existing room) or a name (new room).")
-                return
-            room = Room(name=name, description=description, notes=notes)
-            result = set_room(state, room)
 
-        if not result.ok:
-            await ack_err(interaction, result.error)
-            return
+            if room_id:
+                # Navigate to an existing authored room
+                try:
+                    from uuid import UUID as _UUID
+                    rid = _UUID(room_id)
+                except ValueError:
+                    raise ValueError(f"Invalid room ID: {room_id!r}")
+                result = move_party_to_room(state, rid)
+            else:
+                # Create a new room on the fly
+                if not name.strip():
+                    raise ValueError("Provide either a room_id (existing room) or a name (new room).")
+                room = Room(name=name, description=description, notes=notes)
+                result = set_room(state, room)
 
-        await save_session_async(state)
-        await ack_done(interaction)
-        await update_status(interaction.channel, state)
+            if not result.ok:
+                raise ValueError(result.error)
+
+            await save_session_async(state)
+            await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
     # /dm_addfeature
@@ -378,18 +382,16 @@ class DMCog(commands.Cog):
         state_str: str = "intact",
     ):
         await ack(interaction)
-        state = await self._require_dm(interaction)
-        if state is None:
-            return
+        async with dm_command_context(interaction, self) as state:
+            if state is None:
+                return
 
-        room = state.current_room
-        if room is None:
-            await ack_err(interaction, "No current room. Use /dm_setroom first.")
-            return
+            room = state.current_room
+            if room is None:
+                raise ValueError("No current room. Use /dm_setroom first.")
 
-        room.features.append(RoomFeature(name=name, description=description, state=state_str))
-        await ack_done(interaction)
-        await update_status(interaction.channel, state)
+            room.features.append(RoomFeature(name=name, description=description, state=state_str))
+            await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
     # /dm_setfeature
@@ -410,29 +412,25 @@ class DMCog(commands.Cog):
         new_state: str,
     ):
         await ack(interaction)
-        state = await self._require_dm(interaction)
-        if state is None:
-            return
+        async with dm_command_context(interaction, self) as state:
+            if state is None:
+                return
 
-        room = state.current_room
-        if room is None:
-            await ack_err(interaction, "No current room.")
-            return
+            room = state.current_room
+            if room is None:
+                raise ValueError("No current room.")
 
-        feature = next(
-            (f for f in room.features if f.name.lower() == feature_name.lower()), None
-        )
-        if feature is None:
-            await ack_err(interaction, f"No feature named '{feature_name}' in this room.")
-            return
+            feature = next(
+                (f for f in room.features if f.name.lower() == feature_name.lower()), None
+            )
+            if feature is None:
+                raise ValueError(f"No feature named '{feature_name}' in this room.")
 
-        result = set_feature_state(state, feature.feature_id, new_state)
-        if not result.ok:
-            await ack_err(interaction, result.error)
-            return
+            result = set_feature_state(state, feature.feature_id, new_state)
+            if not result.ok:
+                raise ValueError(result.error)
 
-        await ack_done(interaction)
-        await update_status(interaction.channel, state)
+            await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
     # /dm_addnpc
@@ -461,22 +459,21 @@ class DMCog(commands.Cog):
         notes: str = "",
     ):
         await ack(interaction)
-        state = await self._require_dm(interaction)
-        if state is None:
-            return
+        async with dm_command_context(interaction, self) as state:
+            if state is None:
+                return
 
-        npc = NPC(
-            name=name,
-            hp_max=hp,
-            hp_current=hp,
-            armor_class=ac,
-            description=description,
-            damage_dice=damage_dice,
-            notes=notes,
-        )
-        add_npc(state, npc)
-        await ack_done(interaction)
-        await update_status(interaction.channel, state)
+            npc = NPC(
+                name=name,
+                hp_max=hp,
+                hp_current=hp,
+                armor_class=ac,
+                description=description,
+                damage_dice=damage_dice,
+                notes=notes,
+            )
+            add_npc(state, npc)
+            await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
     # /dm_setnpcstatus
@@ -494,22 +491,19 @@ class DMCog(commands.Cog):
         status: str,
     ):
         await ack(interaction)
-        state = await self._require_dm(interaction)
-        if state is None:
-            return
+        async with dm_command_context(interaction, self) as state:
+            if state is None:
+                return
 
-        npc = _find_npc_by_name(state, npc_name)
-        if npc is None:
-            await ack_err(interaction, f"No NPC named '{npc_name}'")
-            return
+            npc = _find_npc_by_name(state, npc_name)
+            if npc is None:
+                raise ValueError(f"No NPC named '{npc_name}'")
 
-        result = set_npc_status(state, npc.npc_id, status.lower())
-        if not result.ok:
-            await ack_err(interaction, result.error)
-            return
+            result = set_npc_status(state, npc.npc_id, status.lower())
+            if not result.ok:
+                raise ValueError(result.error)
 
-        await ack_done(interaction)
-        await update_status(interaction.channel, state)
+            await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
     # /dm_setlight
@@ -530,18 +524,16 @@ class DMCog(commands.Cog):
         turns: int = -1,
     ):
         await ack(interaction)
-        state = await self._require_dm(interaction)
-        if state is None:
-            return
+        async with dm_command_context(interaction, self) as state:
+            if state is None:
+                return
 
-        turns_remaining = None if turns < 0 else turns
-        result = set_light_source(state, label, turns_remaining)
-        if not result.ok:
-            await ack_err(interaction, result.error)
-            return
+            turns_remaining = None if turns < 0 else turns
+            result = set_light_source(state, label, turns_remaining)
+            if not result.ok:
+                raise ValueError(result.error)
 
-        await ack_done(interaction)
-        await update_status(interaction.channel, state)
+            await update_status(interaction.channel, state)
 
 
     # ------------------------------------------------------------------
@@ -567,24 +559,21 @@ class DMCog(commands.Cog):
         notes: str = "",
     ):
         await ack(interaction)
-        state = await self._require_dm(interaction)
-        if state is None:
-            return
+        async with dm_command_context(interaction, self) as state:
+            if state is None:
+                return
 
-        try:
-            ds = DoorState(door_state.lower())
-        except ValueError:
-            valid = [d.value for d in DoorState]
-            await ack_err(interaction, f"Unknown door state '{door_state}'. Valid: {valid}")
-            return
+            try:
+                ds = DoorState(door_state.lower())
+            except ValueError:
+                valid = [d.value for d in DoorState]
+                raise ValueError(f"Unknown door state '{door_state}'. Valid: {valid}")
 
-        result = add_exit(state, label, description, ds, notes)
-        if not result.ok:
-            await ack_err(interaction, result.error)
-            return
+            result = add_exit(state, label, description, ds, notes)
+            if not result.ok:
+                raise ValueError(result.error)
 
-        await ack_done(interaction)
-        await update_status(interaction.channel, state)
+            await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
     # /dm_setexitstate
@@ -605,34 +594,29 @@ class DMCog(commands.Cog):
         door_state: str,
     ):
         await ack(interaction)
-        state = await self._require_dm(interaction)
-        if state is None:
-            return
+        async with dm_command_context(interaction, self) as state:
+            if state is None:
+                return
 
-        room = state.current_room
-        if room is None:
-            await ack_err(interaction, "No current room.")
-            return
+            room = state.current_room
+            if room is None:
+                raise ValueError("No current room.")
 
-        idx = exit_number - 1
-        if idx < 0 or idx >= len(room.exits):
-            await ack_err(interaction, f"Exit {exit_number} does not exist.")
-            return
+            idx = exit_number - 1
+            if idx < 0 or idx >= len(room.exits):
+                raise ValueError(f"Exit {exit_number} does not exist.")
 
-        try:
-            ds = DoorState(door_state.lower())
-        except ValueError:
-            valid = [d.value for d in DoorState]
-            await ack_err(interaction, f"Unknown door state '{door_state}'. Valid: {valid}")
-            return
+            try:
+                ds = DoorState(door_state.lower())
+            except ValueError:
+                valid = [d.value for d in DoorState]
+                raise ValueError(f"Unknown door state '{door_state}'. Valid: {valid}")
 
-        result = set_exit_state(state, room.exits[idx].exit_id, ds)
-        if not result.ok:
-            await ack_err(interaction, result.error)
-            return
+            result = set_exit_state(state, room.exits[idx].exit_id, ds)
+            if not result.ok:
+                raise ValueError(result.error)
 
-        await ack_done(interaction)
-        await update_status(interaction.channel, state)
+            await update_status(interaction.channel, state)
 
 
     # ------------------------------------------------------------------
@@ -646,20 +630,18 @@ class DMCog(commands.Cog):
     @app_commands.describe(hours="Default turn duration in hours (e.g. 24)")
     async def dm_setturnlength(self, interaction: discord.Interaction, hours: float):
         await ack(interaction)
-        state = await self._require_dm(interaction)
-        if state is None:
-            return
+        async with dm_command_context(interaction, self) as state:
+            if state is None:
+                return
 
-        # Validate turn hours using shared validator
-        hours_result = validate_turn_hours(hours)
-        if not hours_result:
-            await ack_err(interaction, hours_result.error)
-            return
+            # Validate turn hours using shared validator
+            hours_result = validate_turn_hours(hours)
+            if not hours_result:
+                raise ValueError(hours_result.error)
 
-        state.default_turn_hours = hours_result.value
-        await save_session_async(state)
-        await ack_done(interaction)
-        await update_status(interaction.channel, state)
+            state.default_turn_hours = hours_result.value
+            await save_session_async(state)
+            await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
     # /dm_settimer
@@ -672,25 +654,22 @@ class DMCog(commands.Cog):
     @app_commands.describe(hours="Hours from now until this turn expires")
     async def dm_settimer(self, interaction: discord.Interaction, hours: float):
         await ack(interaction)
-        state = await self._require_dm(interaction)
-        if state is None:
-            return
+        async with dm_command_context(interaction, self) as state:
+            if state is None:
+                return
 
-        if state.current_turn is None:
-            await ack_err(interaction, "No open turn.")
-            return
+            if state.current_turn is None:
+                raise ValueError("No open turn.")
 
-        # Validate turn hours using shared validator
-        hours_result = validate_turn_hours(hours)
-        if not hours_result:
-            await ack_err(interaction, hours_result.error)
-            return
+            # Validate turn hours using shared validator
+            hours_result = validate_turn_hours(hours)
+            if not hours_result:
+                raise ValueError(hours_result.error)
 
-        from datetime import datetime, timedelta
-        state.current_turn.due_at = datetime.now(UTC) + timedelta(hours=hours_result.value)
-        await save_session_async(state)
-        await ack_done(interaction)
-        await update_status(interaction.channel, state)
+            from datetime import datetime, timedelta
+            state.current_turn.due_at = datetime.now(UTC) + timedelta(hours=hours_result.value)
+            await save_session_async(state)
+            await update_status(interaction.channel, state)
 
 
     # ------------------------------------------------------------------
@@ -703,15 +682,13 @@ class DMCog(commands.Cog):
     )
     async def dm_hold(self, interaction: discord.Interaction):
         await ack(interaction)
-        state = await self._require_dm(interaction, allow_on_hold=True)
-        if state is None:
-            return
-        result = hold_session(state)
-        if not result.ok:
-            await ack_err(interaction, result.error)
-            return
-        await ack_done(interaction)
-        await repost_status(interaction.channel, state)
+        async with dm_command_context(interaction, self, allow_on_hold=True) as state:
+            if state is None:
+                return
+            result = hold_session(state)
+            if not result.ok:
+                raise ValueError(result.error)
+            await repost_status(interaction.channel, state)
 
     @app_commands.command(
         name="dm_resume",
@@ -719,15 +696,13 @@ class DMCog(commands.Cog):
     )
     async def dm_resume(self, interaction: discord.Interaction):
         await ack(interaction)
-        state = await self._require_dm(interaction, allow_on_hold=True)
-        if state is None:
-            return
-        result = resume_session(state)
-        if not result.ok:
-            await ack_err(interaction, result.error)
-            return
-        await ack_done(interaction)
-        await repost_status(interaction.channel, state)
+        async with dm_command_context(interaction, self, allow_on_hold=True) as state:
+            if state is None:
+                return
+            result = resume_session(state)
+            if not result.ok:
+                raise ValueError(result.error)
+            await repost_status(interaction.channel, state)
 
 
     # ------------------------------------------------------------------
@@ -744,12 +719,12 @@ class DMCog(commands.Cog):
     )
     async def dm_say(self, interaction: discord.Interaction, speaker: str, text: str):
         await ack(interaction)
-        state = await self._require_dm(interaction)
-        if state is None:
-            return
-        say(state, speaker, text)
-        await ack_done(interaction)
-        await update_status(interaction.channel, state)
+        async with dm_command_context(interaction, self) as state:
+            if state is None:
+                return
+            say(state, speaker, text)
+            await update_status(interaction.channel, state)
+
     # ------------------------------------------------------------------
     # /dm_emote
     # ------------------------------------------------------------------
@@ -764,12 +739,11 @@ class DMCog(commands.Cog):
     )
     async def dm_emote(self, interaction: discord.Interaction, speaker: str, text: str):
         await ack(interaction)
-        state = await self._require_dm(interaction)
-        if state is None:
-            return
-        emote(state, speaker, text)
-        await ack_done(interaction)
-        await update_status(interaction.channel, state)
+        async with dm_command_context(interaction, self) as state:
+            if state is None:
+                return
+            emote(state, speaker, text)
+            await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
     # /dm_oracle
@@ -785,18 +759,16 @@ class DMCog(commands.Cog):
     )
     async def dm_oracle(self, interaction: discord.Interaction, number: int, answer: str):
         await ack(interaction)
-        state = await self._require_dm(interaction)
-        if state is None:
-            return
-        result = answer_oracle(state, number, answer)
-        if not result.ok:
-            await ack_err(interaction, result.error)
-            return
-        oracle = result.data
-        await dispatch_oracle_answer(self.bot, interaction.channel, oracle)
+        async with dm_command_context(interaction, self) as state:
+            if state is None:
+                return
+            result = answer_oracle(state, number, answer)
+            if not result.ok:
+                raise ValueError(result.error)
+            oracle = result.data
+            await dispatch_oracle_answer(self.bot, interaction.channel, oracle)
 
-        await save_session_async(state)
-        await ack_done(interaction)
+            await save_session_async(state)
 
 # Lookup helpers
 # ---------------------------------------------------------------------------
