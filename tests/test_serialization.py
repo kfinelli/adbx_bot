@@ -17,8 +17,8 @@ from engine import (
     set_light_source,
 )
 from models import (
-    CharacterClass,
     NPC,
+    CharacterClass,
     CharacterStatus,
     DoorState,
     Dungeon,

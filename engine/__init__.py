@@ -13,10 +13,50 @@ Convention:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 from datetime import UTC
+from typing import Any
 
-from models import GameState, DoorState, SessionMode, TurnStatus, PlayerTurnSubmission
+from models import DoorState, GameState, PlayerTurnSubmission, SessionMode, TurnStatus
+
+# Import managers and utilities from submodules
+from .character import (
+    CharacterManager,
+)
+from .core import (
+    TurnManager,
+)
+from .dice import (
+    d,
+    print_dice_results,
+    roll,
+    roll_3d6,
+    roll_dice_expr,
+    roll_expr,
+    roll_stat_block,
+    roll_stats,
+    roll_sum,
+)
+from .helpers import (
+    _find_npc,
+    _resolve_room,
+    _snapshot,
+)
+from .light import (
+    LightManager,
+    _tick_light,
+)
+from .npc import (
+    NPCManager,
+)
+from .oracle import (
+    OracleManager,
+)
+from .room import (
+    RoomManager,
+)
+from .session import (
+    SessionManager,
+)
 
 
 @dataclass
@@ -36,54 +76,6 @@ def _ok(state: GameState, message: str = "", notify_dm: bool = False) -> EngineR
 def _err(state: GameState, error: str) -> EngineResult:
     return EngineResult(ok=False, error=error, state=state)
 
-
-# Import managers and utilities from submodules
-from .dice import (
-    d,
-    print_dice_results,
-    roll,
-    roll_3d6,
-    roll_dice_expr,
-    roll_expr,
-    roll_stat_block,
-    roll_stats,
-    roll_sum,
-)
-
-from .helpers import (
-    _find_npc,
-    _resolve_room,
-    _snapshot,
-)
-
-from .light import (
-    _tick_light,
-    LightManager,
-)
-
-from .core import (
-    TurnManager,
-)
-
-from .character import (
-    CharacterManager,
-)
-
-from .npc import (
-    NPCManager,
-)
-
-from .room import (
-    RoomManager,
-)
-
-from .oracle import (
-    OracleManager,
-)
-
-from .session import (
-    SessionManager,
-)
 
 
 # Convenience functions for backward compatibility

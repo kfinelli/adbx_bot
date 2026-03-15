@@ -78,7 +78,7 @@ from validation import (
 @contextlib.asynccontextmanager
 async def dm_command_context(interaction: discord.Interaction, cog, allow_on_hold: bool = False):
     """Context manager for DM command boilerplate.
-    
+
     Yields the session state if the user is authorized, else None.
     On successful completion, acknowledges done and updates/reposts status.
     On error, sends an ephemeral error message.
@@ -87,7 +87,7 @@ async def dm_command_context(interaction: discord.Interaction, cog, allow_on_hol
     if state is None:
         yield None
         return
-    
+
     try:
         yield state
         await ack_done(interaction)
@@ -303,9 +303,9 @@ class DMCog(commands.Cog):
 
             try:
                 char_status = CharacterStatus(status.lower())
-            except ValueError:
+            except ValueError as valerr:
                 valid = [s.value for s in CharacterStatus]
-                raise ValueError(f"Unknown status '{status}'. Valid: {valid}")
+                raise ValueError(f"Unknown status '{status}'. Valid: {valid}") from valerr
 
             result = set_character_status(state, char.character_id, char_status, notes)
             if not result.ok:
@@ -345,8 +345,8 @@ class DMCog(commands.Cog):
                 try:
                     from uuid import UUID as _UUID
                     rid = _UUID(room_id)
-                except ValueError:
-                    raise ValueError(f"Invalid room ID: {room_id!r}")
+                except ValueError as valerr:
+                    raise ValueError(f"Invalid room ID: {room_id!r}") from valerr
                 result = move_party_to_room(state, rid)
             else:
                 # Create a new room on the fly
@@ -565,9 +565,9 @@ class DMCog(commands.Cog):
 
             try:
                 ds = DoorState(door_state.lower())
-            except ValueError:
+            except ValueError as valerr:
                 valid = [d.value for d in DoorState]
-                raise ValueError(f"Unknown door state '{door_state}'. Valid: {valid}")
+                raise ValueError(f"Unknown door state '{door_state}'. Valid: {valid}") from valerr
 
             result = add_exit(state, label, description, ds, notes)
             if not result.ok:
@@ -608,9 +608,9 @@ class DMCog(commands.Cog):
 
             try:
                 ds = DoorState(door_state.lower())
-            except ValueError:
+            except ValueError as valerr:
                 valid = [d.value for d in DoorState]
-                raise ValueError(f"Unknown door state '{door_state}'. Valid: {valid}")
+                raise ValueError(f"Unknown door state '{door_state}'. Valid: {valid}") from valerr
 
             result = set_exit_state(state, room.exits[idx].exit_id, ds)
             if not result.ok:

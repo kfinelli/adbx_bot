@@ -2,6 +2,15 @@
 Character management for the dungeon crawler engine.
 """
 
+from models import (
+    AbilityScores,
+    Character,
+    CharacterClass,
+    CharacterStatus,
+    GameState,
+    InventoryItem,
+    SpellBook,
+)
 from tables import (
     ABILITY_MODIFIERS,
     CON_HP_MODIFIER,
@@ -14,16 +23,7 @@ from tables import (
 from validation import validate_hp_value
 
 from .dice import roll_sum
-from models import (
-    AbilityScores,
-    Character,
-    CharacterClass,
-    CharacterStatus,
-    GameState,
-    InventoryItem,
-    SpellBook,
-)
-from .helpers import _ok, _err
+from .helpers import _err, _ok
 
 
 def _con_modifier(con: int) -> int:
@@ -56,7 +56,7 @@ class CharacterManager:
         Otherwise rolls 3d6 straight.
         """
         from engine import _now
-        
+
         if prerolled_stats is not None:
             ability_scores = AbilityScores(**prerolled_stats)
         if not name.strip():
@@ -151,6 +151,7 @@ class CharacterManager:
         new_hp:       int,
     ):
         """Set a character's current HP."""
+        from engine import _now
         char = state.characters.get(character_id)
         if char is None:
             return _err(state, f"Character {character_id} not found.")
@@ -175,8 +176,8 @@ class CharacterManager:
         notes:        str = "",
     ):
         """Set a character's status."""
-        from validation import validate_description
         from engine import _now
+        from validation import validate_description
 
         char = state.characters.get(character_id)
         if char is None:
@@ -196,7 +197,7 @@ class CharacterManager:
 def roll_stat_block() -> AbilityScores:
     """Roll 3d6 straight down the line for ability scores."""
     from .dice import roll_3d6
-    
+
     return AbilityScores(
         strength=roll_3d6(),
         intelligence=roll_3d6(),

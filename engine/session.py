@@ -4,7 +4,7 @@ Session management for the dungeon crawler engine.
 
 from models import GameState, SessionMode
 
-from .helpers import _ok, _err
+from .helpers import _err, _ok
 
 
 class SessionManager:
@@ -22,12 +22,12 @@ class SessionManager:
         state.mode = SessionMode.EXPLORATION
         state.session_active = True
         state.updated_at = _now()
-        
+
         # Open first turn
         from .core import TurnManager
         tm = TurnManager()
         tm.open_turn(state)
-        
+
         return _ok(state, "Session started. The adventure begins!")
 
     def hold_session(self, state: GameState):

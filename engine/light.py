@@ -5,7 +5,7 @@ Light source management for the dungeon crawler engine.
 from models import GameState, LightSource
 from validation import validate_non_empty_string
 
-from .helpers import _ok, _err
+from .helpers import _err, _ok
 
 
 class LightManager:

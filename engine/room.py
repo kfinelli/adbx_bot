@@ -3,8 +3,8 @@ Room management for the dungeon crawler engine.
 """
 
 from models import (
-    Dungeon,
     DoorState,
+    Dungeon,
     Exit,
     GameState,
     Room,
@@ -13,10 +13,9 @@ from validation import (
     validate_description,
     validate_door_state,
     validate_non_empty_string,
-    validate_positive_int,
 )
 
-from .helpers import _ok, _err, _resolve_room
+from .helpers import _err, _ok, _resolve_room
 
 
 class RoomManager:

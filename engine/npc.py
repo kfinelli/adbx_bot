@@ -2,10 +2,10 @@
 NPC management for the dungeon crawler engine.
 """
 
-from models import GameState, NPC
+from models import NPC, GameState
 from validation import validate_hp_value, validate_non_empty_string
 
-from .helpers import _ok, _err, _find_npc
+from .helpers import _err, _find_npc, _ok
 
 
 class NPCManager:

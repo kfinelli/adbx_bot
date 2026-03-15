@@ -10,21 +10,18 @@ import ast
 import os
 import sys
 from pathlib import Path
-from typing import List, Set
-
-import pytest
 
 # Make the project root importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
-def get_python_files(directory: str) -> List[Path]:
+def get_python_files(directory: str) -> list[Path]:
     """Get all .py files in a directory (non-recursive)."""
     dir_path = Path(directory)
     return sorted(dir_path.glob("*.py"))
 
 
-def get_defined_names(tree: ast.AST) -> Set[str]:
+def get_defined_names(tree: ast.AST) -> set[str]:
     """Extract all names defined at module level (imports, assignments, classes, functions)."""
     defined = set()
     for node in ast.iter_child_nodes(tree):
@@ -47,13 +44,12 @@ def get_defined_names(tree: ast.AST) -> Set[str]:
                     for elt in target.elts:
                         if isinstance(elt, ast.Name):
                             defined.add(elt.id)
-        elif isinstance(node, ast.AnnAssign):
-            if isinstance(node.target, ast.Name):
-                defined.add(node.target.id)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            defined.add(node.target.id)
     return defined
 
 
-def get_used_names_in_functions(tree: ast.AST) -> Set[str]:
+def get_used_names_in_functions(tree: ast.AST) -> set[str]:
     """Extract all global names used inside function bodies (excluding builtins and locals)."""
     used = set()
     builtin_names = {
@@ -97,8 +93,7 @@ def get_used_names_in_functions(tree: ast.AST) -> Set[str]:
             for child in ast.walk(node):
                 if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Store):
                     locals_set.add(child.id)
-                elif isinstance(child, ast.Name) and isinstance(child.ctx, ast.Load):
-                    if child.id not in builtin_names and child.id not in locals_set:
+                elif isinstance(child, ast.Name) and isinstance(child.ctx, ast.Load) and child.id not in builtin_names and child.id not in locals_set:
                         used.add(child.id)
 
     return used
@@ -116,7 +111,7 @@ class TestModuleIntegrity:
         """
         engine_init_path = Path(__file__).parent.parent / "engine" / "__init__.py"
 
-        with open(engine_init_path, "r") as f:
+        with open(engine_init_path) as f:
             source = f.read()
 
         tree = ast.parse(source)
@@ -150,7 +145,7 @@ class TestModuleIntegrity:
         """
         engine_init_path = Path(__file__).parent.parent / "engine" / "__init__.py"
 
-        with open(engine_init_path, "r") as f:
+        with open(engine_init_path) as f:
             source = f.read()
 
         tree = ast.parse(source)

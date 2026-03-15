@@ -4,7 +4,7 @@ Oracle and say/emote functions for the dungeon crawler engine.
 
 from models import GameState, Oracle
 
-from .helpers import _ok, _err
+from .helpers import _err, _ok
 
 
 class OracleManager:
