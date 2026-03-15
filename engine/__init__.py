@@ -161,6 +161,10 @@ def submit_turn(state: GameState, character_id, action_text: str):
     tm = TurnManager()
     return tm.submit_turn(state, character_id, action_text)
 
+def unsubmit_turn(state: GameState, character_id,):
+    """Submit a turn."""
+    tm = TurnManager()
+    return tm.submit_turn(state, character_id)
 
 def close_turn(state: GameState):
     """Close a turn."""
@@ -465,12 +469,12 @@ def render_status(state: GameState) -> str:
             )
             lines.append(f"{light.label}: {remaining} turns")
             if light.turns_remaining == 0:
-                lines.append("⚠ LIGHT OUT")
+                lines.append("Light out!")
         else:
             lines.append("No light source")
 
-        # Gold
-        lines.append(f"Gold: {state.party.gold}")
+        # Gold / XP
+        lines.append(f"Gold: {state.party.gold} XP: {state.party.experience}")
 
     lines.append(sep)
 

@@ -169,7 +169,7 @@ def session_list_page(sessions: list[tuple[str, str]]) -> str:
   {_sidebar(None, sessions)}
   <div class="main">
     <h1>DM Control Panel</h1>
-    <p class="muted">Select a session from the sidebar, or start one in Discord with /embark.</p>
+    <p class="muted">Select a session from the sidebar, or start one in Discord with Embark.</p>
   </div>
 </div>"""
     return page("DM Panel", body)
