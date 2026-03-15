@@ -248,7 +248,7 @@ class NPCMovementLogic(Enum):
 class NPCGroup:
     """
     A group of NPCs that move together as a unit.
-    
+
     Attributes:
         group_id: Unique identifier for this group
         name: Optional display name for the group
@@ -278,47 +278,47 @@ class NPCGroup:
 class NPCRoster:
     """
     A roster of NPC groups referenced by GameState.
-    
+
     The roster maintains all NPC groups in the dungeon, with each group
     tracking its current location. This allows NPCs to persist across
     room changes and enables future features like wandering monsters.
-    
+
     Attributes:
         groups: Dictionary mapping group_id to NPCGroup
     """
     groups: dict[UUID, NPCGroup]    = field(default_factory=dict)
-    
+
     def add_group(self, group: NPCGroup) -> None:
         """Add an NPC group to the roster."""
         self.groups[group.group_id] = group
-    
+
     def remove_group(self, group_id: UUID) -> bool:
         """Remove a group from the roster. Returns True if removed, False if not found."""
         if group_id in self.groups:
             del self.groups[group_id]
             return True
         return False
-    
+
     def get_group(self, group_id: UUID) -> NPCGroup | None:
         """Get an NPC group by ID."""
         return self.groups.get(group_id)
-    
+
     def get_groups_in_room(self, room_id: UUID) -> list[NPCGroup]:
         """Get all NPC groups currently in a specific room."""
         return [g for g in self.groups.values() if g.current_room_id == room_id]
-    
+
     def get_group_in_room(self, room_id: UUID) -> NPCGroup | None:
         """Get the first NPC group found in a specific room, or None if no groups exist there."""
         groups = self.get_groups_in_room(room_id)
         return groups[0] if groups else None
-    
+
     def get_npcs_in_room(self, room_id: UUID) -> list[NPC]:
         """Get all NPCs from groups currently in a specific room."""
         npcs = []
         for group in self.get_groups_in_room(room_id):
             npcs.extend(group.npcs)
         return npcs
-    
+
     def move_group_to_room(self, group_id: UUID, room_id: UUID) -> bool:
         """Move an NPC group to a new room. Returns True if successful."""
         group = self.get_group(group_id)
@@ -329,7 +329,7 @@ class NPCRoster:
             return False
         group.current_room_id = room_id
         return True
-    
+
     def all_npcs(self) -> list[NPC]:
         """Get all NPCs from all groups in the roster."""
         npcs = []
@@ -480,7 +480,7 @@ class GameState:
 
     party:           Party | None         = None
     characters:      dict[UUID, Character]   = field(default_factory=dict)
-    
+
     # NPC roster contains all NPCs in the dungeon, organized by group
     npc_roster:      NPCRoster               = field(default_factory=NPCRoster)
 

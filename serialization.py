@@ -20,9 +20,6 @@ from uuid import UUID
 
 from models import (
     NPC,
-    NPCGroup,
-    NPCMovementLogic,
-    NPCRoster,
     AbilityScores,
     Character,
     CharacterClass,
@@ -34,6 +31,9 @@ from models import (
     GameState,
     InventoryItem,
     LightSource,
+    NPCGroup,
+    NPCMovementLogic,
+    NPCRoster,
     Party,
     PlayerTurnSubmission,
     PreparedSpell,
@@ -503,7 +503,7 @@ def deserialize_turn_record(d: dict) -> TurnRecord:
 def deserialize_state(json_str: str) -> GameState:
     """Reconstruct a GameState from a JSON string."""
     d = json.loads(json_str)
-    
+
     # Deserialize NPC roster (new field)
     npc_roster_data = d.get("npc_roster")
     if npc_roster_data:
@@ -511,7 +511,7 @@ def deserialize_state(json_str: str) -> GameState:
     else:
         # Backward compatibility: if no npc_roster, create empty one
         npc_roster = NPCRoster()
-    
+
     return GameState(
         session_id=_load_uuid(d["session_id"]),
         dungeon=deserialize_dungeon(d["dungeon"]) if d["dungeon"] else None,

@@ -38,7 +38,6 @@ from .dice import (
 )
 from .helpers import (
     _find_npc_in_roster,
-    _find_npcgroup_with_npc,
     _resolve_room,
     _snapshot,
 )
@@ -587,6 +586,7 @@ __all__ = [
     "SessionManager",
     # Helper functions
     "_find_npc_in_roster",
+    "_find_npcgroup_with_npc",
     "_resolve_room",
     "_snapshot",
     "_tick_light",

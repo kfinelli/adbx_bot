@@ -78,10 +78,10 @@ class TestSetRoom:
         npc = _make_npc()
         group = NPCGroup(npcs=[npc], current_room_id=bare_state.current_room_id)
         bare_state.npc_roster.add_group(group)
-        
+
         # Move to a new room
         set_room(bare_state, _make_room())
-        
+
         # The old room's NPCs should not be in the new room
         assert bare_state.npcs_in_current_room == []
 
@@ -277,10 +277,9 @@ class TestNPCs:
     def test_add_npc(self, bare_state):
         # Set up a room first since NPCs need a current room
         from engine import set_room
-        from models import Room
         room = _make_room("Test Room")
         set_room(bare_state, room)
-        
+
         npc = _make_npc("Goblin Scout")
         result = add_npc(bare_state, npc)
         assert result.ok
@@ -288,10 +287,9 @@ class TestNPCs:
 
     def test_set_npc_hp(self, bare_state):
         from engine import set_room
-        from models import Room
         room = _make_room("Test Room")
         set_room(bare_state, room)
-        
+
         npc = _make_npc(hp=10)
         add_npc(bare_state, npc)
         result = set_npc_hp(bare_state, npc.npc_id, 3)
@@ -300,10 +298,9 @@ class TestNPCs:
 
     def test_npc_hp_zero_sets_dead(self, bare_state):
         from engine import set_room
-        from models import Room
         room = _make_room("Test Room")
         set_room(bare_state, room)
-        
+
         npc = _make_npc(hp=4)
         add_npc(bare_state, npc)
         set_npc_hp(bare_state, npc.npc_id, 0)
@@ -311,10 +308,9 @@ class TestNPCs:
 
     def test_set_npc_status(self, bare_state):
         from engine import set_room
-        from models import Room
         room = _make_room("Test Room")
         set_room(bare_state, room)
-        
+
         npc = _make_npc()
         add_npc(bare_state, npc)
         result = set_npc_status(bare_state, npc.npc_id, "fled")
@@ -323,10 +319,9 @@ class TestNPCs:
 
     def test_update_npc(self, bare_state):
         from engine import set_room
-        from models import Room
         room = _make_room("Test Room")
         set_room(bare_state, room)
-        
+
         npc = _make_npc("Goblin")
         add_npc(bare_state, npc)
         result = update_npc(
@@ -340,10 +335,9 @@ class TestNPCs:
 
     def test_update_npc_empty_name_fails(self, bare_state):
         from engine import set_room
-        from models import Room
         room = _make_room("Test Room")
         set_room(bare_state, room)
-        
+
         npc = _make_npc()
         add_npc(bare_state, npc)
         result = update_npc(bare_state, npc.npc_id, name="", description="",
@@ -352,10 +346,9 @@ class TestNPCs:
 
     def test_remove_npc(self, bare_state):
         from engine import set_room
-        from models import Room
         room = _make_room("Test Room")
         set_room(bare_state, room)
-        
+
         npc = _make_npc()
         add_npc(bare_state, npc)
         result = remove_npc(bare_state, npc.npc_id)

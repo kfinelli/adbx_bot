@@ -32,7 +32,7 @@ def _find_npcgroup_with_npc(state: GameState, npc_id: UUID):
     for group in state.npc_roster.groups.values():
         for npc in group.npcs:
             if npc.npc_id == npc_id:
-                return group 
+                return group
     return None
 
 

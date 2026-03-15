@@ -2,7 +2,7 @@
 NPC management for the dungeon crawler engine.
 """
 
-from models import NPC, NPCGroup, GameState, NPCMovementLogic
+from models import NPC, GameState, NPCGroup, NPCMovementLogic
 from validation import validate_hp_value, validate_non_empty_string
 
 from .helpers import _err, _find_npc_in_roster, _find_npcgroup_with_npc, _ok
@@ -31,7 +31,7 @@ class NPCManager:
         """
         Add a single NPC to a room. If an NPC group already exists in the room,
         adds the NPC to the first existing group. Otherwise creates a new group.
-        
+
         Args:
             state: Current game state
             npc: The NPC to add
@@ -41,10 +41,10 @@ class NPCManager:
             possible_rooms: List of room IDs where this group may be found
         """
         target_room = room_id if room_id is not None else state.current_room_id
-        
+
         # Check if there's an existing NPC group in the target room
         existing_group = state.npc_roster.get_group_in_room(target_room)
-        
+
         if existing_group:
             # Add NPC to the existing group
             existing_group.npcs.append(npc)
@@ -69,7 +69,6 @@ class NPCManager:
         if not success:
             return _err(state, f"Could not move NPC group {group_id} to room {room_id}.")
         state.updated_at = _now()
-        group = state.npc_roster.get_group(group_id)
         return _ok(state, f"NPC group moved to room {room_id}.")
 
     def set_npc_hp(
@@ -121,7 +120,7 @@ class NPCManager:
         if not success:
             return _err(state, f"NPC group {group_id} not found.")
         state.updated_at = _now()
-        return _ok(state, f"NPC group removed.")
+        return _ok(state, "NPC group removed.")
 
     def remove_npc(self, state: GameState, npc_id):
         """Remove an NPC from its group (and the roster)."""
@@ -132,7 +131,7 @@ class NPCManager:
         if not success:
             return _err(state, f"NPC {npc_id} not found.")
         state.updated_at = _now()
-        return _ok(state, f"NPC removed.")
+        return _ok(state, "NPC removed.")
 
     def update_npc(
         self,

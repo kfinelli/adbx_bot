@@ -889,7 +889,7 @@ def npc_panel(
             npcs_to_show = state.npc_roster.get_npcs_in_room(room_uuid)
         except ValueError:
             npcs_to_show = []
-    
+
     rows = ""
     for npc in npcs_to_show:
         nid = str(npc.npc_id)
