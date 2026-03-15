@@ -10,7 +10,6 @@ import json
 import pytest
 
 from engine import (
-    CharacterClass,
     close_turn,
     create_character,
     register_room,
@@ -19,6 +18,7 @@ from engine import (
 )
 from models import (
     NPC,
+    CharacterClass,
     CharacterStatus,
     DoorState,
     Dungeon,

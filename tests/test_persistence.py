@@ -8,8 +8,8 @@ import tempfile
 
 import pytest
 
-from engine import CharacterClass, create_character, start_session
-from models import GameState, Party
+from engine import create_character, start_session
+from models import CharacterClass, GameState, Party
 from persistence import Database
 
 # ---------------------------------------------------------------------------
