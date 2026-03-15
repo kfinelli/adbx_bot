@@ -2,20 +2,66 @@
 NPC management for the dungeon crawler engine.
 """
 
-from models import NPC, GameState
+from models import NPC, NPCGroup, GameState, NPCMovementLogic
 from validation import validate_hp_value, validate_non_empty_string
 
-from .helpers import _err, _find_npc, _ok
+from .helpers import _err, _find_npc_in_roster, _ok
 
 
 class NPCManager:
-    """Manages NPCs in the game."""
+    """Manages NPCs in the game via the NPC roster."""
 
-    def add_npc(self, state: GameState, npc: NPC):
-        """Add an NPC to the current room. NPC should already be validated before calling."""
-        state.npcs.append(npc)
+    def add_npc_group(self, state: GameState, group: NPCGroup):
+        """Add an NPC group to the roster. The group should already be validated before calling."""
+        state.npc_roster.add_group(group)
+        state.updated_at = _now()
+        npc_count = len(group.npcs)
+        group_name = group.name or f"Group {group.group_id}"
+        return _ok(state, f"{npc_count} NPC(s) added: {group_name}.")
+
+    def add_npc_to_room(
+        self,
+        state: GameState,
+        npc: NPC,
+        room_id=None,
+        group_name: str | None = None,
+        movement_logic: NPCMovementLogic = NPCMovementLogic.STATIONARY,
+        possible_rooms: list | None = None,
+    ):
+        """
+        Add a single NPC to a room by creating a new group for it.
+        
+        Args:
+            state: Current game state
+            npc: The NPC to add
+            room_id: Room to place the NPC in (defaults to current room)
+            group_name: Optional name for the NPC group
+            movement_logic: How the NPC group moves
+            possible_rooms: List of room IDs where this group may be found
+        """
+        target_room = room_id if room_id is not None else state.current_room_id
+        if target_room is None:
+            return _err(state, "No room specified and no current room set.")
+        
+        group = NPCGroup(
+            name=group_name,
+            npcs=[npc],
+            movement_logic=movement_logic,
+            current_room_id=target_room,
+            possible_rooms=possible_rooms or [],
+        )
+        state.npc_roster.add_group(group)
         state.updated_at = _now()
         return _ok(state, f"{npc.name} appears.")
+
+    def move_npc_group_to_room(self, state: GameState, group_id, room_id):
+        """Move an NPC group to a new room."""
+        success = state.npc_roster.move_group_to_room(group_id, room_id)
+        if not success:
+            return _err(state, f"Could not move NPC group {group_id} to room {room_id}.")
+        state.updated_at = _now()
+        group = state.npc_roster.get_group(group_id)
+        return _ok(state, f"NPC group moved to room {room_id}.")
 
     def set_npc_hp(
         self,
@@ -23,8 +69,8 @@ class NPCManager:
         npc_id,
         new_hp: int,
     ):
-        """Set an NPC's current HP."""
-        npc = _find_npc(state, npc_id)
+        """Set an NPC's current HP. Searches the entire roster."""
+        npc = _find_npc_in_roster(state, npc_id)
         if npc is None:
             return _err(state, f"NPC {npc_id} not found.")
 
@@ -46,8 +92,8 @@ class NPCManager:
         npc_id,
         status: str,
     ):
-        """Set an NPC's status."""
-        npc = _find_npc(state, npc_id)
+        """Set an NPC's status. Searches the entire roster."""
+        npc = _find_npc_in_roster(state, npc_id)
         if npc is None:
             return _err(state, f"NPC {npc_id} not found.")
 
@@ -60,14 +106,13 @@ class NPCManager:
         state.updated_at = _now()
         return _ok(state, f"{npc.name} status → {status_result.value}.")
 
-    def remove_npc(self, state: GameState, npc_id):
-        """Remove an NPC from the current room."""
-        npc = _find_npc(state, npc_id)
-        if npc is None:
-            return _err(state, f"NPC {npc_id} not found.")
-        state.npcs = [n for n in state.npcs if n.npc_id != npc_id]
+    def remove_npc_group(self, state: GameState, group_id):
+        """Remove an NPC group from the roster."""
+        success = state.npc_roster.remove_group(group_id)
+        if not success:
+            return _err(state, f"NPC group {group_id} not found.")
         state.updated_at = _now()
-        return _ok(state, f"{npc.name} removed from room.")
+        return _ok(state, f"NPC group removed.")
 
     def update_npc(
         self,
@@ -80,8 +125,8 @@ class NPCManager:
         armor_class: int,
         notes:       str = "",
     ):
-        """Update an NPC's attributes."""
-        npc = _find_npc(state, npc_id)
+        """Update an NPC's attributes. Searches the entire roster."""
+        npc = _find_npc_in_roster(state, npc_id)
         if npc is None:
             return _err(state, f"NPC {npc_id} not found.")
 

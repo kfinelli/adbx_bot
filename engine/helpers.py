@@ -19,11 +19,12 @@ def _err(state: GameState, error: str):
     return EngineResult(ok=False, error=error, state=state)
 
 
-def _find_npc(state: GameState, npc_id: UUID):
-    """Find an NPC by ID in the current state."""
-    for n in state.npcs:
-        if n.npc_id == npc_id:
-            return n
+def _find_npc_in_roster(state: GameState, npc_id: UUID):
+    """Find an NPC by ID in the NPC roster (searches all groups)."""
+    for group in state.npc_roster.groups.values():
+        for npc in group.npcs:
+            if npc.npc_id == npc_id:
+                return npc
     return None
 
 
@@ -39,6 +40,8 @@ def _resolve_room(state: GameState, room_id: UUID | None) -> Room | None:
 def _snapshot(state: GameState) -> dict:
     """Produce a lightweight serializable snapshot of key state for history."""
     room = state.current_room
+    # Use npcs_in_current_room to get NPCs from the roster
+    npcs_in_room = state.npcs_in_current_room
     return {
         "turn_number":  state.turn_number,
         "mode":         state.mode.value,
@@ -55,6 +58,6 @@ def _snapshot(state: GameState) -> dict:
         },
         "npcs": [
             {"name": n.name, "hp_current": n.hp_current, "status": n.status}
-            for n in state.npcs
+            for n in npcs_in_room
         ],
     }

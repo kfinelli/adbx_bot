@@ -59,7 +59,7 @@ class RoomManager:
 
         state.current_room_id = room.room_id
         room.visited = True
-        state.npcs = []
+        # Note: We no longer clear npcs list directly; NPC roster manages persistence
         state.updated_at = _now()
         return _ok(state, f"Entered: {room.name}.")
 
@@ -69,8 +69,8 @@ class RoomManager:
 
         - Looks up the room by ID; fails if not found.
         - Marks the room visited.
-        - Clears state.npcs (session-transient; DM repopulates as needed).
         - Does NOT modify the room's features, exits, or any other authored data.
+        - NPCs in the roster remain in their rooms; use npc_roster for persistent NPCs.
         """
         if state.dungeon is None:
             return _err(state, "No dungeon loaded.")
@@ -79,7 +79,7 @@ class RoomManager:
             return _err(state, f"Room {room_id} not found in dungeon.")
         state.current_room_id = room_id
         room.visited = True
-        state.npcs = []
+        # Note: We no longer clear npcs list directly; NPC roster manages persistence
         state.updated_at = _now()
         return _ok(state, f"Entered: {room.name}.")
 
