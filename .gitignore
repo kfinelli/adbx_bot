@@ -1,1 +1,6 @@
-(empty)
+dungeon.db
+*__pycache__
+venv
+.env
+*.swp
+.aider*
