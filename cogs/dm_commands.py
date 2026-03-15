@@ -37,7 +37,6 @@ from discord.ext import commands
 from discord_tasks import dispatch_oracle_answer, dispatch_turn_resolved
 from engine import (
     add_exit,
-    add_npc,
     answer_oracle,
     close_turn,
     emote,
@@ -49,19 +48,12 @@ from engine import (
     resolve_turn,
     resume_session,
     say,
-    set_character_hp,
-    set_character_status,
     set_exit_state,
     set_feature_state,
     set_light_source,
-    set_npc_hp,
-    set_npc_status,
-    set_room,
     start_session,
 )
 from models import (
-    NPC,
-    CharacterStatus,
     DoorState,
     Room,
     RoomFeature,
@@ -224,296 +216,6 @@ class DMCog(commands.Cog):
                 open_turn(state)
 
             await repost_status(interaction.channel, state, narrative=label)
-
-    # ------------------------------------------------------------------
-    # /dm_resolve
-    # ------------------------------------------------------------------
-
-    @app_commands.command(
-        name="dm_resolve",
-        description="[DM] Resolve the current turn with a narrative and advance.",
-    )
-    @app_commands.describe(narrative="What happens as a result of the players' actions.")
-    async def dm_resolve(self, interaction: discord.Interaction, narrative: str):
-        await ack(interaction)
-        async with dm_command_context(interaction, self) as state:
-            if state is None:
-                return
-
-            if state.current_turn is None:
-                raise ValueError("No open turn to resolve.")
-
-            close_turn(state)
-            result = resolve_turn(state, narrative)
-            if not result.ok:
-                raise ValueError(result.error)
-
-            open_turn(state)
-            # Post narrative visibly, then fresh status below it
-            await dispatch_turn_resolved(interaction.channel, state, narrative)
-
-    # ------------------------------------------------------------------
-    # /dm_sethp
-    # ------------------------------------------------------------------
-
-    @app_commands.command(
-        name="dm_sethp",
-        description="[DM] Set HP for a character or NPC by name.",
-    )
-    @app_commands.describe(target_name="Name of the character or NPC", hp="New HP value")
-    async def dm_sethp(self, interaction: discord.Interaction, target_name: str, hp: int):
-        await ack(interaction)
-        async with dm_command_context(interaction, self) as state:
-            if state is None:
-                return
-
-            char = _find_char_by_name(state, target_name)
-            if char is not None:
-                result = set_character_hp(state, char.character_id, hp)
-            else:
-                npc = _find_npc_by_name(state, target_name)
-                if npc is None:
-                    raise ValueError(f"No character or NPC named '{target_name}'")
-                result = set_npc_hp(state, npc.npc_id, hp)
-
-            if not result.ok:
-                raise ValueError(result.error)
-
-            await update_status(interaction.channel, state)
-
-    # ------------------------------------------------------------------
-    # /dm_setstatus
-    # ------------------------------------------------------------------
-
-    @app_commands.command(
-        name="dm_setstatus",
-        description="[DM] Set a character's status and optional notes.",
-    )
-    @app_commands.describe(
-        character_name="Character name",
-        status="Status: active, dead, fled, petrified, paralyzed",
-        notes="Short note shown in status block (e.g. 'fatigued', 'poisoned')",
-    )
-    async def dm_setstatus(
-        self,
-        interaction: discord.Interaction,
-        character_name: str,
-        status: str,
-        notes: str = "",
-    ):
-        await ack(interaction)
-        async with dm_command_context(interaction, self) as state:
-            if state is None:
-                return
-
-            char = _find_char_by_name(state, character_name)
-            if char is None:
-                raise ValueError(f"No character named '{character_name}'")
-
-            try:
-                char_status = CharacterStatus(status.lower())
-            except ValueError as valerr:
-                valid = [s.value for s in CharacterStatus]
-                raise ValueError(f"Unknown status '{status}'. Valid: {valid}") from valerr
-
-            result = set_character_status(state, char.character_id, char_status, notes)
-            if not result.ok:
-                raise ValueError(result.error)
-
-            await update_status(interaction.channel, state)
-
-    # ------------------------------------------------------------------
-    # /dm_setroom
-    # ------------------------------------------------------------------
-
-    @app_commands.command(
-        name="dm_setroom",
-        description="[DM] Move the party into a room (new or existing).",
-    )
-    @app_commands.describe(
-        room_id="Existing room UUID to move into (from dungeon graph). Omit to create a new room.",
-        name="New room name — required when creating a new room",
-        description="New room description — required when creating a new room",
-        notes="DM-facing notes (new rooms only; ignored when entering existing room)",
-    )
-    async def dm_setroom(
-        self,
-        interaction: discord.Interaction,
-        room_id: str = "",
-        name: str = "",
-        description: str = "",
-        notes: str = "",
-    ):
-        await ack(interaction)
-        async with dm_command_context(interaction, self) as state:
-            if state is None:
-                return
-
-            if room_id:
-                # Navigate to an existing authored room
-                try:
-                    from uuid import UUID as _UUID
-                    rid = _UUID(room_id)
-                except ValueError as valerr:
-                    raise ValueError(f"Invalid room ID: {room_id!r}") from valerr
-                result = move_party_to_room(state, rid)
-            else:
-                # Create a new room on the fly
-                if not name.strip():
-                    raise ValueError("Provide either a room_id (existing room) or a name (new room).")
-                room = Room(name=name, description=description, notes=notes)
-                result = set_room(state, room)
-
-            if not result.ok:
-                raise ValueError(result.error)
-
-            await save_session_async(state)
-            await update_status(interaction.channel, state)
-
-    # ------------------------------------------------------------------
-    # /dm_addfeature
-    # ------------------------------------------------------------------
-
-    @app_commands.command(
-        name="dm_addfeature",
-        description="[DM] Add an interactive feature to the current room.",
-    )
-    @app_commands.describe(
-        name="Feature name (e.g. 'Brass chandelier')",
-        description="Player-visible description",
-        state_str="Initial state (default: intact)",
-    )
-    async def dm_addfeature(
-        self,
-        interaction: discord.Interaction,
-        name: str,
-        description: str,
-        state_str: str = "intact",
-    ):
-        await ack(interaction)
-        async with dm_command_context(interaction, self) as state:
-            if state is None:
-                return
-
-            room = state.current_room
-            if room is None:
-                raise ValueError("No current room. Use /dm_setroom first.")
-
-            room.features.append(RoomFeature(name=name, description=description, state=state_str))
-            await update_status(interaction.channel, state)
-
-    # ------------------------------------------------------------------
-    # /dm_setfeature
-    # ------------------------------------------------------------------
-
-    @app_commands.command(
-        name="dm_setfeature",
-        description="[DM] Update the state of a room feature.",
-    )
-    @app_commands.describe(
-        feature_name="Name of the feature to update",
-        new_state="New state (e.g. 'smashed', 'unlocked')",
-    )
-    async def dm_setfeature(
-        self,
-        interaction: discord.Interaction,
-        feature_name: str,
-        new_state: str,
-    ):
-        await ack(interaction)
-        async with dm_command_context(interaction, self) as state:
-            if state is None:
-                return
-
-            room = state.current_room
-            if room is None:
-                raise ValueError("No current room.")
-
-            feature = next(
-                (f for f in room.features if f.name.lower() == feature_name.lower()), None
-            )
-            if feature is None:
-                raise ValueError(f"No feature named '{feature_name}' in this room.")
-
-            result = set_feature_state(state, feature.feature_id, new_state)
-            if not result.ok:
-                raise ValueError(result.error)
-
-            await update_status(interaction.channel, state)
-
-    # ------------------------------------------------------------------
-    # /dm_addnpc
-    # ------------------------------------------------------------------
-
-    @app_commands.command(
-        name="dm_addnpc",
-        description="[DM] Add an NPC or monster to the current room.",
-    )
-    @app_commands.describe(
-        name="NPC name (e.g. 'Goblin A')",
-        hp="Hit points",
-        ac="Armor class (descending AC, e.g. 6)",
-        description="Brief description shown in status block",
-        damage_dice="Damage dice string (e.g. 1d6)",
-        notes="DM-facing notes (not shown to players)",
-    )
-    async def dm_addnpc(
-        self,
-        interaction: discord.Interaction,
-        name: str,
-        hp: int,
-        ac: int = 9,
-        description: str = "",
-        damage_dice: str = "1d6",
-        notes: str = "",
-    ):
-        await ack(interaction)
-        async with dm_command_context(interaction, self) as state:
-            if state is None:
-                return
-
-            npc = NPC(
-                name=name,
-                hp_max=hp,
-                hp_current=hp,
-                armor_class=ac,
-                description=description,
-                damage_dice=damage_dice,
-                notes=notes,
-            )
-            add_npc(state, npc)
-            await update_status(interaction.channel, state)
-
-    # ------------------------------------------------------------------
-    # /dm_setnpcstatus
-    # ------------------------------------------------------------------
-
-    @app_commands.command(
-        name="dm_setnpcstatus",
-        description="[DM] Update an NPC's status (e.g. dead, fled, charmed).",
-    )
-    @app_commands.describe(npc_name="Name of the NPC", status="New status string")
-    async def dm_setnpcstatus(
-        self,
-        interaction: discord.Interaction,
-        npc_name: str,
-        status: str,
-    ):
-        await ack(interaction)
-        async with dm_command_context(interaction, self) as state:
-            if state is None:
-                return
-
-            npc = _find_npc_by_name(state, npc_name)
-            if npc is None:
-                raise ValueError(f"No NPC named '{npc_name}'")
-
-            result = set_npc_status(state, npc.npc_id, status.lower())
-            if not result.ok:
-                raise ValueError(result.error)
-
-            await update_status(interaction.channel, state)
-
 
     # ------------------------------------------------------------------
     # /dm_addexit
@@ -749,21 +451,8 @@ class DMCog(commands.Cog):
 
             await save_session_async(state)
 
-# Lookup helpers
-# ---------------------------------------------------------------------------
-
-def _find_char_by_name(state, name: str):
-    for char in state.characters.values():
-        if char.name.lower() == name.lower():
-            return char
-    return None
-
-
-def _find_npc_by_name(state, name: str):
-    for npc in state.npcs:
-        if npc.name.lower() == name.lower():
-            return npc
-    return None
+# Lookup helpers are no longer needed since dm_sethp, dm_setstatus, dm_addnpc, and dm_setnpcstatus
+# have been removed (functionality moved to WebUI). These helpers were only used by those commands.
 
 
 async def setup(bot: commands.Bot):

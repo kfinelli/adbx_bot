@@ -588,6 +588,7 @@ __all__ = [
     "close_turn",
     "resolve_turn",
     "set_turn_number",
+    "unsubmit_turn",
     "set_light_source",
     "register_room",
     "set_room",
