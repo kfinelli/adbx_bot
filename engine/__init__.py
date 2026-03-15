@@ -37,7 +37,7 @@ from .dice import (
     roll_sum,
 )
 from .helpers import (
-    _find_npc,
+    _find_npc_in_roster,
     _resolve_room,
     _snapshot,
 )
@@ -111,7 +111,7 @@ def set_character_status(state: GameState, character_id, status, notes: str = ""
 def add_npc(state: GameState, npc):
     """Add an NPC."""
     nm = NPCManager()
-    return nm.add_npc(state, npc)
+    return nm.add_npc_to_room(state, npc)
 
 
 def set_npc_hp(state: GameState, npc_id, new_hp: int):
@@ -126,9 +126,20 @@ def set_npc_status(state: GameState, npc_id, status: str):
     return nm.set_npc_status(state, npc_id, status)
 
 
-def remove_npc(state: GameState, npc_id):
-    """Remove an NPC."""
+def remove_npc_group(state: GameState, npc_id):
+    """Remove an NPC by removing its group."""
     nm = NPCManager()
+    # Find the group containing this NPC
+    for group in state.npc_roster.groups.values():
+        for n in group.npcs:
+            if n.npc_id == npc_id:
+                return nm.remove_npc_group(state, group.group_id)
+    return _err(state, f"NPC {npc_id} not found.")
+
+def remove_npc(state: GameState, npc_id):
+    """Remove an NPC from its parent group."""
+    nm = NPCManager()
+    # Find the group containing this NPC
     return nm.remove_npc(state, npc_id)
 
 
@@ -522,8 +533,8 @@ def render_status(state: GameState) -> str:
 
     lines.append(sep)
 
-    # NPCs
-    active_npcs = [n for n in state.npcs if n.status != "dead"]
+    # NPCs - get from roster based on current room
+    active_npcs = [n for n in state.npcs_in_current_room if n.status != "dead"]
     if active_npcs:
         lines.append("NPCs:")
         for npc in active_npcs:
@@ -574,7 +585,8 @@ __all__ = [
     "OracleManager",
     "SessionManager",
     # Helper functions
-    "_find_npc",
+    "_find_npc_in_roster",
+    "_find_npcgroup_with_npc",
     "_resolve_room",
     "_snapshot",
     "_tick_light",

@@ -31,6 +31,9 @@ from models import (
     GameState,
     InventoryItem,
     LightSource,
+    NPCGroup,
+    NPCMovementLogic,
+    NPCRoster,
     Party,
     PlayerTurnSubmission,
     PreparedSpell,
@@ -206,6 +209,24 @@ def serialize_npc(n: NPC) -> dict:
     }
 
 
+def serialize_npc_group(g: NPCGroup) -> dict:
+    return {
+        "group_id":        _uuid(g.group_id),
+        "name":            g.name,
+        "npcs":            [serialize_npc(n) for n in g.npcs],
+        "possible_rooms":  [_uuid(r) for r in g.possible_rooms],
+        "movement_logic":  g.movement_logic.value,
+        "current_room_id": _uuid(g.current_room_id),
+        "patrol_route":    [_uuid(r) for r in g.patrol_route],
+    }
+
+
+def serialize_npc_roster(roster: NPCRoster) -> dict:
+    return {
+        "groups": {str(gid): serialize_npc_group(g) for gid, g in roster.groups.items()},
+    }
+
+
 def serialize_light_source(ls: LightSource) -> dict:
     return {
         "label":           ls.label,
@@ -258,7 +279,7 @@ def serialize_state(state: GameState) -> str:
         "current_room_id":      _uuid(state.current_room_id),
         "party":                serialize_party(state.party) if state.party else None,
         "characters":           {str(k): serialize_character(v) for k, v in state.characters.items()},
-        "npcs":                 [serialize_npc(n) for n in state.npcs],
+        "npc_roster":           serialize_npc_roster(state.npc_roster),
         "mode":                 _enum(state.mode),
         "turn_number":          state.turn_number,
         "current_turn":         serialize_turn_record(state.current_turn) if state.current_turn else None,
@@ -414,6 +435,27 @@ def deserialize_npc(d: dict) -> NPC:
     )
 
 
+def deserialize_npc_group(d: dict) -> NPCGroup:
+    return NPCGroup(
+        group_id=_load_uuid(d["group_id"]),
+        name=d["name"],
+        npcs=[deserialize_npc(n) for n in d["npcs"]],
+        possible_rooms=[_load_uuid(r) for r in d["possible_rooms"]],
+        movement_logic=NPCMovementLogic(d["movement_logic"]),
+        current_room_id=_load_uuid(d["current_room_id"]),
+        patrol_route=[_load_uuid(r) for r in d["patrol_route"]],
+    )
+
+
+def deserialize_npc_roster(d: dict) -> NPCRoster:
+    roster = NPCRoster()
+    groups_data = d.get("groups", {})
+    for gid_str, gdata in groups_data.items():
+        group = deserialize_npc_group(gdata)
+        roster.groups[UUID(gid_str)] = group
+    return roster
+
+
 def deserialize_light_source(d: dict) -> LightSource:
     return LightSource(
         label=d["label"],
@@ -461,6 +503,15 @@ def deserialize_turn_record(d: dict) -> TurnRecord:
 def deserialize_state(json_str: str) -> GameState:
     """Reconstruct a GameState from a JSON string."""
     d = json.loads(json_str)
+
+    # Deserialize NPC roster (new field)
+    npc_roster_data = d.get("npc_roster")
+    if npc_roster_data:
+        npc_roster = deserialize_npc_roster(npc_roster_data)
+    else:
+        # Backward compatibility: if no npc_roster, create empty one
+        npc_roster = NPCRoster()
+
     return GameState(
         session_id=_load_uuid(d["session_id"]),
         dungeon=deserialize_dungeon(d["dungeon"]) if d["dungeon"] else None,
@@ -470,7 +521,7 @@ def deserialize_state(json_str: str) -> GameState:
             UUID(k): deserialize_character(v)
             for k, v in d["characters"].items()
         },
-        npcs=[deserialize_npc(n) for n in d["npcs"]],
+        npc_roster=npc_roster,
         mode=SessionMode(d["mode"]),
         turn_number=d["turn_number"],
         current_turn=deserialize_turn_record(d["current_turn"]) if d["current_turn"] else None,

@@ -111,11 +111,13 @@ class TestStateRoundTrip:
         assert restored.turn_history[0].resolution == "First resolution."
 
     def test_npc_roundtrips(self, bare_state):
+        from models import NPCGroup
         npc = NPC(name="Goblin", hp_max=4, hp_current=2, armor_class=7)
-        bare_state.npcs.append(npc)
+        group = NPCGroup(npcs=[npc], current_room_id=bare_state.current_room_id)
+        bare_state.npc_roster.add_group(group)
         restored = _roundtrip(bare_state)
-        assert len(restored.npcs) == 1
-        r = restored.npcs[0]
+        assert len(restored.npc_roster.groups) == 1
+        r = list(restored.npc_roster.groups.values())[0].npcs[0]
         assert r.name == "Goblin"
         assert r.hp_current == 2
         assert r.armor_class == 7

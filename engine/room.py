@@ -49,7 +49,7 @@ class RoomManager:
     def set_room(self, state: GameState, room: Room):
         """
         DM creates a new room on the fly and immediately moves the party in.
-        Adds it to the dungeon graph, sets it as current, and clears NPCs.
+        Adds it to the dungeon graph and sets it as current.
         Used by the /dm_setroom slash command (no room_id) path.
         For web UI room creation, use register_room() instead.
         """
@@ -59,7 +59,6 @@ class RoomManager:
 
         state.current_room_id = room.room_id
         room.visited = True
-        state.npcs = []
         state.updated_at = _now()
         return _ok(state, f"Entered: {room.name}.")
 
@@ -69,8 +68,8 @@ class RoomManager:
 
         - Looks up the room by ID; fails if not found.
         - Marks the room visited.
-        - Clears state.npcs (session-transient; DM repopulates as needed).
         - Does NOT modify the room's features, exits, or any other authored data.
+        - NPCs in the roster remain in their rooms; use npc_roster for persistent NPCs.
         """
         if state.dungeon is None:
             return _err(state, "No dungeon loaded.")
@@ -79,7 +78,6 @@ class RoomManager:
             return _err(state, f"Room {room_id} not found in dungeon.")
         state.current_room_id = room_id
         room.visited = True
-        state.npcs = []
         state.updated_at = _now()
         return _ok(state, f"Entered: {room.name}.")
 

@@ -879,8 +879,19 @@ def npc_panel(
         channel_id = state.platform_channel_id
     base_url = f"/session/{channel_id}?view_room={view_room_id}"
 
+    # Use npcs_in_current_room to get NPCs from the roster for the current room
+    npcs_to_show = state.npcs_in_current_room if view_room_id == "" else []
+    # If viewing a specific room, get NPCs from that room in the roster
+    if view_room_id:
+        from uuid import UUID
+        try:
+            room_uuid = UUID(view_room_id)
+            npcs_to_show = state.npc_roster.get_npcs_in_room(room_uuid)
+        except ValueError:
+            npcs_to_show = []
+
     rows = ""
-    for npc in state.npcs:
+    for npc in npcs_to_show:
         nid = str(npc.npc_id)
         npc_base = f"{base_url}&edit={nid}"
         if edit_id == nid:
