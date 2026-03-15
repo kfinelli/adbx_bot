@@ -28,6 +28,15 @@ def _find_npc_in_roster(state: GameState, npc_id: UUID):
     return None
 
 
+def _find_npcgroup_with_npc(state: GameState, npc_id: UUID):
+    """Find an NPC group to which an NPC with an ID belongs (searches all groups)."""
+    for group in state.npc_roster.groups.values():
+        for npc in group.npcs:
+            if npc.npc_id == npc_id:
+                return group 
+    return None
+
+
 def _resolve_room(state: GameState, room_id: UUID | None) -> Room | None:
     """Return the room for room_id if given, else the party's current room."""
     if room_id is not None:

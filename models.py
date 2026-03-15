@@ -266,6 +266,14 @@ class NPCGroup:
     current_room_id: UUID | None    = None
     patrol_route: list[UUID]        = field(default_factory=list)
 
+    def remove_npc(self, npc_id: UUID) -> bool:
+        """Remove an NPC from the group. Returns True if removed, False if not found."""
+        for i in range(len(self.npcs)):
+            if self.npcs[i].npc_id == npc_id:
+                del self.npcs[i]
+                return True
+        return False
+
 
 @dataclass
 class NPCRoster:

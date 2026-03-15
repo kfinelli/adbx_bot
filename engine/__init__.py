@@ -38,6 +38,7 @@ from .dice import (
 )
 from .helpers import (
     _find_npc_in_roster,
+    _find_npcgroup_with_npc,
     _resolve_room,
     _snapshot,
 )
@@ -126,8 +127,8 @@ def set_npc_status(state: GameState, npc_id, status: str):
     return nm.set_npc_status(state, npc_id, status)
 
 
-def remove_npc(state: GameState, npc_id):
-    """Remove an NPC by removing its group."""
+def remove_npc_group(state: GameState, npc_id):
+    """Remove an NPC group by finding the group containing the specified NPC."""
     nm = NPCManager()
     # Find the group containing this NPC
     for group in state.npc_roster.groups.values():
@@ -136,6 +137,12 @@ def remove_npc(state: GameState, npc_id):
                 return nm.remove_npc_group(state, group.group_id)
     return _err(state, f"NPC {npc_id} not found.")
 
+
+def remove_npc(state: GameState, npc_id):
+    """Remove an NPC from its parent group."""
+    nm = NPCManager()
+    # Find the group containing this NPC
+    return nm.remove_npc(state, npc_id)
 
 
 def update_npc(
