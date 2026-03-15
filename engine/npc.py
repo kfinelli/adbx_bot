@@ -5,7 +5,7 @@ NPC management for the dungeon crawler engine.
 from models import NPC, NPCGroup, GameState, NPCMovementLogic
 from validation import validate_hp_value, validate_non_empty_string
 
-from .helpers import _err, _find_npc_in_roster, _ok
+from .helpers import _err, _find_npc_in_roster, _find_npcgroup_with_npc, _ok
 
 
 class NPCManager:
@@ -122,6 +122,17 @@ class NPCManager:
             return _err(state, f"NPC group {group_id} not found.")
         state.updated_at = _now()
         return _ok(state, f"NPC group removed.")
+
+    def remove_npc(self, state: GameState, npc_id):
+        """Remove an NPC from its group (and the roster)."""
+        group = _find_npcgroup_with_npc(state, npc_id)
+        if group is None:
+            return _err(state, f"NPC {npc_id} not found.")
+        success = group.remove_npc(npc_id)
+        if not success:
+            return _err(state, f"NPC {npc_id} not found.")
+        state.updated_at = _now()
+        return _ok(state, f"NPC removed.")
 
     def update_npc(
         self,

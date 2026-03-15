@@ -280,7 +280,6 @@ def serialize_state(state: GameState) -> str:
         "party":                serialize_party(state.party) if state.party else None,
         "characters":           {str(k): serialize_character(v) for k, v in state.characters.items()},
         "npc_roster":           serialize_npc_roster(state.npc_roster),
-        "npcs":                 [serialize_npc(n) for n in state.npcs],  # deprecated, kept for backward compatibility
         "mode":                 _enum(state.mode),
         "turn_number":          state.turn_number,
         "current_turn":         serialize_turn_record(state.current_turn) if state.current_turn else None,
@@ -523,7 +522,6 @@ def deserialize_state(json_str: str) -> GameState:
             for k, v in d["characters"].items()
         },
         npc_roster=npc_roster,
-        npcs=[deserialize_npc(n) for n in d.get("npcs", [])],  # deprecated, kept for backward compatibility
         mode=SessionMode(d["mode"]),
         turn_number=d["turn_number"],
         current_turn=deserialize_turn_record(d["current_turn"]) if d["current_turn"] else None,
