@@ -29,7 +29,8 @@ class NPCManager:
         possible_rooms: list | None = None,
     ):
         """
-        Add a single NPC to a room by creating a new group for it.
+        Add a single NPC to a room. If an NPC group already exists in the room,
+        adds the NPC to the first existing group. Otherwise creates a new group.
         
         Args:
             state: Current game state
@@ -41,16 +42,26 @@ class NPCManager:
         """
         target_room = room_id if room_id is not None else state.current_room_id
         
-        group = NPCGroup(
-            name=group_name,
-            npcs=[npc],
-            movement_logic=movement_logic,
-            current_room_id=target_room,
-            possible_rooms=possible_rooms or [],
-        )
-        state.npc_roster.add_group(group)
-        state.updated_at = _now()
-        return _ok(state, f"{npc.name} appears.")
+        # Check if there's an existing NPC group in the target room
+        existing_group = state.npc_roster.get_group_in_room(target_room)
+        
+        if existing_group:
+            # Add NPC to the existing group
+            existing_group.npcs.append(npc)
+            state.updated_at = _now()
+            return _ok(state, f"{npc.name} appears.")
+        else:
+            # Create a new group for this NPC
+            group = NPCGroup(
+                name=group_name,
+                npcs=[npc],
+                movement_logic=movement_logic,
+                current_room_id=target_room,
+                possible_rooms=possible_rooms or [],
+            )
+            state.npc_roster.add_group(group)
+            state.updated_at = _now()
+            return _ok(state, f"{npc.name} appears.")
 
     def move_npc_group_to_room(self, state: GameState, group_id, room_id):
         """Move an NPC group to a new room."""

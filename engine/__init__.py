@@ -528,8 +528,8 @@ def render_status(state: GameState) -> str:
 
     lines.append(sep)
 
-    # NPCs
-    active_npcs = [n for n in state.npcs if n.status != "dead"]
+    # NPCs - get from roster based on current room
+    active_npcs = [n for n in state.npcs_in_current_room if n.status != "dead"]
     if active_npcs:
         lines.append("NPCs:")
         for npc in active_npcs:

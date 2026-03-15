@@ -300,6 +300,11 @@ class NPCRoster:
         """Get all NPC groups currently in a specific room."""
         return [g for g in self.groups.values() if g.current_room_id == room_id]
     
+    def get_group_in_room(self, room_id: UUID) -> NPCGroup | None:
+        """Get the first NPC group found in a specific room, or None if no groups exist there."""
+        groups = self.get_groups_in_room(room_id)
+        return groups[0] if groups else None
+    
     def get_npcs_in_room(self, room_id: UUID) -> list[NPC]:
         """Get all NPCs from groups currently in a specific room."""
         npcs = []
