@@ -40,8 +40,6 @@ class NPCManager:
             possible_rooms: List of room IDs where this group may be found
         """
         target_room = room_id if room_id is not None else state.current_room_id
-        if target_room is None:
-            return _err(state, "No room specified and no current room set.")
         
         group = NPCGroup(
             name=group_name,
