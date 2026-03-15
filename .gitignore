@@ -1,6 +1,39 @@
-dungeon.db
-*__pycache__
-venv
+```
+# Compiled Python files
+*.pyc
+__pycache__/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Logs
+*.log
+
+# Environment files
 .env
+.env.local
+*.env.*
+
+# Editor/IDE files
+.vscode/
+.idea/
 *.swp
-.aider*
+*.swo
+*.tmp
+
+# Coverage reports
+.coverage
+coverage/
+htmlcov/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Dependencies cache
+.mypy_cache/
+.pytest_cache/
+```

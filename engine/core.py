@@ -168,3 +168,61 @@ class TurnManager:
             state.current_turn.turn_number = turn_number
         state.updated_at = _now()
         return _ok(state, f"Turn number set to {turn_number}.")
+
+    def unsubmit_turn(
+        self,
+        state: GameState,
+        character_id,
+    ):
+        """
+        Mark a player's latest turn submission as not latest (un-submit).
+        Used when a player's action is invalid and needs to be re-done.
+        Returns the character name for notification purposes.
+        """
+        if state.current_turn is None:
+            return _err(state, "No current turn.")
+        if state.current_turn.status != TurnStatus.OPEN:
+            return _err(state, "Current turn is not open; cannot un-submit.")
+
+        char = state.characters.get(character_id)
+        if char is None:
+            return _err(state, f"Character {character_id} not found.")
+
+        # Find and mark the latest submission from this character as not latest
+        found = False
+        for sub in state.current_turn.submissions:
+            if sub.character_id == character_id and sub.is_latest:
+                sub.is_latest = False
+                found = True
+                break
+
+        if not found:
+            return _err(state, f"{char.name} has not submitted a turn.")
+
+        state.updated_at = _now()
+        return _ok(state, f"{char.name}'s turn submission has been sent back for revision.")
+
+
+# Module-level convenience functions
+def open_turn(*args, **kwargs):
+    return TurnManager().open_turn(*args, **kwargs)
+
+
+def submit_turn(*args, **kwargs):
+    return TurnManager().submit_turn(*args, **kwargs)
+
+
+def close_turn(*args, **kwargs):
+    return TurnManager().close_turn(*args, **kwargs)
+
+
+def resolve_turn(*args, **kwargs):
+    return TurnManager().resolve_turn(*args, **kwargs)
+
+
+def set_turn_number(*args, **kwargs):
+    return TurnManager().set_turn_number(*args, **kwargs)
+
+
+def unsubmit_turn(*args, **kwargs):
+    return TurnManager().unsubmit_turn(*args, **kwargs)

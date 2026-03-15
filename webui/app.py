@@ -44,6 +44,7 @@ from engine import (
     set_npc_status,
     set_turn_number,
     start_session,
+    unsubmit_turn,
     update_exit,
     update_feature,
     update_npc,
@@ -226,6 +227,35 @@ async def route_resume(channel_id: str):
     return _respond(channel_id, flash="Session resumed.")
 
 
+@app.post("/session/{channel_id}/turn/{char_id}/unsubmit", response_class=HTMLResponse)
+async def route_unsubmit_turn(
+    channel_id: str,
+    char_id: str,
+):
+    """DM rejects a player's turn submission, sending it back for revision."""
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    result = unsubmit_turn(state, UUID(char_id))
+    if not result.ok:
+        return _respond(channel_id, error=result.error)
+    await save_session_async(state)
+    # Notify the player via Discord DM
+    if _bot:
+        char = state.characters.get(UUID(char_id))
+        if char and char.owner_id:
+            try:
+                user = await _bot.fetch_user(int(char.owner_id))
+                await user.send(
+                    f"**Turn Submission Returned**\n\n"
+                    f"The DM has returned your turn submission for **{char.name}**. "
+                    f"Please review and re-submit your action for the current turn."
+                )
+            except Exception:
+                pass  # Could not DM user (privacy settings, etc.)
+    return _respond(channel_id, flash=result.message)
+
+
 # ---------------------------------------------------------------------------
 # Character routes
 # ---------------------------------------------------------------------------
@@ -277,6 +307,40 @@ async def route_setleader(channel_id: str, char_id: str):
     await save_session_async(state)
     char = state.characters[cid]
     return _respond(channel_id, flash=f"{char.name} is now party leader.")
+
+
+# ---------------------------------------------------------------------------
+# Party routes (gold, XP)
+# ---------------------------------------------------------------------------
+
+@app.post("/session/{channel_id}/party/addgold", response_class=HTMLResponse)
+async def route_party_addgold(
+    channel_id: str,
+    amount: Annotated[int, Form()],
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    if state.party is None:
+        return _respond(channel_id, error="No party.")
+    state.party.gold += amount
+    await save_session_async(state)
+    return _respond(channel_id, flash=f"Added {amount} gold to party.")
+
+
+@app.post("/session/{channel_id}/party/addxp", response_class=HTMLResponse)
+async def route_party_addxp(
+    channel_id: str,
+    amount: Annotated[int, Form()],
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    if state.party is None:
+        return _respond(channel_id, error="No party.")
+    state.party.experience += amount
+    await save_session_async(state)
+    return _respond(channel_id, flash=f"Added {amount} XP to party.")
 
 
 # ---------------------------------------------------------------------------

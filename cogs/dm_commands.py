@@ -5,15 +5,24 @@ All responses are ephemeral (errors only) or silent.
 The channel stays clean — feedback comes from the status block updating.
 
 Commands:
-  /dm_resolve     — write turn resolution narrative, advance turn
-  /dm_sethp       — set HP for a character or NPC (by name)
-  /dm_setstatus   — set a character's status and notes
-  /dm_setroom     — set the current room name and description
-  /dm_addfeature  — add an interactive feature to the current room
-  /dm_setfeature  — update a feature's state string
-  /dm_addnpc      — add an NPC to the current room
-  /dm_setnpcstatus — update an NPC's status (e.g. dead, fled)
-  /dm_setlight    — set the active light source
+  /dm_reset       — end the session permanently
+  /dm_newsession  — create a new session in this channel
+  /embark         — begin the session (move from lobby to dungeon)
+  /dm_strife      — toggle combat rounds mode
+  /dm_addexit     — add an exit to the current room
+  /dm_setexitstate — set door state on an exit
+  /dm_setturnlength — set default turn length
+  /dm_settimer    — override current turn timer
+  /dm_hold        — put session on hold
+  /dm_resume      — resume a held session
+  /dm_say         — post a message as a speaker
+  /dm_emote       — post an emote message
+  /dm_oracle      — answer an oracle question
+
+Note: Many former /dm_* commands have been removed as their functionality
+is now available in the WebUI: /dm_resolve, /dm_sethp, /dm_setstatus,
+/dm_setroom, /dm_addfeature, /dm_setfeature, /dm_addnpc, /dm_setnpcstatus,
+/dm_setlight.
 """
 
 from __future__ import annotations
@@ -500,36 +509,6 @@ class DMCog(commands.Cog):
                 raise ValueError(f"No NPC named '{npc_name}'")
 
             result = set_npc_status(state, npc.npc_id, status.lower())
-            if not result.ok:
-                raise ValueError(result.error)
-
-            await update_status(interaction.channel, state)
-
-    # ------------------------------------------------------------------
-    # /dm_setlight
-    # ------------------------------------------------------------------
-
-    @app_commands.command(
-        name="dm_setlight",
-        description="[DM] Set the active light source.",
-    )
-    @app_commands.describe(
-        label="Description of the light source (e.g. 'Torch', 'Lantern')",
-        turns="Remaining turns (omit or set -1 for permanent/magical)",
-    )
-    async def dm_setlight(
-        self,
-        interaction: discord.Interaction,
-        label: str,
-        turns: int = -1,
-    ):
-        await ack(interaction)
-        async with dm_command_context(interaction, self) as state:
-            if state is None:
-                return
-
-            turns_remaining = None if turns < 0 else turns
-            result = set_light_source(state, label, turns_remaining)
             if not result.ok:
                 raise ValueError(result.error)
 
