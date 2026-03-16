@@ -90,10 +90,10 @@ class SessionManager:
         session begins so players arrive into a known map. Replaces any
         previously loaded dungeon wholesale.
 
-        If the dungeon has an entrance_id, the current room is set to that
-        room so the DM can immediately see it in the web UI status block. The room
-        is NOT marked visited — that happens when the party actually enters
-        via /embark + /dm_setroom or move_party_to_room.
+        If the dungeon has an entrance_id, the current room is set to that room
+        so the DM can immediately see it in the web UI and status block. The
+        room is NOT marked visited — that happens when the party actually
+        enters via /embark + /dm_setroom or move_party_to_room.
 
         Args:
             state: Current game state

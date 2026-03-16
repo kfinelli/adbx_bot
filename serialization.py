@@ -543,14 +543,16 @@ def deserialize_state(json_str: str) -> GameState:
 # Standalone dungeon file (import / export)
 # ---------------------------------------------------------------------------
 # A dungeon file is a self-contained JSON document representing only the
-# Dungeon object — no session state, no characters, no party. This is the
-# format used for the web UI importer/exporter and for sharing dungeons.
+# Dungeon object and NPC roster — no session state, no characters, no party.
+# This is the format used for the web UI importer/exporter and for sharing
+# dungeons.
 #
 # Schema:
 #   {
 #     "format":  "adbx-dungeon",   // sentinel to catch wrong file types
-#     "version": 1,
+#     "version": 2,
 #     "dungeon": { ...serialize_dungeon() output... }
+#     "npc_roster": { ... serialize_npc_roster() output ... }
 #   }
 
 _DUNGEON_FILE_FORMAT  = "adbx-dungeon"
