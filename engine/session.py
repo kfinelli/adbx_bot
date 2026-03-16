@@ -82,22 +82,30 @@ class SessionManager:
         state.updated_at = _now()
         return _ok(state, "Returning to exploration.")
 
-    def import_dungeon(self, state: GameState, dungeon):
+    def import_dungeon(self, state: GameState, dungeon, npc_roster=None):
         """
-        Load a pre-authored dungeon into the session.
+        Load a pre-authored dungeon and optionally an NPC roster into the session.
 
         Only permitted in PRE_START — the dungeon must be set before the
         session begins so players arrive into a known map. Replaces any
         previously loaded dungeon wholesale.
 
         If the dungeon has an entrance_id, the current room is set to that
-        room so the DM can immediately see it in the status block. The room
+        room so the DM can immediately see it in the web UI status block. The room
         is NOT marked visited — that happens when the party actually enters
         via /embark + /dm_setroom or move_party_to_room.
+
+        Args:
+            state: Current game state
+            dungeon: The Dungeon object to load
+            npc_roster: Optional NPCRoster to load (replaces existing roster if provided)
         """
         if state.mode != SessionMode.PRE_START:
             return _err(state, "Dungeons can only be imported before the session starts.")
         state.dungeon = dungeon
+        # Replace the NPC roster if provided
+        if npc_roster is not None:
+            state.npc_roster = npc_roster
         # Point current_room_id at the entrance so the web UI has something
         # to show, but leave visited=False until the party actually enters.
         if dungeon.entrance_id and dungeon.entrance_id in dungeon.rooms:

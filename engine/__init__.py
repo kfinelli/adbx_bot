@@ -355,10 +355,10 @@ def exit_rounds(state: GameState):
     return sm.exit_rounds(state)
 
 
-def import_dungeon(state: GameState, dungeon):
-    """Import a dungeon."""
+def import_dungeon(state: GameState, dungeon, npc_roster=None):
+    """Import a dungeon and optionally an NPC roster."""
     sm = SessionManager()
-    return sm.import_dungeon(state, dungeon)
+    return sm.import_dungeon(state, dungeon, npc_roster)
 
 
 def abscond(

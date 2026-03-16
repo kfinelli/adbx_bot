@@ -576,10 +576,10 @@ async def route_dungeon_import(channel_id: str, file: UploadFile = File(...)):
         return HTMLResponse("Session not found.", status_code=404)
     raw = await file.read()
     try:
-        dungeon = deserialize_dungeon_file(raw.decode("utf-8"))
+        dungeon, npc_roster = deserialize_dungeon_file(raw.decode("utf-8"))
     except (ValueError, UnicodeDecodeError) as e:
         return _respond(channel_id, error=f"Import failed: {e}")
-    result = import_dungeon(state, dungeon)
+    result = import_dungeon(state, dungeon, npc_roster)
     if not result.ok:
         return _respond(channel_id, error=result.error)
     await save_session_async(state)
@@ -593,7 +593,7 @@ async def route_dungeon_export(channel_id: str):
         return HTMLResponse("Session not found.", status_code=404)
     if state.dungeon is None:
         return HTMLResponse("No dungeon loaded.", status_code=404)
-    json_str = serialize_dungeon_file(state.dungeon)
+    json_str = serialize_dungeon_file(state.dungeon, state.npc_roster)
     safe_name = state.dungeon.name.replace(" ", "_").lower()
     return Response(
         content=json_str,
