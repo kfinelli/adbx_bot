@@ -24,6 +24,7 @@ from models import (
     Dungeon,
     Exit,
     GameState,
+    NPCRoster,
     Room,
     RoomFeature,
     SessionMode,
@@ -199,39 +200,44 @@ class TestDungeonFileFormat:
 
     def test_serialize_produces_valid_json(self):
         d = self._make_dungeon()
-        json_str = serialize_dungeon_file(d)
+        roster = NPCRoster()
+        json_str = serialize_dungeon_file(d, roster)
         doc = json.loads(json_str)
         assert doc["format"] == "adbx-dungeon"
-        assert doc["version"] == 1
+        assert doc["version"] == 2
         assert "dungeon" in doc
+        assert "npc_roster" in doc
 
     def test_roundtrip_preserves_dungeon(self):
         d = self._make_dungeon()
-        restored = deserialize_dungeon_file(serialize_dungeon_file(d))
-        assert restored.name == "Keep of Sorrows"
-        assert len(restored.rooms) == 1
-        room = list(restored.rooms.values())[0]
+        roster = NPCRoster()
+        restored_dungeon, restored_roster = deserialize_dungeon_file(serialize_dungeon_file(d, roster))
+        assert restored_dungeon.name == "Keep of Sorrows"
+        assert len(restored_dungeon.rooms) == 1
+        room = list(restored_dungeon.rooms.values())[0]
         assert room.name == "Entry Hall"
 
     def test_entrance_id_preserved(self):
         d = self._make_dungeon()
-        restored = deserialize_dungeon_file(serialize_dungeon_file(d))
-        assert restored.entrance_id == d.entrance_id
+        roster = NPCRoster()
+        restored_dungeon, _ = deserialize_dungeon_file(serialize_dungeon_file(d, roster))
+        assert restored_dungeon.entrance_id == d.entrance_id
 
     def test_wrong_format_sentinel_rejected(self):
-        doc = {"format": "wrong", "version": 1, "dungeon": {}}
+        doc = {"format": "wrong", "version": 2, "dungeon": {}, "npc_roster": {"groups": {}}}
         with pytest.raises(ValueError, match="format"):
             deserialize_dungeon_file(json.dumps(doc))
 
     def test_wrong_version_rejected(self):
         d = self._make_dungeon()
-        doc = json.loads(serialize_dungeon_file(d))
+        roster = NPCRoster()
+        doc = json.loads(serialize_dungeon_file(d, roster))
         doc["version"] = 99
         with pytest.raises(ValueError, match="version"):
             deserialize_dungeon_file(json.dumps(doc))
 
     def test_missing_dungeon_key_rejected(self):
-        doc = {"format": "adbx-dungeon", "version": 1}
+        doc = {"format": "adbx-dungeon", "version": 2}
         with pytest.raises(ValueError, match="Missing"):
             deserialize_dungeon_file(json.dumps(doc))
 
@@ -241,8 +247,9 @@ class TestDungeonFileFormat:
 
     def test_multi_room_dungeon_roundtrips(self):
         d = Dungeon(name="Labyrinth")
+        roster = NPCRoster()
         for i in range(5):
             room = Room(name=f"Room {i}", description=f"Desc {i}.")
             d.rooms[room.room_id] = room
-        restored = deserialize_dungeon_file(serialize_dungeon_file(d))
-        assert len(restored.rooms) == 5
+        restored_dungeon, _ = deserialize_dungeon_file(serialize_dungeon_file(d, roster))
+        assert len(restored_dungeon.rooms) == 5

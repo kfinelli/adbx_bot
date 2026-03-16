@@ -543,33 +543,36 @@ def deserialize_state(json_str: str) -> GameState:
 # Standalone dungeon file (import / export)
 # ---------------------------------------------------------------------------
 # A dungeon file is a self-contained JSON document representing only the
-# Dungeon object — no session state, no characters, no party. This is the
-# format used for the web UI importer/exporter and for sharing dungeons.
+# Dungeon object and NPC roster — no session state, no characters, no party.
+# This is the format used for the web UI importer/exporter and for sharing
+# dungeons.
 #
 # Schema:
 #   {
 #     "format":  "adbx-dungeon",   // sentinel to catch wrong file types
-#     "version": 1,
+#     "version": 2,
 #     "dungeon": { ...serialize_dungeon() output... }
+#     "npc_roster": { ... serialize_npc_roster() output ... }
 #   }
 
 _DUNGEON_FILE_FORMAT  = "adbx-dungeon"
-_DUNGEON_FILE_VERSION = 1
+_DUNGEON_FILE_VERSION = 2
 
 
-def serialize_dungeon_file(dungeon: Dungeon) -> str:
+def serialize_dungeon_file(dungeon: Dungeon, npc_roster: NPCRoster | None = None) -> str:
     """Produce a pretty-printed JSON string suitable for download."""
     doc = {
         "format":  _DUNGEON_FILE_FORMAT,
         "version": _DUNGEON_FILE_VERSION,
         "dungeon": serialize_dungeon(dungeon),
+        "npc_roster": serialize_npc_roster(npc_roster) if npc_roster is not None else serialize_npc_roster(NPCRoster()),
     }
     return json.dumps(doc, indent=2)
 
 
-def deserialize_dungeon_file(json_str: str) -> Dungeon:
+def deserialize_dungeon_file(json_str: str) -> tuple[Dungeon, NPCRoster]:
     """
-    Parse a dungeon file JSON string and return a Dungeon.
+    Parse a dungeon file JSON string and return a (Dungeon, NPCRoster) tuple.
     Raises ValueError with a human-readable message on any problem.
     """
     try:
@@ -592,6 +595,18 @@ def deserialize_dungeon_file(json_str: str) -> Dungeon:
         raise ValueError("Missing 'dungeon' key in dungeon file.")
 
     try:
-        return deserialize_dungeon(doc["dungeon"])
+        dungeon = deserialize_dungeon(doc["dungeon"])
     except (KeyError, TypeError, ValueError) as e:
         raise ValueError(f"Dungeon data is malformed: {e}") from e
+
+    # Deserialize NPC roster (may be missing in older files, but we require v2)
+    npc_roster_data = doc.get("npc_roster")
+    if npc_roster_data is None:
+        npc_roster = NPCRoster()
+    else:
+        try:
+            npc_roster = deserialize_npc_roster(npc_roster_data)
+        except (KeyError, TypeError, ValueError) as e:
+            raise ValueError(f"NPC roster data is malformed: {e}") from e
+
+    return dungeon, npc_roster
