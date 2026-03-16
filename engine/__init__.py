@@ -173,9 +173,9 @@ def submit_turn(state: GameState, character_id, action_text: str):
     return tm.submit_turn(state, character_id, action_text)
 
 def unsubmit_turn(state: GameState, character_id,):
-    """Submit a turn."""
+    """Un-submit a turn."""
     tm = TurnManager()
-    return tm.submit_turn(state, character_id)
+    return tm.unsubmit_turn(state, character_id)
 
 def close_turn(state: GameState):
     """Close a turn."""
