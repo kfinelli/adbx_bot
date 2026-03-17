@@ -8,7 +8,10 @@ a `name` attribute matching what the server expects.
 
 from __future__ import annotations
 
+from dataclasses import fields
+
 from models import (
+    Character,
     CharacterStatus,
     DoorState,
     GameState,
@@ -80,7 +83,7 @@ def page(title: str, body: str) -> str:
       font-size: 0.9rem;
     }}
     textarea {{ resize: vertical; min-height: 60px; }}
-    button, .btn {{
+    button, a.btn {{
       background: #0f3460;
       border: 1px solid #1a4a8a;
       color: #e0e0e0;
@@ -90,7 +93,7 @@ def page(title: str, body: str) -> str:
       font-size: 0.85rem;
       margin-top: 6px;
     }}
-    button:hover, .btn:hover {{ background: #1a4a8a; }}
+    button:hover, .btn:hover a.bt:hover {{ background: #1a4a8a; }}
     .btn-danger {{ border-color: #8a1a1a; }}
     .btn-danger:hover {{ background: #8a1a1a; }}
     .btn-success {{ border-color: #1a8a4a; }}
@@ -155,11 +158,12 @@ def _sidebar(channel_id: str | None, sessions: list[tuple[str, str]]) -> str:
         links += f'<a href="/session/{cid}" {active}>{name}</a>\n'
     return f"""
 <div class="sidebar">
-  <h1 style="font-size:1.1rem; margin-bottom:1.5rem;">&#127922; DM Panel</h1>
+  <h1 style="font-size:1.1rem; margin-bottom:1.5rem;">DM Panel</h1>
   <h2>Sessions</h2>
   {links or '<p class="muted">No active sessions</p>'}
   <hr class="divider" style="margin:1rem 0">
-  <a href="/archive">&#128196; Archive</a>
+  <a href="/archive">Archive</a>
+  <a href="/characters">Character Sheets</a>
 </div>"""
 
 
@@ -1056,3 +1060,139 @@ def archive_page(
   </div>
 </div>"""
     return page("Archive — DM Panel", body)
+
+# ---------------------------------------------------------------------------
+# Character browser page
+# ---------------------------------------------------------------------------
+
+def character_page(
+        sessions: list[tuple[str, str]],
+        entries: dict,
+        flash: str = "",
+        error: str = "",
+        view_char_id: str = "",
+        ) -> str:
+    flash_html = f'<div class="flash">{flash}</div>' if flash else ""
+    error_html = f'<div class="error">{error}</div>' if error else ""
+    char_sheet_html =""
+
+    if not entries:
+        rows_html = '<p class="muted">No characters available.</p>'
+    else:
+        rows = ""
+        for e in entries.values():
+            cid       = e.character_id
+            cname     = e.name
+            cclass    = e.character_class.value
+            clevel    = e.level
+            status    = e.status.value
+            created   = e.created_at.strftime("%Y/%m/%d")
+            rows += f"""
+<tr>
+  <td>
+    <strong>{cname}</strong><br>
+    <span class="muted" style="font-size:0.75rem">{cid}</span>
+  </td>
+  <td class="muted">{cclass}</td>
+  <td style="text-align:center">{clevel}</td>
+  <td class="muted">{status}</td>
+  <td class="muted">{created}</td>
+  <td style="white-space:nowrap;min-width:220px">
+    <a href="/characters?view_char={cid}" class="btn btn-sm btn-success">Show</a>
+  </td>
+</tr>"""
+
+            if str(e.character_id) == view_char_id:
+                char_sheet_html = f"""
+    <div class="card">
+      {character_sheet_panel(e)}
+    </div>"""
+
+        rows_html = f"""
+<table>
+  <tr>
+    <th>Name</th>
+    <th>Class</th>
+    <th>Level</th>
+    <th>Status</th>
+    <th>Created</th>
+    <th>Actions</th>
+  </tr>
+  {rows}
+</table>"""
+
+    body = f"""
+<div class="layout">
+  {_sidebar(None, sessions)}
+  <div class="main">
+    {flash_html}{error_html}
+    <div class="card">
+      <div class="section-header"><h3>Character Sheet Browser</h3></div>
+      {rows_html}
+    </div>
+    {char_sheet_html}
+  </div>
+</div>"""
+    return page("Characters — DM Panel", body)
+
+def _stat_block(stats: list[tuple[str, str]], cols: int | None = None, name: str | None = None) -> str:
+    """Render a row of label/value pairs, e.g. [('HP', '8/10'), ('AC', '5')]"""
+    col_count = cols or len(stats)
+    cells = "".join(
+        f'<div style="text-align:center">'
+        f'  <div class="muted" style="font-size:0.7rem">{label}</div>'
+        f'  <div style="font-size:1.1rem;font-weight:bold">{value}</div>'
+        f'</div>'
+        for label, value in stats
+    )
+    header = ""
+    if name is not None:
+        header = f'<div class="section-header"> <h3>{name}</h3> </div>'
+    return (
+        f'<div style="display:grid;'
+        f'grid-template-columns:repeat({col_count},1fr);'
+        f'gap:0.5rem;margin:0.5rem;padding:0.75rem; border:1px solid #0f3460; border-radius:8px;">'
+        f'{header}{cells}</div>'
+    )
+
+def character_sheet_panel(
+    character: Character,
+) -> str:
+    score_rows = ""
+    for f in fields(character.ability_scores):
+        val = getattr(character.ability_scores, f.name)
+        score_rows += f"""<div style="text-align:center">
+            <div class="muted" style="font-size:0.7rem">{f.name.capitalize()}</div>
+            <div style="font-size:1.1rem;font-weight:bold">{val}</div>
+            </div>"""
+
+    ability_scores = _stat_block([("STR", character.ability_scores.strength),
+                                  ("DEX", character.ability_scores.dexterity),
+                                  ("CON", character.ability_scores.constitution),
+                                  ("INT", character.ability_scores.intelligence),
+                                  ("WIS", character.ability_scores.wisdom),
+                                  ("CHA", character.ability_scores.charisma)], name="Ability Scores")
+    hp_ac_movement = _stat_block([("HP", f"{character.hp_current}/{character.hp_max}"),
+                                  ("AC", character.armor_class),
+                                  ("Move", f"{character.movement_speed}'")], 1)
+    saves = _stat_block([("Death/Poison",    character.saving_throws["death_poison"]),
+                         ("Wands",           character.saving_throws["wands"]),
+                         ("Paralysis/Stone", character.saving_throws["paralysis_stone"]),
+                         ("Breath",          character.saving_throws["breath_weapon"]),
+                         ("Spells",          character.saving_throws["spells"])], 2, name="Saves")
+    inventory = ""
+    spells = ""
+
+    return f"""
+<div class="card">
+<div class="section-header"> <h3>{character.name}</h3> </div>
+<div class="muted">{character.character_class.value} — Level {character.level} &nbsp;·&nbsp; {character.experience}
+XP &nbsp;·&nbsp; {character.gold} gp</div>
+  {ability_scores}
+  <div class="grid-2">
+  {hp_ac_movement}
+  {saves}
+  </div>
+  {inventory}
+  {spells}
+</div>"""

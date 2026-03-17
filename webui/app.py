@@ -64,6 +64,7 @@ from serialization import deserialize_dungeon_file, serialize_dungeon_file
 from store import archive_session, repost_status, save_session_async
 from webui.templates import (
     archive_page,
+    character_page,
     dashboard_fragment,
     session_list_page,
     session_page,
@@ -866,3 +867,20 @@ async def archive_delete(session_id: str):
     await store.db.delete_archive_async(session_id)
     entries = await store.db.list_archive_async()
     return HTMLResponse(archive_page(_session_list(), entries, flash="Archive entry deleted."))
+
+
+# ---------------------------------------------------------------------------
+# Character sheet browser
+# ---------------------------------------------------------------------------
+
+@app.get("/characters", response_class=HTMLResponse)
+async def character_index(view_char: str = "", flash: str = "", error: str = ""):
+    #STUB - need character persistence code - this just gets the first active session and ignores everything else!!!
+    channel_ids = store.db.list_channels()
+    entries = None
+    if channel_ids is not None:
+        state = store.get_session(channel_ids[0])
+        entries = state.characters
+    #/STUB
+    return character_page(_session_list(), entries, flash=flash, error=error, view_char_id=view_char)
+
