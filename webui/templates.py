@@ -1139,21 +1139,38 @@ def _stat_block(stats: list[tuple[str, str]], cols: int | None = None, name: str
     """Render a row of label/value pairs, e.g. [('HP', '8/10'), ('AC', '5')]"""
     col_count = cols or len(stats)
     cells = "".join(
-        f'<div style="text-align:center">'
-        f'  <div class="muted" style="font-size:0.7rem">{label}</div>'
-        f'  <div style="font-size:1.1rem;font-weight:bold">{value}</div>'
-        f'</div>'
-        for label, value in stats
-    )
-    header = ""
-    if name is not None:
-        header = f'<div class="section-header"> <h3>{name}</h3> </div>'
+            f'<div style="text-align:center">'
+            f'  <div class="muted" style="font-size:0.7rem">{label}</div>'
+            f'  <div style="font-size:1.1rem;font-weight:bold">{value}</div>'
+            f'</div>'
+            for label, value in stats
+            )
+    header = (
+            f'<div class="section-header" style="margin-bottom:0.5rem">'
+            f'  <h3>{name}</h3>'
+            f'</div>'
+            ) if name else ""
+    grid = (
+            f'<div style="display:grid;'
+            f'grid-template-columns:repeat({col_count},minmax(3rem,5rem));gap:0.5rem;">'
+            f'{cells}</div>'
+            )
     return (
-        f'<div style="display:grid;'
-        f'grid-template-columns:repeat({col_count},1fr);'
-        f'gap:0.5rem;margin:0.5rem;padding:0.75rem; border:1px solid #0f3460; border-radius:8px;">'
-        f'{header}{cells}</div>'
-    )
+            f'<div style="padding:0.75rem;border:1px solid #0f3460;'
+            f'width:fit-content;border-radius:8px;margin:0.5rem 0">'
+            f'{header}{grid}'
+            f'</div>'
+            )
+
+def _display_inventory_item(item: InventoryItem) -> str:
+    """Prepare a formatted name, quantity, equip indicator for an item"""
+    quantity = (f"{item.quantity}x ") if item.quantity>1 else "" 
+    equipstatus = ("(EQUIP) ") if item.is_equipped else ""
+    return f"{quantity}{equipstatus}{item.name}"
+
+def _display_spellbook_spell(spells: SpellBook) -> str:
+    """STUB: return nicely formatted string of a spellbook spell"""
+    return ""
 
 def character_sheet_panel(
     character: Character,
@@ -1180,8 +1197,34 @@ def character_sheet_panel(
                          ("Paralysis/Stone", character.saving_throws["paralysis_stone"]),
                          ("Breath",          character.saving_throws["breath_weapon"]),
                          ("Spells",          character.saving_throws["spells"])], 2, name="Saves")
-    inventory = ""
-    spells = ""
+    inv_cells = "".join(
+            f'<div style="text-align:left">'
+            f'  <div style="font-size:0.9rem">{_display_inventory_item(inv_item)}</div>'
+            f'</div>'
+            for inv_item in character.inventory
+            )
+    inventory = (
+            f'<div style="padding:0.75rem;border:1px solid #0f3460;'
+            f'width:fit-content;border-radius:8px;margin:0.5rem 0">'
+            f'<div class="section-header" style="margin-bottom:0.5rem">'
+            f'  <h3>Inventory</h3>'
+            f'</div>'
+            f'<div style="display:grid;'
+            f'grid-template-columns:repeat(2,max-content);gap:0.5rem;">'
+            f'{inv_cells}</div>'
+            f'</div>'
+            )
+
+    spell_grid = _display_spellbook_spell(character.spellbook)
+    spells = (
+            f'<div style="padding:0.75rem;border:1px solid #0f3460;'
+            f'width:fit-content;border-radius:8px;margin:0.5rem 0">'
+            f'<div class="section-header" style="margin-bottom:0.5rem">'
+            f'  <h3>Spellbook</h3>'
+            f'</div>'
+            f'{spell_grid}'
+            f'</div>'
+              ) if character.spellbook else ""
 
     return f"""
 <div class="card">
@@ -1189,7 +1232,7 @@ def character_sheet_panel(
 <div class="muted">{character.character_class.value} — Level {character.level} &nbsp;·&nbsp; {character.experience}
 XP &nbsp;·&nbsp; {character.gold} gp</div>
   {ability_scores}
-  <div class="grid-2">
+  <div style="display:flex; gap:1rem; flex-wrap:wrap;">
   {hp_ac_movement}
   {saves}
   </div>
