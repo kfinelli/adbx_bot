@@ -20,6 +20,7 @@ from models import DoorState, GameState, PlayerTurnSubmission, SessionMode, Turn
 
 # Import managers and utilities from submodules
 from .character import CharacterManager
+from .combat import CombatAction, apply_condition, auto_resolve_round, initialize_battlefield
 from .core import TurnManager
 from .data_loader import (
     ACTION_REGISTRY,
@@ -555,6 +556,11 @@ def _now():
 __all__ = [
     # Core types
     "EngineResult",
+    # Combat
+    "CombatAction",
+    "initialize_battlefield",
+    "auto_resolve_round",
+    "apply_condition",
     # Data registries (read-only, loaded from data/ at startup)
     "ACTION_REGISTRY",
     "CONDITION_REGISTRY",

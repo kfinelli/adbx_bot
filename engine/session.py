@@ -49,8 +49,9 @@ class SessionManager:
     def enter_rounds(self, state: GameState):
         """
         Switch to combat rounds mode.
-        Saves the current exploration turn number and resets the counter to 1
-        so rounds are counted from Round 1.
+        Saves the current exploration turn number, resets the round counter
+        to 1, and initialises the battlefield with all active characters and
+        room NPCs.
         """
         if state.mode == SessionMode.ROUNDS:
             return _err(state, "Already in rounds.")
@@ -60,6 +61,12 @@ class SessionManager:
         if state.current_turn:
             state.current_turn.mode = SessionMode.ROUNDS
             state.current_turn.turn_number = 1
+
+        # Initialise battlefield — lazy import to avoid circular dependency
+        # engine/__init__ → session → combat → engine/__init__
+        from .combat import initialize_battlefield
+        state.battlefield = initialize_battlefield(state)
+
         state.updated_at = _now()
         return _ok(state, "Entering rounds!")
 
@@ -68,14 +75,15 @@ class SessionManager:
         Return to exploration mode.
         Restores the exploration turn counter, advancing by 1 to account
         for the turn consumed by combat (standard B/X ruling).
+        Clears the battlefield.
         """
         if state.mode == SessionMode.EXPLORATION:
             return _err(state, "Already in exploration mode.")
         state.mode = SessionMode.EXPLORATION
-        # Restore exploration turn number, +1 for the turn combat consumed
         resumed_at = (state.rounds_started_at_turn or state.turn_number) + 1
         state.turn_number = resumed_at
         state.rounds_started_at_turn = None
+        state.battlefield = None
         if state.current_turn:
             state.current_turn.mode = SessionMode.EXPLORATION
             state.current_turn.turn_number = resumed_at
