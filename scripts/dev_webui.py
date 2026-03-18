@@ -23,14 +23,12 @@ from __future__ import annotations
 import importlib
 import os
 import sys
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import parse_qs, urlparse
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
 sys.path.insert(0, _ROOT)
-
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from urllib.parse import parse_qs, urlparse
-from uuid import UUID
 
 from engine import (
     add_exit,
@@ -39,20 +37,16 @@ from engine import (
     register_room,
     start_session,
     submit_turn,
-    close_turn,
 )
 from models import (
+    NPC,
     DoorState,
     GameState,
-    NPC,
     Party,
     Room,
     RoomFeature,
-    SessionMode,
-    TurnStatus,
 )
 from tables import CharacterClass
-
 
 # ---------------------------------------------------------------------------
 # Fixture data — edit freely to test different UI states
@@ -183,7 +177,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
 
             self._send(html)
 
-        except Exception as exc:
+        except Exception:
             import traceback
             tb = traceback.format_exc()
             # Render the traceback in the browser so you don't have to watch the terminal
@@ -209,9 +203,9 @@ if __name__ == "__main__":
     print(f"Fixture state: {len(state.characters)} characters, "
           f"session {FIXTURE_CHANNEL_ID[:8]}...")
     print(f"Preview server running at http://localhost:{port}")
-    print(f"  /                          → session list")
+    print("  /                          → session list")
     print(f"  /session/{FIXTURE_CHANNEL_ID[:16]}...  → dashboard")
-    print(f"  /archive                   → archive page")
-    print(f"  /characters                → character browser")
-    print(f"\nEdit templates.py and refresh — no restart needed.\n")
+    print("  /archive                   → archive page")
+    print("  /characters                → character browser")
+    print("\nEdit templates.py and refresh — no restart needed.\n")
     HTTPServer(("", port), PreviewHandler).serve_forever()

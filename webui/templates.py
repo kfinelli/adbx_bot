@@ -15,7 +15,9 @@ from models import (
     CharacterStatus,
     DoorState,
     GameState,
+    InventoryItem,
     SessionMode,
+    SpellBook,
     TurnStatus,
 )
 
@@ -1164,7 +1166,7 @@ def _stat_block(stats: list[tuple[str, str]], cols: int | None = None, name: str
 
 def _display_inventory_item(item: InventoryItem) -> str:
     """Prepare a formatted name, quantity, equip indicator for an item"""
-    quantity = (f"{item.quantity}x ") if item.quantity>1 else "" 
+    quantity = (f"{item.quantity}x ") if item.quantity>1 else ""
     equipstatus = ("(EQUIP) ") if item.is_equipped else ""
     return f"{quantity}{equipstatus}{item.name}"
 
