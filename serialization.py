@@ -21,9 +21,12 @@ from uuid import UUID
 from models import (
     NPC,
     AbilityScores,
+    ActiveCondition,
     Character,
     CharacterClass,
     CharacterStatus,
+    CombatantState,
+    CombatBattlefield,
     DoorState,
     Dungeon,
     Exit,
@@ -37,6 +40,7 @@ from models import (
     Party,
     PlayerTurnSubmission,
     PreparedSpell,
+    RangeBand,
     Room,
     RoomFeature,
     SessionMode,
@@ -246,12 +250,42 @@ def serialize_party(p: Party) -> dict:
     }
 
 
+def serialize_active_condition(c: ActiveCondition) -> dict:
+    return {
+        "condition_id":    c.condition_id,
+        "duration_rounds": c.duration_rounds,
+        "source_id":       _uuid(c.source_id),
+    }
+
+
+def serialize_combatant_state(cs: CombatantState) -> dict:
+    return {
+        "combatant_id":      _uuid(cs.combatant_id),
+        "is_player":         cs.is_player,
+        "range_band":        _enum(cs.range_band),
+        "initiative":        cs.initiative,
+        "acted_this_round":  cs.acted_this_round,
+        "active_conditions": [serialize_active_condition(c) for c in cs.active_conditions],
+    }
+
+
+def serialize_battlefield(bf: CombatBattlefield) -> dict:
+    return {
+        "combatants": {
+            str(cid): serialize_combatant_state(cs)
+            for cid, cs in bf.combatants.items()
+        },
+        "round_log": list(bf.round_log),
+    }
+
+
 def serialize_submission(s: PlayerTurnSubmission) -> dict:
     return {
-        "character_id": _uuid(s.character_id),
-        "submitted_at": _dt(s.submitted_at),
-        "action_text":  s.action_text,
-        "is_latest":    s.is_latest,
+        "character_id":  _uuid(s.character_id),
+        "submitted_at":  _dt(s.submitted_at),
+        "action_text":   s.action_text,
+        "is_latest":     s.is_latest,
+        "combat_action": s.combat_action,   # plain dict or None — passes through unchanged
     }
 
 
@@ -288,6 +322,7 @@ def serialize_state(state: GameState) -> str:
         "oracles":              [serialize_oracle(o) for o in state.oracles],
         "oracle_counter":       state.oracle_counter,
         "session_active":       state.session_active,
+        "battlefield":          serialize_battlefield(state.battlefield) if state.battlefield else None,
         "rounds_started_at_turn": state.rounds_started_at_turn,
         "default_turn_hours":   state.default_turn_hours,
         "created_at":           _dt(state.created_at),
@@ -475,12 +510,44 @@ def deserialize_party(d: dict) -> Party:
     )
 
 
+def deserialize_active_condition(d: dict) -> ActiveCondition:
+    return ActiveCondition(
+        condition_id=d["condition_id"],
+        duration_rounds=d.get("duration_rounds"),
+        source_id=_load_uuid(d.get("source_id")),
+    )
+
+
+def deserialize_combatant_state(d: dict) -> CombatantState:
+    return CombatantState(
+        combatant_id=_load_uuid(d["combatant_id"]),
+        is_player=d["is_player"],
+        range_band=RangeBand(d["range_band"]),
+        initiative=d.get("initiative", 0),
+        acted_this_round=d.get("acted_this_round", False),
+        active_conditions=[
+            deserialize_active_condition(c) for c in d.get("active_conditions", [])
+        ],
+    )
+
+
+def deserialize_battlefield(d: dict) -> CombatBattlefield:
+    return CombatBattlefield(
+        combatants={
+            UUID(cid): deserialize_combatant_state(cs)
+            for cid, cs in d.get("combatants", {}).items()
+        },
+        round_log=list(d.get("round_log", [])),
+    )
+
+
 def deserialize_submission(d: dict) -> PlayerTurnSubmission:
     return PlayerTurnSubmission(
         character_id=_load_uuid(d["character_id"]),
         submitted_at=_load_dt(d["submitted_at"]),
         action_text=d["action_text"],
         is_latest=d["is_latest"],
+        combat_action=d.get("combat_action"),   # None for old saves and exploration turns
     )
 
 
@@ -530,6 +597,10 @@ def deserialize_state(json_str: str) -> GameState:
         oracles=[deserialize_oracle(o) for o in d.get("oracles", [])],
         oracle_counter=d.get("oracle_counter", 0),
         session_active=d.get("session_active", True),
+        battlefield=(
+            deserialize_battlefield(d["battlefield"])
+            if d.get("battlefield") else None
+        ),
         rounds_started_at_turn=d.get("rounds_started_at_turn", None),
         default_turn_hours=d.get("default_turn_hours", 24.0),
         created_at=_load_dt(d["created_at"]),

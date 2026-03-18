@@ -1,0 +1,11 @@
+{
+  "action_id": "attack",
+  "label": "Attack",
+  "button_style": "danger",
+  "action_type": "attack",
+  "description": "Make a melee attack against a target in range.",
+  "requires_target": true,
+  "requires_destination": false,
+  "range_requirement": ["engage", "close_minus", "close_plus"],
+  "effect_tags": ["melee_damage_str_mod", "check_death"]
+}

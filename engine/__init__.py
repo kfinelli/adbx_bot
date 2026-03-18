@@ -19,11 +19,15 @@ from typing import Any
 from models import DoorState, GameState, PlayerTurnSubmission, SessionMode, TurnStatus
 
 # Import managers and utilities from submodules
-from .character import (
-    CharacterManager,
-)
-from .core import (
-    TurnManager,
+from .character import CharacterManager
+from .core import TurnManager
+from .data_loader import (
+    ACTION_REGISTRY,
+    CLASS_DEFINITIONS,
+    CONDITION_REGISTRY,
+    ActionDef,
+    ClassDef,
+    ConditionDef,
 )
 from .dice import (
     d,
@@ -36,27 +40,12 @@ from .dice import (
     roll_stats,
     roll_sum,
 )
-from .helpers import (
-    _find_npc_in_roster,
-    _resolve_room,
-    _snapshot,
-)
-from .light import (
-    LightManager,
-    _tick_light,
-)
-from .npc import (
-    NPCManager,
-)
-from .oracle import (
-    OracleManager,
-)
-from .room import (
-    RoomManager,
-)
-from .session import (
-    SessionManager,
-)
+from .helpers import _find_npc_in_roster, _resolve_room, _snapshot
+from .light import LightManager, _tick_light
+from .npc import NPCManager
+from .oracle import OracleManager
+from .room import RoomManager
+from .session import SessionManager
 
 
 @dataclass
@@ -167,10 +156,10 @@ def open_turn(state: GameState, due_at=None):
     return tm.open_turn(state, due_at)
 
 
-def submit_turn(state: GameState, character_id, action_text: str):
+def submit_turn(state: GameState, character_id, action_text: str, combat_action: dict | None = None):
     """Submit a turn."""
     tm = TurnManager()
-    return tm.submit_turn(state, character_id, action_text)
+    return tm.submit_turn(state, character_id, action_text, combat_action=combat_action)
 
 def unsubmit_turn(state: GameState, character_id,):
     """Un-submit a turn."""
@@ -566,6 +555,13 @@ def _now():
 __all__ = [
     # Core types
     "EngineResult",
+    # Data registries (read-only, loaded from data/ at startup)
+    "ACTION_REGISTRY",
+    "CONDITION_REGISTRY",
+    "CLASS_DEFINITIONS",
+    "ActionDef",
+    "ConditionDef",
+    "ClassDef",
     # Dice functions
     "d",
     "roll",

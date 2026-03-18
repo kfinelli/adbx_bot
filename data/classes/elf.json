@@ -1,0 +1,17 @@
+{
+  "key": "ELF",
+  "display_name": "Elf",
+  "hit_die": 6,
+  "base_ac": 9,
+  "base_movement": 120,
+  "is_spellcaster": true,
+  "default_saves": {
+    "death_poison": 12,
+    "wands": 13,
+    "paralysis_stone": 13,
+    "breath_weapon": 15,
+    "spells": 15
+  },
+  "pack_bonus_items": {},
+  "combat_actions": ["attack", "move", "affect"]
+}

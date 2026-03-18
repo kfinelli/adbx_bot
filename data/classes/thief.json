@@ -1,0 +1,19 @@
+{
+  "key": "THIEF",
+  "display_name": "Thief",
+  "hit_die": 4,
+  "base_ac": 9,
+  "base_movement": 120,
+  "is_spellcaster": false,
+  "default_saves": {
+    "death_poison": 13,
+    "wands": 14,
+    "paralysis_stone": 13,
+    "breath_weapon": 16,
+    "spells": 15
+  },
+  "pack_bonus_items": {
+    "Pack C": ["Thief's Tools", 1, 0.5]
+  },
+  "combat_actions": ["attack", "move", "affect"]
+}

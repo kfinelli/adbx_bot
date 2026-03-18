@@ -51,6 +51,23 @@ class DoorState(Enum):
     SECRET = "secret"
 
 
+class RangeBand(Enum):
+    """
+    Five-band positional system used during combat (ROUNDS mode).
+
+    Players start on the minus side; NPCs start on the plus side.
+    Adjacent bands are considered neighbouring for melee/reach weapons.
+
+        FAR_MINUS  ←→  CLOSE_MINUS  ←→  ENGAGE  ←→  CLOSE_PLUS  ←→  FAR_PLUS
+            -far           -close        engage        +close           +far
+    """
+    FAR_MINUS   = "far_minus"
+    CLOSE_MINUS = "close_minus"
+    ENGAGE      = "engage"
+    CLOSE_PLUS  = "close_plus"
+    FAR_PLUS    = "far_plus"
+
+
 class ExitDirection(Enum):
     NORTH = "north"
     SOUTH = "south"
@@ -371,6 +388,12 @@ class PlayerTurnSubmission:
     submitted_at:  datetime           = field(default_factory=datetime.utcnow)
     action_text:   str                = ""      # free-form description
     is_latest:     bool               = True    # False if superseded by a resubmission
+    # Structured combat action — populated in ROUNDS mode when the player
+    # uses an action button rather than free-text Affect.  None in exploration
+    # mode and for Affect submissions.  Stored as a plain dict so that
+    # serialization requires no special handling beyond json.dumps/loads;
+    # Phase 2 will introduce a typed CombatAction dataclass that wraps this.
+    combat_action: dict | None     = None
 
 
 @dataclass
@@ -449,6 +472,57 @@ class Oracle:
         )
 
 
+# ---------------------------------------------------------------------------
+# Combat
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ActiveCondition:
+    """
+    An instance of a status condition currently affecting a combatant.
+
+    condition_id references a key in the CONDITION_REGISTRY loaded by
+    engine/data_loader.py.  duration_rounds=None means permanent (lasts
+    until explicitly removed).  source_id is the combatant that applied it,
+    if any (used for some condition-removal rules).
+    """
+    condition_id:    str            = ""
+    duration_rounds: int | None  = None
+    source_id:       UUID | None = None
+
+
+@dataclass
+class CombatantState:
+    """
+    Per-combatant runtime state that only exists during ROUNDS mode.
+
+    Keyed by combatant_id in CombatBattlefield.combatants.
+    combatant_id is a character_id (UUID) for players or an npc_id (UUID)
+    for NPCs.
+    """
+    combatant_id:      UUID                    = field(default_factory=uuid4)
+    is_player:         bool                    = True
+    range_band:        RangeBand               = RangeBand.FAR_MINUS
+    initiative:        int                     = 0
+    acted_this_round:  bool                    = False
+    active_conditions: list[ActiveCondition]   = field(default_factory=list)
+
+
+@dataclass
+class CombatBattlefield:
+    """
+    Complete combat state for an ongoing ROUNDS encounter.
+
+    Lives on GameState.battlefield; None outside of ROUNDS mode.
+    combatants maps combatant_id → CombatantState for every participant
+    (both player characters and NPCs) present when enter_rounds was called.
+    round_log accumulates a plain-text narrative for each auto-resolved
+    action within the current round.
+    """
+    combatants: dict[UUID, CombatantState]  = field(default_factory=dict)
+    round_log:  list[str]                   = field(default_factory=list)
+
+
 @dataclass
 class Party:
     party_id:       UUID               = field(default_factory=uuid4)
@@ -499,6 +573,9 @@ class GameState:
 
     # Session control
     session_active:      bool                 = True   # False = on hold
+
+    # Combat — populated by enter_rounds(), cleared by exit_rounds()
+    battlefield:         CombatBattlefield | None = None
 
     # Turn timer config
     default_turn_hours: float                = 24.0  # default turn length in hours

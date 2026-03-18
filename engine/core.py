@@ -53,13 +53,19 @@ class TurnManager:
 
     def submit_turn(
         self,
-        state:        GameState,
+        state:         GameState,
         character_id,
-        action_text:  str,
+        action_text:   str,
+        combat_action: dict | None = None,
     ):
         """
         Submit (or resubmit) a player's action for the current open turn.
         Previous submissions by this character are marked superseded.
+
+        combat_action: optional plain-dict representation of a CombatAction
+            (from CombatAction.to_dict()).  When all active players have
+            submitted structured (non-Affect) combat actions in ROUNDS mode,
+            the round is auto-resolved immediately without DM intervention.
         """
         if not state.session_active:
             return _err(state, "The session is on hold.")
@@ -85,25 +91,82 @@ class TurnManager:
             submitted_at=_now(),
             action_text=action_text,
             is_latest=True,
+            combat_action=combat_action,
         ))
         state.updated_at = _now()
 
-        # Auto-close if all active party members have submitted
-        if state.party is not None:
-            submitted_ids = {
-                s.character_id for s in state.current_turn.submissions if s.is_latest
-            }
-            active_ids = {
-                cid for cid in state.party.member_ids
-                if state.characters.get(cid) and
-                   state.characters[cid].status.value == "active"
-            }
-            if active_ids and active_ids.issubset(submitted_ids):
-                state.current_turn.status = TurnStatus.CLOSED
-                state.current_turn.closed_at = _now()
-                return _ok(state, f"{char.name}: \"{action_text}\"", notify_dm=True)
+        # --- Check whether all active members have now submitted ------------
+        if state.party is None:
+            return _ok(state, f"{char.name}: \"{action_text}\"")
 
-        return _ok(state, f"{char.name}: \"{action_text}\"")
+        submitted_ids = {
+            s.character_id for s in state.current_turn.submissions if s.is_latest
+        }
+        active_ids = {
+            cid for cid in state.party.member_ids
+            if state.characters.get(cid) and
+               state.characters[cid].status.value == "active"
+        }
+
+        if not (active_ids and active_ids.issubset(submitted_ids)):
+            # Still waiting on other players
+            return _ok(state, f"{char.name}: \"{action_text}\"")
+
+        # All submitted — check whether we can auto-resolve (ROUNDS mode only)
+        if state.mode == SessionMode.ROUNDS:
+            latest_subs = [
+                s for s in state.current_turn.submissions if s.is_latest
+            ]
+            all_structured = all(
+                s.combat_action is not None and
+                s.combat_action.get("action_id") != "affect"
+                for s in latest_subs
+            )
+            if all_structured:
+                return self._auto_resolve(state, char.name, action_text)
+
+        # Exploration mode, or ROUNDS with at least one Affect — close for DM
+        state.current_turn.status = TurnStatus.CLOSED
+        state.current_turn.closed_at = _now()
+        return _ok(state, f"{char.name}: \"{action_text}\"", notify_dm=True)
+
+    def _auto_resolve(
+        self,
+        state:       GameState,
+        last_name:   str,
+        action_text: str,
+    ):
+        """
+        Auto-resolve a round where all players used structured combat actions.
+        Calls auto_resolve_round(), then advances the turn as if the DM had
+        called resolve_turn().  Returns notify_dm=False (no DM ping needed).
+        """
+        from .combat import auto_resolve_round
+
+        result = auto_resolve_round(state)
+        if not result.ok:
+            # Fallback: hand to DM if auto-resolve errors
+            state.current_turn.status = TurnStatus.CLOSED
+            state.current_turn.closed_at = _now()
+            return _ok(state, f"{last_name}: \"{action_text}\"", notify_dm=True)
+
+        narrative = result.message
+
+        # Advance turn exactly as resolve_turn() does
+        turn = state.current_turn
+        turn.state_snapshot = _snapshot(state)
+        turn.resolution     = narrative
+        turn.status         = TurnStatus.RESOLVED
+        turn.resolved_at    = _now()
+
+        state.turn_history.append(turn)
+        state.current_turn  = None
+        state.say_log       = []
+        state.oracle_counter = 0
+        state.turn_number   += 1
+        state.updated_at    = _now()
+
+        return _ok(state, narrative, notify_dm=False)
 
     def close_turn(self, state: GameState):
         """
