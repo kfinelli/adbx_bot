@@ -22,3 +22,4 @@ ignore = [
 [lint.per-file-ignores]
 # Test files: allow assert statements and magic values
 "tests/*" = ["S101", "PLR2004"]
+"scripts/*" = ["E402"]
