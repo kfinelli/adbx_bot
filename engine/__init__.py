@@ -536,6 +536,16 @@ def render_status(state: GameState) -> str:
     else:
         lines.append("NPCs: none")
 
+    # Battlefield positions (ROUNDS mode only)
+    if state.mode == SessionMode.ROUNDS and state.battlefield is not None:
+        lines.append(sep)
+        lines.append("Positions:")
+        try:
+            from cogs.action_buttons import render_battlefield_section
+            lines.append(render_battlefield_section(state))
+        except ImportError:
+            pass  # platform layer not loaded (e.g. during testing)
+
     # Say log — clears each turn
     if state.say_log:
         lines.append(sep)
