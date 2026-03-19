@@ -13,5 +13,10 @@
     "spells": 16
   },
   "pack_bonus_items": {},
-  "combat_actions": ["attack", "move", "affect"]
+  "combat_actions": [
+    "attack",
+    "move",
+    "charge",
+    "affect"
+  ]
 }

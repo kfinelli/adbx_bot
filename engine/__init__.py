@@ -51,12 +51,13 @@ from .session import SessionManager
 
 @dataclass
 class EngineResult:
-    ok:        bool             = True
-    message:   str              = ""   # narrative / confirmation text for the platform to display
-    error:     str              = ""   # human-readable error if ok=False
-    state:     GameState | None = None
-    notify_dm: bool             = False  # platform should notify DM to resolve
-    data:      Any              = None  # optional additional data (e.g., Oracle object for platform layer)
+    ok:            bool             = True
+    message:       str              = ""   # narrative / confirmation text for the platform to display
+    error:         str              = ""   # human-readable error if ok=False
+    state:         GameState | None = None
+    notify_dm:     bool             = False  # platform should notify DM to resolve
+    auto_resolved: bool             = False  # round auto-resolved; platform should post narrative + fresh status
+    data:          Any              = None  # optional additional data (e.g., Oracle object for platform layer)
 
 
 def _ok(state: GameState, message: str = "", notify_dm: bool = False) -> EngineResult:

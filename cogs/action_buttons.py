@@ -760,6 +760,7 @@ class ClassActionView(discord.ui.View):
                     char_id=self.char_id,
                     channel_id=self.channel_id,
                     npc_targets=npc_targets,
+                    then_destination=action_def.requires_destination,
                 )
                 await interaction.response.edit_message(
                     content=f"**{owner_char.name}** — select a target:",
@@ -800,13 +801,25 @@ class TargetSelectView(discord.ui.View):
     Second-step ephemeral view for actions that require a target.
     Presents a Select menu of living NPCs in the current room.
     Built fresh at click time so the list is always current.
+
+    then_destination: if True, selecting a target chains into DestinationSelectView
+    rather than submitting immediately.  Used by actions that require both a
+    target and a destination (e.g. Charge).
     """
 
-    def __init__(self, action_id: str, char_id: UUID, channel_id: str, npc_targets):
+    def __init__(
+        self,
+        action_id:        str,
+        char_id:          UUID,
+        channel_id:       str,
+        npc_targets,
+        then_destination: bool = False,
+    ):
         super().__init__(timeout=180)
-        self.action_id  = action_id
-        self.char_id    = char_id
-        self.channel_id = channel_id
+        self.action_id        = action_id
+        self.char_id          = char_id
+        self.channel_id       = channel_id
+        self.then_destination = then_destination
 
         options = [
             discord.SelectOption(
@@ -838,8 +851,29 @@ class TargetSelectView(discord.ui.View):
             return
 
         target_id = UUID(interaction.data["values"][0])
-        action = CombatAction(action_id=self.action_id, target_id=target_id)
-        await _submit_combat_action(interaction, self.char_id, self.channel_id, action)
+
+        if self.then_destination:
+            # Chain: target chosen — now collect destination
+            partial = CombatAction(action_id=self.action_id, target_id=target_id)
+            current_band = (
+                state.battlefield.combatants[self.char_id].range_band
+                if state.battlefield and self.char_id in state.battlefield.combatants
+                else None
+            )
+            view = DestinationSelectView(
+                action_id=self.action_id,
+                char_id=self.char_id,
+                channel_id=self.channel_id,
+                current_band=current_band,
+                partial_action=partial,
+            )
+            await interaction.response.edit_message(
+                content=f"**{owner_char.name}** — select destination:",
+                view=view,
+            )
+        else:
+            action = CombatAction(action_id=self.action_id, target_id=target_id)
+            await _submit_combat_action(interaction, self.char_id, self.channel_id, action)
 
 
 # ---------------------------------------------------------------------------
@@ -857,23 +891,28 @@ _BAND_LABELS: dict[RangeBand, str] = {
 
 class DestinationSelectView(discord.ui.View):
     """
-    Second-step ephemeral view for Move actions.
-    Presents a Select menu of all five range bands, with the current band
-    noted so players can orient themselves.
+    Ephemeral view for actions that require a destination range band.
+
+    Used in two scenarios:
+      • Standalone (Move): action_id + destination → submit.
+      • Chained after TargetSelectView (Charge): partial_action carries the
+        already-chosen target_id; selecting a destination completes the action.
     """
 
     def __init__(
         self,
-        action_id:    str,
-        char_id:      UUID,
-        channel_id:   str,
-        current_band: RangeBand | None,
+        action_id:      str,
+        char_id:        UUID,
+        channel_id:     str,
+        current_band:   RangeBand | None,
+        partial_action: CombatAction | None = None,
     ):
         super().__init__(timeout=180)
-        self.action_id    = action_id
-        self.char_id      = char_id
-        self.channel_id   = channel_id
-        self.current_band = current_band
+        self.action_id      = action_id
+        self.char_id        = char_id
+        self.channel_id     = channel_id
+        self.current_band   = current_band
+        self.partial_action = partial_action  # carries target_id for chained flows
 
         options = [
             discord.SelectOption(
@@ -905,7 +944,18 @@ class DestinationSelectView(discord.ui.View):
             return
 
         destination = RangeBand(interaction.data["values"][0])
-        action = CombatAction(action_id=self.action_id, destination=destination)
+
+        if self.partial_action is not None:
+            # Chained flow: merge destination into the partial action
+            action = CombatAction(
+                action_id=self.partial_action.action_id,
+                target_id=self.partial_action.target_id,
+                destination=destination,
+                free_text=self.partial_action.free_text,
+            )
+        else:
+            action = CombatAction(action_id=self.action_id, destination=destination)
+
         await _submit_combat_action(interaction, self.char_id, self.channel_id, action)
 
 
@@ -970,10 +1020,16 @@ class AffectModal(discord.ui.Modal):
 
         await interaction.response.send_message("✓ Action submitted.", ephemeral=True)
         channel = interaction.channel
-        if channel is not None:
+        if channel is None:
+            return
+
+        if result.auto_resolved:
+            from discord_tasks import dispatch_turn_resolved
+            await dispatch_turn_resolved(channel, state, result.message)
+        elif result.notify_dm:
+            await notify_dm_of_turn_close(channel, state, turn_number)
+        else:
             await update_status(channel, state)
-            if result.notify_dm:
-                await notify_dm_of_turn_close(channel, state, turn_number)
 
 
 # ---------------------------------------------------------------------------
@@ -988,7 +1044,13 @@ async def _submit_combat_action(
 ) -> None:
     """
     Final step of every structured combat flow: submit the action, edit the
-    ephemeral to a confirmation, and update the public status block.
+    ephemeral to a confirmation, then update the channel.
+
+    Three outcomes after submit_turn():
+      • result.auto_resolved → post narrative + fresh status block + ping players
+        (identical to the DM resolve path via dispatch_turn_resolved)
+      • result.notify_dm     → all submissions in, at least one Affect; notify DM
+      • neither              → partial submissions; silently edit existing status block
 
     Uses interaction.response.edit_message() so the ephemeral is replaced
     in-place rather than spawning additional messages.
@@ -1031,16 +1093,23 @@ async def _submit_combat_action(
     await interaction.response.edit_message(
         content="✓ Action submitted.", view=None
     )
+
     channel = interaction.channel
-    if channel is not None:
-        if result.notify_dm:
-            await notify_dm_of_turn_close(channel, state, turn_number)
-        elif state.current_turn is None:
-            # Round auto-resolved — post narrative then fresh status
-            narrative = state.turn_history[-1].resolution if state.turn_history else ""
-            await repost_status(channel, state, narrative=narrative)
-        else:
-            await update_status(channel, state)
+    if channel is None:
+        return
+
+    if result.auto_resolved:
+        # Every player used a structured action — round resolved automatically.
+        # Post the narrative as a standalone message, then a fresh status block,
+        # then ping players that the next round is open.  Same path as DM resolve.
+        from discord_tasks import dispatch_turn_resolved
+        await dispatch_turn_resolved(channel, state, result.message)
+    elif result.notify_dm:
+        # At least one Affect — DM must resolve manually.
+        await notify_dm_of_turn_close(channel, state, turn_number)
+    else:
+        # Still waiting on other players — silently update the existing status block.
+        await update_status(channel, state)
 
 
 # ---------------------------------------------------------------------------

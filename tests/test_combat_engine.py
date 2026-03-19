@@ -364,9 +364,52 @@ class TestAutoResolveTrigger:
         # Second submission completes the round — should auto-resolve
         assert result.ok
         assert result.notify_dm is False
-        assert state.current_turn is None          # turn moved to history
+        assert result.auto_resolved is True        # platform should post narrative
+        assert result.message != ""               # narrative is populated
+        # The resolved round is in history; a new open round starts immediately
+        assert state.current_turn is not None          # next round already open
+        assert state.current_turn.status == TurnStatus.OPEN
         assert state.turn_number == 2              # counter advanced
         assert len(state.turn_history) == 1
+
+    def test_auto_resolved_flag_false_for_partial_submission(self):
+        """Partial submission (not all players) should not set auto_resolved."""
+        state = _make_party_state()
+        enter_rounds(state)
+        open_turn(state)
+
+        npc = state.npcs_in_current_room[0]
+        char_ids = list(state.characters.keys())
+        for cid in char_ids:
+            state.battlefield.combatants[cid].range_band = RangeBand.ENGAGE
+
+        action = CombatAction(action_id="attack", target_id=npc.npc_id)
+        result = submit_turn(state, char_ids[0], "Attack", combat_action=action.to_dict())
+
+        assert result.ok
+        assert result.auto_resolved is False
+        assert result.notify_dm is False
+
+    def test_auto_resolved_flag_false_for_affect(self):
+        """Affect submission (DM needed) should not set auto_resolved."""
+        state = _make_party_state()
+        enter_rounds(state)
+        open_turn(state)
+
+        npc = state.npcs_in_current_room[0]
+        char_ids = list(state.characters.keys())
+        for cid in char_ids:
+            state.battlefield.combatants[cid].range_band = RangeBand.ENGAGE
+
+        attack = CombatAction(action_id="attack", target_id=npc.npc_id)
+        affect = CombatAction(action_id="affect",  free_text="I taunt the goblin.")
+
+        submit_turn(state, char_ids[0], "Attack", combat_action=attack.to_dict())
+        result = submit_turn(state, char_ids[1], "Taunt",  combat_action=affect.to_dict())
+
+        assert result.ok
+        assert result.auto_resolved is False
+        assert result.notify_dm is True
 
     def test_affect_submission_suppresses_auto_resolve(self):
         """One Affect among submissions → DM resolution required."""

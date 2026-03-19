@@ -13,7 +13,16 @@
     "spells": 15
   },
   "pack_bonus_items": {
-    "Pack C": ["Thief's Tools", 1, 0.5]
+    "Pack C": [
+      "Thief's Tools",
+      1,
+      0.5
+    ]
   },
-  "combat_actions": ["attack", "move", "affect"]
+  "combat_actions": [
+    "attack",
+    "move",
+    "charge",
+    "affect"
+  ]
 }

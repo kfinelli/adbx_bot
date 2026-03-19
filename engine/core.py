@@ -139,7 +139,9 @@ class TurnManager:
         """
         Auto-resolve a round where all players used structured combat actions.
         Calls auto_resolve_round(), then advances the turn as if the DM had
-        called resolve_turn().  Returns notify_dm=False (no DM ping needed).
+        called resolve_turn(), and immediately opens the next round so the
+        Act button is never greyed out waiting for DM intervention.
+        Returns notify_dm=False (no DM ping needed).
         """
         from .combat import auto_resolve_round
 
@@ -166,7 +168,14 @@ class TurnManager:
         state.turn_number   += 1
         state.updated_at    = _now()
 
-        return _ok(state, narrative, notify_dm=False)
+        # Open the next round immediately so the status message shows an open
+        # turn and the Act button is enabled on the very next status post.
+        # (The DM can still close/hold if they want to interject.)
+        self.open_turn(state)
+
+        result = _ok(state, narrative, notify_dm=False)
+        result.auto_resolved = True
+        return result
 
     def close_turn(self, state: GameState):
         """

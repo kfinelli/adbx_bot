@@ -13,7 +13,16 @@
     "spells": 15
   },
   "pack_bonus_items": {
-    "Pack C": ["Holy Symbol", 1, 0.0]
+    "Pack C": [
+      "Holy Symbol",
+      1,
+      0.0
+    ]
   },
-  "combat_actions": ["attack", "move", "affect"]
+  "combat_actions": [
+    "attack",
+    "move",
+    "charge",
+    "affect"
+  ]
 }
