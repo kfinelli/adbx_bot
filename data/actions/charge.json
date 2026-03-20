@@ -7,5 +7,9 @@
   "requires_target": true,
   "requires_destination": true,
   "range_requirement": [],
-  "effect_tags": ["move_to_band", "melee_damage_str_mod", "check_death"]
+  "effect_tags": [
+    "move_to_band",
+    {"tag": "melee_attack", "dice": "1d6"},
+    "check_death"
+  ]
 }

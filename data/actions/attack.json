@@ -7,5 +7,8 @@
   "requires_target": true,
   "requires_destination": false,
   "range_requirement": ["engage", "close_minus", "close_plus"],
-  "effect_tags": ["melee_damage_str_mod", "check_death"]
+  "effect_tags": [
+    {"tag": "melee_attack", "dice": "1d6"},
+    "check_death"
+  ]
 }

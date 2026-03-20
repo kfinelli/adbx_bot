@@ -14,6 +14,21 @@ Also reads data/classes/ and exposes:
 These are consumed by tables.py (to build CharacterClass and CREATION_RULES)
 and by engine/combat.py (to drive action dispatch and condition hooks).
 
+Hook format
+-----------
+A hook value in a condition or action effect_tags list can be either:
+
+  • A plain string — the tag name, no parameters:
+        "on_turn_start": "skip_action"
+        "effect_tags": ["check_death"]
+
+  • A hook object — tag name plus parameters dict:
+        "on_turn_end": {"tag": "deal_damage", "dice": "1d4", "type": "poison"}
+        "effect_tags": [{"tag": "melee_attack", "dice": "1d6"}]
+
+Both forms are valid everywhere.  _dispatch_hook() in combat.py handles
+the unwrapping transparently.  See CONTRIBUTING.md for how to add new hooks.
+
 Design notes
 ------------
 - All registries are plain dicts keyed by the item's own ID/key field.
@@ -21,7 +36,8 @@ Design notes
   immediately rather than producing a silent bad state at runtime.
 - Callables are never stored in the data files.  Effect logic lives
   exclusively in engine/combat.py:_dispatch_hook().  Data files use
-  string tags that the dispatcher maps to functions.
+  string tags (or hook objects with a "tag" key) that the dispatcher maps
+  to functions.
 """
 
 from __future__ import annotations
@@ -29,6 +45,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
+
 
 # ---------------------------------------------------------------------------
 # Locate the data directory
@@ -41,9 +58,18 @@ _DATA_DIR    = _PROJECT_DIR / "data"
 
 
 # ---------------------------------------------------------------------------
+# Type alias for a hook entry
+# ---------------------------------------------------------------------------
+
+# A hook value is either:
+#   str  — plain tag name, no params  (e.g. "skip_action")
+#   dict — {"tag": "...", ...params}  (e.g. {"tag": "deal_damage", "dice": "1d4"})
+#   None — no effect
+HookEntry = str | dict | None
+
+
+# ---------------------------------------------------------------------------
 # Data definition dataclasses
-# (These describe the *definitions* loaded from disk, not runtime state.
-#  Runtime state lives in models.py: ActiveCondition, CombatantState, etc.)
 # ---------------------------------------------------------------------------
 
 @dataclass
@@ -60,17 +86,18 @@ class ActionDef:
     requires_destination: True → platform must collect a RangeBand destination.
     range_requirement  : List of RangeBand values (as strings) the attacker must
                          occupy to use this action.  Empty list = no restriction.
-    effect_tags        : Ordered list of hook tags dispatched by _dispatch_hook().
+    effect_tags        : Ordered list of hook entries dispatched by _dispatch_hook().
+                         Each entry is a plain tag string or a hook object dict.
     """
-    action_id:            str        = ""
-    label:                str        = ""
-    button_style:         str        = "secondary"
-    action_type:          str        = ""
-    description:          str        = ""
-    requires_target:      bool       = False
-    requires_destination: bool       = False
-    range_requirement:    list[str]  = field(default_factory=list)
-    effect_tags:          list[str]  = field(default_factory=list)
+    action_id:            str            = ""
+    label:                str            = ""
+    button_style:         str            = "secondary"
+    action_type:          str            = ""
+    description:          str            = ""
+    requires_target:      bool           = False
+    requires_destination: bool           = False
+    range_requirement:    list[str]      = field(default_factory=list)
+    effect_tags:          list[HookEntry] = field(default_factory=list)
 
 
 @dataclass
@@ -81,22 +108,27 @@ class ConditionDef:
     condition_id  : Unique key, must match the filename stem.
     label         : Display name shown to players.
     duration_type : "rounds" | "permanent".
-    hooks         : Dict mapping hook names to effect tag strings (or null).
+    hooks         : Dict mapping hook names to HookEntry values (str, dict, or null).
                     Recognised hook names:
-                      on_turn_start, on_turn_end, on_attack, on_hit,
-                      on_take_damage, on_death, on_move
+                      on_turn_start — fires before the actor's action this round
+                      on_turn_end   — fires at end of round (after all actions)
+                      on_attack     — fires when the combatant makes an attack
+                      on_hit        — fires when the combatant lands a hit
+                      on_take_damage — fires when the combatant receives damage
+                      on_death      — fires when the combatant reaches 0 HP
+                      on_move       — fires inside move_to_band before movement
     stat_modifiers: Dict mapping ability name → integer modifier
                     (e.g. {"strength": -2}).  Applied for the condition's
                     duration.
     grants_actions: List of action IDs added to the combatant's available
                     actions while this condition is active.
     """
-    condition_id:   str               = ""
-    label:          str               = ""
-    duration_type:  str               = "rounds"
-    hooks:          dict[str, str | None] = field(default_factory=dict)
-    stat_modifiers: dict[str, int]    = field(default_factory=dict)
-    grants_actions: list[str]         = field(default_factory=list)
+    condition_id:   str                       = ""
+    label:          str                       = ""
+    duration_type:  str                       = "rounds"
+    hooks:          dict[str, HookEntry]      = field(default_factory=dict)
+    stat_modifiers: dict[str, int]            = field(default_factory=dict)
+    grants_actions: list[str]                 = field(default_factory=list)
 
 
 @dataclass
@@ -157,6 +189,62 @@ _VALID_HOOK_NAMES     = {
 
 
 # ---------------------------------------------------------------------------
+# Hook entry helpers
+# ---------------------------------------------------------------------------
+
+def _validate_hook_entry(entry: HookEntry, path: Path, hook_name: str) -> None:
+    """
+    Validate a single hook entry value (the right-hand side of a hook dict).
+    Raises ValueError if the entry is not a valid hook entry.
+
+    Valid forms:
+      null / None  — no effect, always valid
+      "tag_name"   — plain string tag
+      {"tag": "tag_name", ...params} — parameterized hook object
+    """
+    if entry is None:
+        return
+    if isinstance(entry, str):
+        return
+    if isinstance(entry, dict):
+        if "tag" not in entry:
+            raise ValueError(
+                f"{path}: hook '{hook_name}' object is missing required key 'tag'. "
+                f"Hook objects must be {{\"tag\": \"tag_name\", ...params}}. Got: {entry!r}"
+            )
+        if not isinstance(entry["tag"], str):
+            raise ValueError(
+                f"{path}: hook '{hook_name}' object 'tag' must be a string. Got: {entry['tag']!r}"
+            )
+        return
+    raise ValueError(
+        f"{path}: hook '{hook_name}' value must be a string, object with 'tag' key, "
+        f"or null. Got: {entry!r}"
+    )
+
+
+def _validate_effect_tag(entry: HookEntry, path: Path, idx: int) -> None:
+    """Validate a single entry in an action's effect_tags list."""
+    if isinstance(entry, str):
+        return
+    if isinstance(entry, dict):
+        if "tag" not in entry:
+            raise ValueError(
+                f"{path}: effect_tags[{idx}] object is missing required key 'tag'. "
+                f"Got: {entry!r}"
+            )
+        if not isinstance(entry["tag"], str):
+            raise ValueError(
+                f"{path}: effect_tags[{idx}] 'tag' must be a string. Got: {entry['tag']!r}"
+            )
+        return
+    raise ValueError(
+        f"{path}: effect_tags[{idx}] must be a string or object with 'tag' key. "
+        f"Got: {entry!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Loaders
 # ---------------------------------------------------------------------------
 
@@ -195,6 +283,10 @@ def _load_action(path: Path) -> ActionDef:
     if atype not in _VALID_ACTION_TYPES:
         raise ValueError(f"{path}: invalid action_type '{atype}'; must be one of {_VALID_ACTION_TYPES}")
 
+    raw_tags = list(data["effect_tags"])
+    for i, entry in enumerate(raw_tags):
+        _validate_effect_tag(entry, path, i)
+
     return ActionDef(
         action_id=action_id,
         label=data["label"],
@@ -204,7 +296,7 @@ def _load_action(path: Path) -> ActionDef:
         requires_target=bool(data["requires_target"]),
         requires_destination=bool(data["requires_destination"]),
         range_requirement=list(data.get("range_requirement", [])),
-        effect_tags=list(data["effect_tags"]),
+        effect_tags=raw_tags,
     )
 
 
@@ -224,10 +316,13 @@ def _load_condition(path: Path) -> ConditionDef:
             f"{path}: invalid duration_type '{dtype}'; must be one of {_VALID_DURATION_TYPES}"
         )
 
-    hooks = dict(data["hooks"])
-    unknown_hooks = set(hooks.keys()) - _VALID_HOOK_NAMES
-    if unknown_hooks:
-        raise ValueError(f"{path}: unknown hook name(s): {sorted(unknown_hooks)}")
+    hooks: dict[str, HookEntry] = {}
+    for hook_name, entry in data["hooks"].items():
+        if hook_name not in _VALID_HOOK_NAMES:
+            raise ValueError(f"{path}: unknown hook name '{hook_name}'; "
+                             f"valid names: {sorted(_VALID_HOOK_NAMES)}")
+        _validate_hook_entry(entry, path, hook_name)
+        hooks[hook_name] = entry
 
     return ConditionDef(
         condition_id=condition_id,
@@ -249,8 +344,6 @@ def _load_class(path: Path) -> ClassDef:
             f"{path}: 'key' value '{key}' must match filename stem '{path.stem}' (case-insensitive)"
         )
 
-    # pack_bonus_items values are stored as [name, qty, enc] arrays in JSON;
-    # convert to tuples to match the existing tables.py convention.
     raw_pack = data.get("pack_bonus_items", {})
     pack_bonus: dict = {}
     for pack_name, item in raw_pack.items():
@@ -328,7 +421,6 @@ def _cross_validate(
     Ensure all references between registries are consistent.
     Called once after all files are loaded.
     """
-    # Every action referenced in a class's combat_actions must exist
     for key, cls_def in class_definitions.items():
         for action_id in cls_def.combat_actions:
             if action_id not in action_registry:
@@ -337,7 +429,6 @@ def _cross_validate(
                     f"in combat_actions. Add data/actions/{action_id}.json."
                 )
 
-    # Every action referenced in a condition's grants_actions must exist
     for cond_id, cond_def in condition_registry.items():
         for action_id in cond_def.grants_actions:
             if action_id not in action_registry:

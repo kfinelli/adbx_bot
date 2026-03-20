@@ -736,10 +736,16 @@ class TestConditions:
 
     def test_poisoned_has_on_turn_end_hook(self):
         from engine import CONDITION_REGISTRY
-        assert CONDITION_REGISTRY["poisoned"].hooks.get("on_turn_end") == "deal_1d4_poison_damage"
+        entry = CONDITION_REGISTRY["poisoned"].hooks.get("on_turn_end")
+        # Now a hook object, not a plain string
+        assert isinstance(entry, dict)
+        assert entry["tag"] == "deal_damage"
+        assert entry["dice"] == "1d4"
+        assert entry["type"] == "poison"
 
     def test_stunned_has_on_turn_start_hook(self):
         from engine import CONDITION_REGISTRY
+        # Plain string — no params needed
         assert CONDITION_REGISTRY["stunned"].hooks.get("on_turn_start") == "skip_action"
 
     def test_strengthened_has_str_modifier(self):
@@ -783,7 +789,7 @@ class TestConditions:
 
         hp_after = state.characters[char_id].hp_current
         assert hp_after < hp_before, "Poisoned character should have lost HP"
-        assert any("poison damage" in entry for entry in log)
+        assert any("poison" in entry for entry in log)
 
     def test_poisoned_damage_is_1_to_4(self):
         """Run many ticks; all damage values must fall in [1, 4]."""
@@ -859,26 +865,26 @@ class TestConditions:
     # ------------------------------------------------------------------
 
     def test_strengthened_increases_effective_str_mod(self):
-        from engine.combat import _effective_str_mod
+        from engine.combat import _effective_stat_mod
         state, char_id, _ = self._state_in_rounds()
 
         char = state.characters[char_id]
         char.ability_scores.strength = 10   # base modifier = 0
-        base_mod = _effective_str_mod(state, char_id)
+        base_mod = _effective_stat_mod(state, char_id, "strength")
         assert base_mod == 0
 
         apply_condition(state, char_id, "strengthened", duration=3)
-        boosted_mod = _effective_str_mod(state, char_id)
+        boosted_mod = _effective_stat_mod(state, char_id, "strength")
         assert boosted_mod == 2
 
     def test_strengthened_stacks_with_base_strength(self):
-        from engine.combat import _effective_str_mod
+        from engine.combat import _effective_stat_mod
         state, char_id, _ = self._state_in_rounds()
 
         char = state.characters[char_id]
         char.ability_scores.strength = 16   # base modifier = +2
         apply_condition(state, char_id, "strengthened", duration=3)
-        assert _effective_str_mod(state, char_id) == 4  # +2 base + +2 condition
+        assert _effective_stat_mod(state, char_id, "strength") == 4  # +2 base + +2 condition
 
     def test_strengthened_has_no_hooks(self):
         from engine import CONDITION_REGISTRY
@@ -1005,7 +1011,6 @@ class TestPoisonAction:
     def test_poison_works_at_any_range(self):
         """Thief at FAR_MINUS, guard at FAR_PLUS — should still apply."""
         state, char_id, npc = self._thief_state()
-        # No range adjustment — they stay at starting positions
         action = CombatAction(action_id="poison", target_id=npc.npc_id)
         from models import PlayerTurnSubmission
         state.current_turn.submissions = [PlayerTurnSubmission(
@@ -1014,7 +1019,8 @@ class TestPoisonAction:
         )]
         result = auto_resolve_round(state)
         assert result.ok
-        assert "poisons" in result.message.lower()
+        # New log format: "Rogue applies Poisoned to Guard! (3 rounds)"
+        assert "applies" in result.message.lower() or "poison" in result.message.lower()
 
     def test_poison_tick_fires_same_round_applied(self):
         """Condition is applied mid-round; _tick_conditions runs at end so
@@ -1044,3 +1050,259 @@ class TestPoisonAction:
         result = auto_resolve_round(state)
         assert "Guard" in result.message
         assert "Rogue" in result.message
+
+
+# ---------------------------------------------------------------------------
+# Parameterized hook system
+# ---------------------------------------------------------------------------
+
+class TestParameterizedHooks:
+    """
+    Tests for the parameterized hook dispatch system:
+      - _dispatch_hook handles plain strings and hook objects identically
+      - deal_damage uses dice/type params
+      - melee_attack uses dice param
+      - apply_condition uses condition/duration params
+      - unknown tags log a warning without raising
+    """
+
+    def _state_with_char_and_npc(self):
+        state = _make_state_with_npc()
+        enter_rounds(state)
+        char_id = list(state.characters.keys())[0]
+        npc = state.npcs_in_current_room[0]
+        state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
+        state.battlefield.combatants[npc.npc_id].range_band = RangeBand.ENGAGE
+        state.characters[char_id].hp_current = 20
+        state.characters[char_id].hp_max = 20
+        npc.hp_current = 20
+        npc.hp_max = 20
+        return state, char_id, npc
+
+    # ------------------------------------------------------------------
+    # _dispatch_hook — core dispatch logic
+    # ------------------------------------------------------------------
+
+    def test_plain_string_tag_dispatches(self):
+        from engine.combat import _dispatch_hook, CombatAction
+        state, char_id, _ = self._state_with_char_and_npc()
+        cs = state.battlefield.combatants[char_id]
+        assert cs.skip_action is False
+        log: list[str] = []
+        _dispatch_hook("skip_action", state, char_id, None, log)
+        assert cs.skip_action is True
+
+    def test_hook_object_dispatches(self):
+        from engine.combat import _dispatch_hook
+        state, char_id, _ = self._state_with_char_and_npc()
+        hp_before = state.characters[char_id].hp_current
+        log: list[str] = []
+        _dispatch_hook({"tag": "deal_damage", "dice": "1d4", "type": "fire"}, state, char_id, None, log)
+        assert state.characters[char_id].hp_current < hp_before
+        assert any("fire" in e for e in log)
+
+    def test_unknown_tag_logs_warning_does_not_raise(self):
+        from engine.combat import _dispatch_hook
+        state, char_id, _ = self._state_with_char_and_npc()
+        log: list[str] = []
+        _dispatch_hook("completely_unknown_tag", state, char_id, None, log)
+        assert any("unknown hook tag" in e for e in log)
+
+    def test_hook_object_missing_tag_logs_warning(self):
+        from engine.combat import _dispatch_hook
+        state, char_id, _ = self._state_with_char_and_npc()
+        log: list[str] = []
+        _dispatch_hook({"dice": "1d6"}, state, char_id, None, log)  # missing "tag"
+        assert any("empty tag" in e or "unknown" in e for e in log)
+
+    # ------------------------------------------------------------------
+    # deal_damage — dice and type params
+    # ------------------------------------------------------------------
+
+    def test_deal_damage_default_dice(self):
+        """Default dice is 1d6 when not specified."""
+        from engine.combat import _dispatch_hook
+        state, char_id, _ = self._state_with_char_and_npc()
+        damages = set()
+        for _ in range(40):
+            s2, cid, _ = self._state_with_char_and_npc()
+            hp_before = s2.characters[cid].hp_current
+            _dispatch_hook({"tag": "deal_damage"}, s2, cid, None, [])
+            d = hp_before - s2.characters[cid].hp_current
+            if d > 0:
+                damages.add(d)
+        assert damages <= {1, 2, 3, 4, 5, 6}
+
+    def test_deal_damage_custom_dice(self):
+        """dice param controls the roll range."""
+        from engine.combat import _dispatch_hook
+        damages = set()
+        for _ in range(60):
+            state, char_id, _ = self._state_with_char_and_npc()
+            hp_before = state.characters[char_id].hp_current
+            _dispatch_hook({"tag": "deal_damage", "dice": "1d4"}, state, char_id, None, [])
+            d = hp_before - state.characters[char_id].hp_current
+            if d > 0:
+                damages.add(d)
+        assert damages <= {1, 2, 3, 4}
+
+    def test_deal_damage_type_in_log(self):
+        from engine.combat import _dispatch_hook
+        state, char_id, _ = self._state_with_char_and_npc()
+        log: list[str] = []
+        _dispatch_hook({"tag": "deal_damage", "dice": "1d4", "type": "necrotic"}, state, char_id, None, log)
+        assert any("necrotic" in e for e in log)
+
+    # ------------------------------------------------------------------
+    # melee_attack — dice param
+    # ------------------------------------------------------------------
+
+    def test_melee_attack_uses_dice_param(self):
+        """A d20 weapon should produce damage in [1, 20] range over many rolls."""
+        from engine.combat import _dispatch_hook
+        damages = set()
+        for _ in range(80):
+            state, char_id, npc = self._state_with_char_and_npc()
+            npc.armor_class = 1  # guarantee hit
+            npc.hp_current = 100
+            action = CombatAction(action_id="attack", target_id=npc.npc_id)
+            log: list[str] = []
+            _dispatch_hook({"tag": "melee_attack", "dice": "1d20"}, state, char_id, action, log)
+            if any("hits" in e for e in log):
+                import re
+                for e in log:
+                    m = re.search(r"Deals (\d+) damage", e)
+                    if m:
+                        damages.add(int(m.group(1)))
+        # With 1d20 and any str modifier, max damage ≥ 1 and we should see
+        # values beyond what 1d6 can produce (> 6) over 80 rolls
+        assert any(d > 6 for d in damages), f"Expected d20 damage > 6, got {damages}"
+
+    # ------------------------------------------------------------------
+    # apply_condition — condition/duration params
+    # ------------------------------------------------------------------
+
+    def test_apply_condition_hook_applies_named_condition(self):
+        from engine.combat import _dispatch_hook
+        state, char_id, npc = self._state_with_char_and_npc()
+        action = CombatAction(action_id="poison", target_id=npc.npc_id)
+        log: list[str] = []
+        _dispatch_hook(
+            {"tag": "apply_condition", "condition": "stunned", "duration": 2},
+            state, char_id, action, log,
+        )
+        npc_cs = state.battlefield.combatants[npc.npc_id]
+        assert any(c.condition_id == "stunned" for c in npc_cs.active_conditions)
+        stunned = next(c for c in npc_cs.active_conditions if c.condition_id == "stunned")
+        assert stunned.duration_rounds == 2
+
+    def test_apply_condition_hook_missing_condition_param_logs_error(self):
+        from engine.combat import _dispatch_hook
+        state, char_id, npc = self._state_with_char_and_npc()
+        action = CombatAction(action_id="poison", target_id=npc.npc_id)
+        log: list[str] = []
+        _dispatch_hook({"tag": "apply_condition"}, state, char_id, action, log)
+        assert any("condition" in e.lower() for e in log)
+
+    def test_apply_condition_hook_no_target_logs_error(self):
+        from engine.combat import _dispatch_hook
+        state, char_id, _ = self._state_with_char_and_npc()
+        log: list[str] = []
+        _dispatch_hook(
+            {"tag": "apply_condition", "condition": "stunned"},
+            state, char_id, None, log,  # action=None, no target
+        )
+        assert any("no target" in e.lower() for e in log)
+
+
+# ---------------------------------------------------------------------------
+# data_loader: hook object validation
+# ---------------------------------------------------------------------------
+
+class TestHookObjectValidation:
+    """Tests that data_loader correctly validates hook objects in data files."""
+
+    def test_plain_string_hook_loads(self):
+        import tempfile, json
+        from pathlib import Path
+        from engine.data_loader import load_all
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp)
+            (p / "actions").mkdir(); (p / "conditions").mkdir(); (p / "classes").mkdir()
+            (p / "conditions" / "test.json").write_text(json.dumps({
+                "condition_id": "test", "label": "Test", "duration_type": "rounds",
+                "hooks": {"on_turn_end": "skip_action"},
+            }))
+            _, cr, _ = load_all(p)
+            assert cr["test"].hooks["on_turn_end"] == "skip_action"
+
+    def test_hook_object_loads(self):
+        import tempfile, json
+        from pathlib import Path
+        from engine.data_loader import load_all
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp)
+            (p / "actions").mkdir(); (p / "conditions").mkdir(); (p / "classes").mkdir()
+            (p / "conditions" / "burning.json").write_text(json.dumps({
+                "condition_id": "burning", "label": "Burning", "duration_type": "rounds",
+                "hooks": {"on_turn_end": {"tag": "deal_damage", "dice": "1d6", "type": "fire"}},
+            }))
+            _, cr, _ = load_all(p)
+            entry = cr["burning"].hooks["on_turn_end"]
+            assert isinstance(entry, dict)
+            assert entry["tag"] == "deal_damage"
+            assert entry["dice"] == "1d6"
+
+    def test_hook_object_missing_tag_raises(self):
+        import tempfile, json
+        from pathlib import Path
+        from engine.data_loader import load_all
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp)
+            (p / "actions").mkdir(); (p / "conditions").mkdir(); (p / "classes").mkdir()
+            (p / "conditions" / "bad.json").write_text(json.dumps({
+                "condition_id": "bad", "label": "Bad", "duration_type": "rounds",
+                "hooks": {"on_turn_end": {"dice": "1d6"}},   # missing "tag"
+            }))
+            try:
+                load_all(p)
+                raise AssertionError("Should have raised")
+            except ValueError as e:
+                assert "tag" in str(e).lower()
+
+    def test_hook_object_in_effect_tags_loads(self):
+        import tempfile, json
+        from pathlib import Path
+        from engine.data_loader import load_all
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp)
+            (p / "actions").mkdir(); (p / "conditions").mkdir(); (p / "classes").mkdir()
+            (p / "actions" / "stab.json").write_text(json.dumps({
+                "action_id": "stab", "label": "Stab", "button_style": "danger",
+                "action_type": "attack", "requires_target": True,
+                "requires_destination": False, "range_requirement": [],
+                "effect_tags": [{"tag": "melee_attack", "dice": "1d4"}, "check_death"],
+            }))
+            ar, _, _ = load_all(p)
+            tags = ar["stab"].effect_tags
+            assert tags[0] == {"tag": "melee_attack", "dice": "1d4"}
+            assert tags[1] == "check_death"
+
+    def test_effect_tag_object_missing_tag_raises(self):
+        import tempfile, json
+        from pathlib import Path
+        from engine.data_loader import load_all
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp)
+            (p / "actions").mkdir(); (p / "conditions").mkdir(); (p / "classes").mkdir()
+            (p / "actions" / "bad.json").write_text(json.dumps({
+                "action_id": "bad", "label": "Bad", "button_style": "danger",
+                "action_type": "attack", "requires_target": False,
+                "requires_destination": False, "range_requirement": [],
+                "effect_tags": [{"dice": "1d6"}],   # missing "tag"
+            }))
+            try:
+                load_all(p)
+                raise AssertionError("Should have raised")
+            except ValueError as e:
+                assert "tag" in str(e).lower()

@@ -103,15 +103,18 @@ class TestProductionDataFiles:
         assert a.action_type == "attack"
         assert a.requires_target is True
         assert a.requires_destination is False
-        assert "melee_damage_str_mod" in a.effect_tags
-        assert "check_death" in a.effect_tags
+        # effect_tags now contains hook objects; check tags by resolving them
+        tags = [e["tag"] if isinstance(e, dict) else e for e in a.effect_tags]
+        assert "melee_attack" in tags
+        assert "check_death" in tags
 
     def test_action_move_values(self):
         a = ACTION_REGISTRY["move"]
         assert a.action_type == "move"
         assert a.requires_destination is True
         assert a.requires_target is False
-        assert "move_to_band" in a.effect_tags
+        tags = [e["tag"] if isinstance(e, dict) else e for e in a.effect_tags]
+        assert "move_to_band" in tags
 
     def test_action_affect_values(self):
         a = ACTION_REGISTRY["affect"]
