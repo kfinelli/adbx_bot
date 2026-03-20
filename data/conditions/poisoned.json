@@ -1,0 +1,10 @@
+{
+  "condition_id": "poisoned",
+  "label": "Poisoned",
+  "duration_type": "rounds",
+  "hooks": {
+    "on_turn_end": "deal_1d4_poison_damage"
+  },
+  "stat_modifiers": {},
+  "grants_actions": []
+}

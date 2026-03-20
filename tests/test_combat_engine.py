@@ -201,12 +201,19 @@ class TestInitializeBattlefield:
 class TestAutoResolveRound:
 
     def _setup_combat(self, npc_hp=5, npc_ac=1):
-        """Enter rounds, open a turn, return (state, char_id, npc_id)."""
+        """Enter rounds, open a turn, return (state, char_id, npc_id).
+
+        Character HP is set to 20 so an NPC counter-attack before the player
+        acts cannot kill the character and skip their action.
+        """
         state = _make_state_with_npc()
         npc = state.npcs_in_current_room[0]
         npc.hp_current = npc_hp
         npc.hp_max = npc_hp
         npc.armor_class = npc_ac
+        char = list(state.characters.values())[0]
+        char.hp_current = 20
+        char.hp_max = 20
         enter_rounds(state)
         open_turn(state)
         return state, list(state.characters.keys())[0], npc.npc_id
@@ -685,3 +692,355 @@ class TestCombatSerialization:
         assert len(state2.turn_history) == 1
         assert state2.turn_history[0].status.value == "resolved"
         assert len(state2.turn_history[0].resolution) > 0
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — Status conditions
+# ---------------------------------------------------------------------------
+
+class TestConditions:
+    """
+    Tests for the four Phase 4 conditions: poisoned, stunned, strengthened,
+    entangled.  All four are real data files loaded from disk, so these tests
+    also serve as integration checks for the data → hook → engine pipeline.
+    """
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _state_in_rounds(self):
+        """One-character combat state, both combatants at ENGAGE."""
+        state = _make_state_with_npc()
+        enter_rounds(state)
+        char_id = list(state.characters.keys())[0]
+        npc = state.npcs_in_current_room[0]
+        state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
+        state.battlefield.combatants[npc.npc_id].range_band = RangeBand.ENGAGE
+        # Give character enough HP to survive condition damage
+        state.characters[char_id].hp_current = 20
+        state.characters[char_id].hp_max = 20
+        # Give NPC enough HP to survive attacks
+        npc.hp_current = 20
+        npc.hp_max = 20
+        return state, char_id, npc
+
+    # ------------------------------------------------------------------
+    # Condition registry sanity
+    # ------------------------------------------------------------------
+
+    def test_all_four_conditions_loaded(self):
+        from engine import CONDITION_REGISTRY
+        for cid in ("poisoned", "stunned", "strengthened", "entangled"):
+            assert cid in CONDITION_REGISTRY, f"'{cid}' not in CONDITION_REGISTRY"
+
+    def test_poisoned_has_on_turn_end_hook(self):
+        from engine import CONDITION_REGISTRY
+        assert CONDITION_REGISTRY["poisoned"].hooks.get("on_turn_end") == "deal_1d4_poison_damage"
+
+    def test_stunned_has_on_turn_start_hook(self):
+        from engine import CONDITION_REGISTRY
+        assert CONDITION_REGISTRY["stunned"].hooks.get("on_turn_start") == "skip_action"
+
+    def test_strengthened_has_str_modifier(self):
+        from engine import CONDITION_REGISTRY
+        assert CONDITION_REGISTRY["strengthened"].stat_modifiers.get("strength") == 2
+
+    def test_entangled_has_on_move_hook(self):
+        from engine import CONDITION_REGISTRY
+        assert CONDITION_REGISTRY["entangled"].hooks.get("on_move") == "block_movement"
+
+    # ------------------------------------------------------------------
+    # apply_condition with real conditions
+    # ------------------------------------------------------------------
+
+    def test_apply_poisoned(self):
+        state, char_id, _ = self._state_in_rounds()
+        result = apply_condition(state, char_id, "poisoned", duration=3)
+        assert result.ok
+        cs = state.battlefield.combatants[char_id]
+        assert any(c.condition_id == "poisoned" for c in cs.active_conditions)
+
+    def test_apply_condition_message_contains_label(self):
+        state, char_id, _ = self._state_in_rounds()
+        result = apply_condition(state, char_id, "stunned", duration=1)
+        assert result.ok
+        assert "Stunned" in result.message
+
+    # ------------------------------------------------------------------
+    # Poisoned — deals 1d4 damage on_turn_end
+    # ------------------------------------------------------------------
+
+    def test_poisoned_deals_damage_each_round(self):
+        state, char_id, npc = self._state_in_rounds()
+        apply_condition(state, char_id, "poisoned", duration=3)
+        hp_before = state.characters[char_id].hp_current
+
+        # Manually trigger _tick_conditions (simulates end of round)
+        from engine.combat import _tick_conditions
+        log: list[str] = []
+        _tick_conditions(state, log)
+
+        hp_after = state.characters[char_id].hp_current
+        assert hp_after < hp_before, "Poisoned character should have lost HP"
+        assert any("poison damage" in entry for entry in log)
+
+    def test_poisoned_damage_is_1_to_4(self):
+        """Run many ticks; all damage values must fall in [1, 4]."""
+        from engine.combat import _tick_conditions
+        damages = set()
+        for _ in range(60):
+            state, char_id, _ = self._state_in_rounds()
+            apply_condition(state, char_id, "poisoned", duration=5)
+            hp_before = state.characters[char_id].hp_current
+            _tick_conditions(state, [])
+            damage = hp_before - state.characters[char_id].hp_current
+            if damage > 0:
+                damages.add(damage)
+        assert damages <= {1, 2, 3, 4}
+
+    def test_poisoned_expires_after_duration(self):
+        state, char_id, _ = self._state_in_rounds()
+        apply_condition(state, char_id, "poisoned", duration=2)
+        from engine.combat import _tick_conditions
+        _tick_conditions(state, [])   # round 1 — duration becomes 1
+        _tick_conditions(state, [])   # round 2 — expires
+        cs = state.battlefield.combatants[char_id]
+        assert not any(c.condition_id == "poisoned" for c in cs.active_conditions)
+
+    # ------------------------------------------------------------------
+    # Stunned — skip_action for one round
+    # ------------------------------------------------------------------
+
+    def test_stunned_sets_skip_action_flag(self):
+        state, char_id, _ = self._state_in_rounds()
+        apply_condition(state, char_id, "stunned", duration=1)
+        from engine.combat import _fire_turn_start_hooks
+        log: list[str] = []
+        _fire_turn_start_hooks(state, log)
+        cs = state.battlefield.combatants[char_id]
+        assert cs.skip_action is True
+
+    def test_stunned_character_skips_action_in_round(self):
+        state, char_id, npc = self._state_in_rounds()
+        open_turn(state)
+        apply_condition(state, char_id, "stunned", duration=1)
+
+        action = CombatAction(action_id="attack", target_id=npc.npc_id)
+        from models import PlayerTurnSubmission
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id, action_text="Attack",
+            is_latest=True, combat_action=action.to_dict(),
+        )]
+        result = auto_resolve_round(state)
+        assert result.ok
+        assert "stunned" in result.message.lower()
+        # NPC should be unharmed since player was stunned
+        assert npc.hp_current == 20
+
+    def test_skip_action_flag_cleared_after_round(self):
+        state, char_id, _ = self._state_in_rounds()
+        apply_condition(state, char_id, "stunned", duration=2)
+        open_turn(state)
+
+        from models import PlayerTurnSubmission
+        action = CombatAction(action_id="attack", target_id=state.npcs_in_current_room[0].npc_id)
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id, action_text="Attack",
+            is_latest=True, combat_action=action.to_dict(),
+        )]
+        auto_resolve_round(state)
+        cs = state.battlefield.combatants.get(char_id)
+        if cs:
+            assert cs.skip_action is False
+
+    # ------------------------------------------------------------------
+    # Strengthened — +2 STR modifier to attacks
+    # ------------------------------------------------------------------
+
+    def test_strengthened_increases_effective_str_mod(self):
+        from engine.combat import _effective_str_mod
+        state, char_id, _ = self._state_in_rounds()
+
+        char = state.characters[char_id]
+        char.ability_scores.strength = 10   # base modifier = 0
+        base_mod = _effective_str_mod(state, char_id)
+        assert base_mod == 0
+
+        apply_condition(state, char_id, "strengthened", duration=3)
+        boosted_mod = _effective_str_mod(state, char_id)
+        assert boosted_mod == 2
+
+    def test_strengthened_stacks_with_base_strength(self):
+        from engine.combat import _effective_str_mod
+        state, char_id, _ = self._state_in_rounds()
+
+        char = state.characters[char_id]
+        char.ability_scores.strength = 16   # base modifier = +2
+        apply_condition(state, char_id, "strengthened", duration=3)
+        assert _effective_str_mod(state, char_id) == 4  # +2 base + +2 condition
+
+    def test_strengthened_has_no_hooks(self):
+        from engine import CONDITION_REGISTRY
+        cond = CONDITION_REGISTRY["strengthened"]
+        assert not cond.hooks  # empty dict — purely stat-modifier based
+
+    # ------------------------------------------------------------------
+    # Entangled — cannot move
+    # ------------------------------------------------------------------
+
+    def test_entangled_blocks_movement(self):
+        state, char_id, _ = self._state_in_rounds()
+        apply_condition(state, char_id, "entangled", duration=2)
+        open_turn(state)
+
+        from models import PlayerTurnSubmission
+        action = CombatAction(action_id="move", destination=RangeBand.FAR_MINUS)
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id, action_text="Move",
+            is_latest=True, combat_action=action.to_dict(),
+        )]
+        result = auto_resolve_round(state)
+        assert result.ok
+        assert "entangled" in result.message.lower()
+        # Character should still be at ENGAGE (didn't move)
+        cs = state.battlefield.combatants.get(char_id)
+        if cs:
+            assert cs.range_band == RangeBand.ENGAGE
+
+    def test_entangled_does_not_block_attack(self):
+        """Entangled only prevents movement; attacks are unaffected."""
+        state, char_id, npc = self._state_in_rounds()
+        apply_condition(state, char_id, "entangled", duration=2)
+        open_turn(state)
+
+        from models import PlayerTurnSubmission
+        action = CombatAction(action_id="attack", target_id=npc.npc_id)
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id, action_text="Attack",
+            is_latest=True, combat_action=action.to_dict(),
+        )]
+        result = auto_resolve_round(state)
+        assert result.ok
+        # Attack should have resolved (NPC may or may not have taken damage
+        # depending on roll, but no movement-related error)
+        assert "cannot move" not in result.message.lower() or "attacks" in result.message.lower()
+
+    def test_movement_blocked_flag_cleared_after_round(self):
+        state, char_id, _ = self._state_in_rounds()
+        apply_condition(state, char_id, "entangled", duration=3)
+        open_turn(state)
+
+        from models import PlayerTurnSubmission
+        action = CombatAction(action_id="move", destination=RangeBand.FAR_MINUS)
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id, action_text="Move",
+            is_latest=True, combat_action=action.to_dict(),
+        )]
+        auto_resolve_round(state)
+        cs = state.battlefield.combatants.get(char_id)
+        if cs:
+            assert cs.movement_blocked is False
+
+
+# ---------------------------------------------------------------------------
+# Poison action (thief-exclusive)
+# ---------------------------------------------------------------------------
+
+class TestPoisonAction:
+
+    def _thief_state(self):
+        """Thief + NPC in ROUNDS mode."""
+        from engine import add_npc, register_room
+        from models import Room
+        state = GameState(platform_channel_id="ch", dm_user_id="dm")
+        state.party = Party(name="P")
+        create_character(state, "Rogue", CharacterClass.THIEF, "Pack A", owner_id="u1")
+        start_session(state)
+        room = Room(name="Hall", description="Hall.")
+        register_room(state, room)
+        state.current_room_id = room.room_id
+        npc = NPC(name="Guard", hp_current=20, hp_max=20, armor_class=5)
+        add_npc(state, npc)
+        enter_rounds(state)
+        open_turn(state)
+        # Give thief enough HP to survive any NPC counter-attack
+        char_id = list(state.characters.keys())[0]
+        state.characters[char_id].hp_current = 20
+        state.characters[char_id].hp_max = 20
+        return state, list(state.characters.keys())[0], npc
+
+    def test_poison_in_thief_actions(self):
+        from engine import CLASS_DEFINITIONS
+        actions = CLASS_DEFINITIONS["THIEF"].combat_actions
+        assert "poison" in actions
+        assert actions.index("poison") < actions.index("affect")
+
+    def test_poison_not_in_fighter_actions(self):
+        from engine import CLASS_DEFINITIONS
+        assert "poison" not in CLASS_DEFINITIONS["FIGHTER"].combat_actions
+
+    def test_poison_has_no_range_requirement(self):
+        from engine import ACTION_REGISTRY
+        assert ACTION_REGISTRY["poison"].range_requirement == []
+
+    def test_poison_requires_target(self):
+        from engine import ACTION_REGISTRY
+        assert ACTION_REGISTRY["poison"].requires_target is True
+
+    def test_poison_applies_condition_to_target(self):
+        state, char_id, npc = self._thief_state()
+        action = CombatAction(action_id="poison", target_id=npc.npc_id)
+        from models import PlayerTurnSubmission
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id, action_text="Poison",
+            is_latest=True, combat_action=action.to_dict(),
+        )]
+        result = auto_resolve_round(state)
+        assert result.ok
+        npc_cs = state.battlefield.combatants.get(npc.npc_id)
+        assert npc_cs is not None
+        assert any(c.condition_id == "poisoned" for c in npc_cs.active_conditions)
+
+    def test_poison_works_at_any_range(self):
+        """Thief at FAR_MINUS, guard at FAR_PLUS — should still apply."""
+        state, char_id, npc = self._thief_state()
+        # No range adjustment — they stay at starting positions
+        action = CombatAction(action_id="poison", target_id=npc.npc_id)
+        from models import PlayerTurnSubmission
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id, action_text="Poison",
+            is_latest=True, combat_action=action.to_dict(),
+        )]
+        result = auto_resolve_round(state)
+        assert result.ok
+        assert "poisons" in result.message.lower()
+
+    def test_poison_tick_fires_same_round_applied(self):
+        """Condition is applied mid-round; _tick_conditions runs at end so
+        first damage tick happens immediately — duration decrements to 2."""
+        state, char_id, npc = self._thief_state()
+        action = CombatAction(action_id="poison", target_id=npc.npc_id)
+        from models import PlayerTurnSubmission
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id, action_text="Poison",
+            is_latest=True, combat_action=action.to_dict(),
+        )]
+        auto_resolve_round(state)
+        npc_cs = state.battlefield.combatants.get(npc.npc_id)
+        assert npc_cs is not None
+        cond = next(c for c in npc_cs.active_conditions if c.condition_id == "poisoned")
+        assert cond.duration_rounds == 2   # started at 3, ticked once
+        assert npc.hp_current < 20         # took poison damage this round
+
+    def test_poison_narrative_mentions_target(self):
+        state, char_id, npc = self._thief_state()
+        action = CombatAction(action_id="poison", target_id=npc.npc_id)
+        from models import PlayerTurnSubmission
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id, action_text="Poison",
+            is_latest=True, combat_action=action.to_dict(),
+        )]
+        result = auto_resolve_round(state)
+        assert "Guard" in result.message
+        assert "Rogue" in result.message

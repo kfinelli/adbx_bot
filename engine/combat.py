@@ -10,19 +10,22 @@ Public API (all exported via engine/__init__.py):
 Internal helpers (used only within this module and engine/__init__.py):
     _npc_decide(state, npc_id, cs) → CombatAction | None
     _execute_action(state, actor_id, action, log) → None
-    _dispatch_hook(tag, state, actor_id, target_id, log) → None
+    _dispatch_hook(tag, state, actor_id, action, log) → None
     _tick_conditions(state, log) → None
+    _fire_turn_start_hooks(state, log) → None
 
 Design notes
 ------------
 - All functions take GameState and mutate it in-place, returning EngineResult.
-- Effect logic is driven by string tags from ActionDef.effect_tags.
+- Effect logic is driven by string tags from ActionDef/ConditionDef.
   _dispatch_hook() maps tags to handler functions; adding a new effect
-  requires only adding one entry to _HOOK_DISPATCH at the bottom of this file.
-- NPC AI is intentionally simple at this stage: move toward players if far,
-  attack lowest-HP active character if in range.
-- "In range" means: attacker's RangeBand is listed in the action's
-  range_requirement (empty list = always in range).
+  requires only a new handler + one entry in _HOOK_DISPATCH.
+- Condition hooks fire at defined points in the round pipeline:
+    on_turn_start  — before actions are executed (step 2b)
+    on_turn_end    — after actions, inside _tick_conditions (step 5)
+    on_move        — inside _hook_move_to_band, before movement executes
+- NPC AI is intentionally simple: move toward players if far, attack
+  lowest-HP active character if in range.
 """
 
 from __future__ import annotations
@@ -209,7 +212,7 @@ def apply_condition(
         source_id=source_id,
     ))
 
-    cond_def  = CONDITION_REGISTRY[condition_id]
+    cond_def    = CONDITION_REGISTRY[condition_id]
     target_name = _combatant_name(state, target_id)
     state.updated_at = _now()
     return _ok(state, f"{target_name} is now {cond_def.label}.")
@@ -229,10 +232,11 @@ def auto_resolve_round(state: GameState) -> object:  # EngineResult
     Pipeline:
       1. Collect player actions from current_turn.submissions.
       2. Add NPC decisions.
+      2b. Fire on_turn_start condition hooks (sets skip_action / movement_blocked).
       3. Sort all actions by initiative (descending).
-      4. Execute each action via _execute_action().
-      5. Tick status condition durations.
-      6. Reset acted_this_round flags.
+      4. Execute each action via _execute_action(), skipping stunned combatants.
+      5. Tick status condition durations (fires on_turn_end hooks).
+      6. Reset single-round flags (acted, skip_action, movement_blocked).
       7. Build narrative from round_log, set as TurnRecord.resolution.
 
     Returns an EngineResult whose .message is the full round narrative.
@@ -266,6 +270,11 @@ def auto_resolve_round(state: GameState) -> object:  # EngineResult
         if action:
             npc_actions[npc.npc_id] = action
 
+    # --- 2b. Fire on_turn_start hooks ---------------------------------------
+    # Must happen after actions are collected but before execution, so that
+    # stunned combatants have their skip_action flag set before the action loop.
+    _fire_turn_start_hooks(state, log)
+
     # --- 3. Sort by initiative (descending) ---------------------------------
     all_actors: list[tuple[UUID, CombatAction]] = []
     for cid, action in player_actions.items():
@@ -287,20 +296,26 @@ def auto_resolve_round(state: GameState) -> object:  # EngineResult
         # Skip dead combatants (may have died earlier this round)
         if not _is_alive(state, actor_id):
             continue
+        # Skip stunned combatants (skip_action set by on_turn_start hook)
+        if cs.skip_action:
+            actor_name = _combatant_name(state, actor_id)
+            log.append(f"{actor_name} is stunned and cannot act this round!")
+            continue
         _execute_action(state, actor_id, action, log)
-        if cs is not None:
-            cs.acted_this_round = True
+        cs.acted_this_round = True
 
-    # --- 5. Tick conditions -------------------------------------------------
+    # --- 5. Tick conditions (fires on_turn_end hooks, decrements durations) -
     _tick_conditions(state, log)
 
-    # --- 6. Reset acted flags -----------------------------------------------
+    # --- 6. Reset single-round flags ----------------------------------------
     for cs in bf.combatants.values():
-        cs.acted_this_round = False
+        cs.acted_this_round  = False
+        cs.skip_action       = False
+        cs.movement_blocked  = False
 
     # --- 7. Build narrative -------------------------------------------------
     narrative = "\n".join(log) if log else "The round passes without incident."
-    bf.round_log = log[:]   # snapshot for display
+    bf.round_log = log[:]
 
     state.updated_at = _now()
     return _ok(state, narrative)
@@ -367,18 +382,48 @@ def _npc_decide(
         not attack_def.range_requirement
         or cs.range_band.value in attack_def.range_requirement
     ):
-        # Target the lowest-HP active character
         target_id = _lowest_hp_player(state, living_players)
         if target_id:
             return CombatAction(action_id="attack", target_id=target_id)
 
     # Otherwise move toward the nearest player
-    # NPC starts on + side, players on - side: move toward ENGAGE
     destination = _step_toward(cs.range_band, RangeBand.ENGAGE)
     if destination != cs.range_band:
         return CombatAction(action_id="move", destination=destination)
 
     return None
+
+
+# ---------------------------------------------------------------------------
+# Condition stat modifier helper
+# ---------------------------------------------------------------------------
+
+def _effective_str_mod(state: GameState, actor_id: UUID) -> int:
+    """
+    Return the effective STR modifier for actor_id, including any bonus
+    or penalty from active conditions with a 'strength' stat_modifier.
+
+    For NPCs there is no ability score, so condition modifiers are still
+    applied as a flat bonus to their attack_bonus (handled in the attack hook).
+    """
+    actor_char = state.characters.get(actor_id)
+    if actor_char is None:
+        return 0
+
+    base_mod = ABILITY_MODIFIERS.get(actor_char.ability_scores.strength, 0)
+
+    # Sum any condition-based strength modifiers
+    cs = state.battlefield.combatants.get(actor_id) if state.battlefield else None
+    if cs is None:
+        return base_mod
+
+    condition_bonus = 0
+    for active_cond in cs.active_conditions:
+        cond_def = CONDITION_REGISTRY.get(active_cond.condition_id)
+        if cond_def:
+            condition_bonus += cond_def.stat_modifiers.get("strength", 0)
+
+    return base_mod + condition_bonus
 
 
 # ---------------------------------------------------------------------------
@@ -393,27 +438,27 @@ def _hook_melee_damage_str_mod(
 ) -> None:
     """
     Roll a melee attack against target's AC; on hit, deal weapon or base
-    damage plus STR modifier.
+    damage plus effective STR modifier (includes condition bonuses/penalties).
 
     Attack roll: 1d20 vs target AC (B/X: roll >= AC to hit, descending AC).
-    Damage:      1d6 + STR modifier (base; Phase 5 will read equipped weapon).
+    Damage:      1d6 + effective STR modifier (base; Phase 5 reads weapon).
     """
     if action.target_id is None:
         log.append("[melee_damage_str_mod: no target specified]")
         return
 
-    target_id  = action.target_id
+    target_id   = action.target_id
     actor_name  = _combatant_name(state, actor_id)
     target_name = _combatant_name(state, target_id)
 
-    # Attacker STR modifier
-    str_mod = 0
+    # Attacker modifiers
     actor_char = state.characters.get(actor_id)
     actor_npc  = _find_npc(state, actor_id)
     if actor_char:
-        str_mod = ABILITY_MODIFIERS.get(actor_char.ability_scores.strength, 0)
-        attack_bonus = 0  # Base fighter; Phase 5 adds THAC0/attack bonus
+        str_mod      = _effective_str_mod(state, actor_id)
+        attack_bonus = 0  # Base; Phase 5 adds THAC0/attack bonus
     elif actor_npc:
+        str_mod      = 0
         attack_bonus = actor_npc.attack_bonus
     else:
         return
@@ -471,7 +516,6 @@ def _hook_check_death(
         from models import CharacterStatus
         target_char.status = CharacterStatus.DEAD
         log.append(f"{target_name} has fallen!")
-        # Remove from battlefield tracking
         state.battlefield.combatants.pop(target_id, None)
         return
 
@@ -488,10 +532,26 @@ def _hook_move_to_band(
     action:   CombatAction,
     log:      list[str],
 ) -> None:
-    """Move the actor to action.destination (one step at a time)."""
+    """
+    Move the actor to action.destination (one step at a time).
+    If the actor's movement_blocked flag is set (e.g. entangled), the move
+    is cancelled and the on_move hook has already logged the reason.
+    """
     cs = state.battlefield.combatants.get(actor_id)
     if cs is None:
         return
+
+    # Fire on_move condition hooks before executing movement.
+    # Hooks may set cs.movement_blocked to cancel the move.
+    for active_cond in cs.active_conditions:
+        cond_def = CONDITION_REGISTRY.get(active_cond.condition_id)
+        if cond_def:
+            move_tag = cond_def.hooks.get("on_move")
+            if move_tag:
+                _dispatch_hook(move_tag, state, actor_id, action, log)
+
+    if cs.movement_blocked:
+        return  # hook already logged the reason
 
     if action.destination is None:
         log.append("[move_to_band: no destination specified]")
@@ -500,7 +560,6 @@ def _hook_move_to_band(
     actor_name = _combatant_name(state, actor_id)
     old_band   = cs.range_band
 
-    # Only allow moving one step per action
     adjacent = _adjacent_bands(old_band)
     if action.destination in adjacent:
         cs.range_band = action.destination
@@ -508,13 +567,131 @@ def _hook_move_to_band(
     elif action.destination == old_band:
         log.append(f"{actor_name} holds position at {old_band.value}.")
     else:
-        # Destination is too far — move one step toward it instead
         one_step = _step_toward(old_band, action.destination)
         cs.range_band = one_step
         log.append(
             f"{actor_name} moves toward {action.destination.value} "
             f"(now at {one_step.value})."
         )
+
+
+def _hook_deal_1d4_poison_damage(
+    state:    GameState,
+    actor_id: UUID,
+    action:   CombatAction | None,
+    log:      list[str],
+) -> None:
+    """
+    Poison tick: deal 1d4 damage to the poisoned combatant at end of turn.
+    actor_id is the poisoned combatant (the hook is fired on their state).
+    """
+    damage      = random.randint(1, 4)
+    actor_name  = _combatant_name(state, actor_id)
+
+    actor_char = state.characters.get(actor_id)
+    actor_npc  = _find_npc(state, actor_id)
+
+    if actor_char:
+        actor_char.hp_current = max(0, actor_char.hp_current - damage)
+        hp_str = f"{actor_char.hp_current}/{actor_char.hp_max}"
+        if actor_char.hp_current <= 0:
+            from models import CharacterStatus
+            actor_char.status = CharacterStatus.DEAD
+            state.battlefield.combatants.pop(actor_id, None)
+            log.append(f"{actor_name} takes {damage} poison damage and falls!")
+            return
+    elif actor_npc:
+        actor_npc.hp_current = max(0, actor_npc.hp_current - damage)
+        hp_str = f"{actor_npc.hp_current}/{actor_npc.hp_max}"
+        if actor_npc.hp_current <= 0:
+            actor_npc.status = "dead"
+            state.battlefield.combatants.pop(actor_id, None)
+            log.append(f"{actor_name} takes {damage} poison damage and is slain!")
+            return
+    else:
+        return
+
+    log.append(f"{actor_name} takes {damage} poison damage. [{actor_name}: {hp_str}]")
+
+
+def _hook_skip_action(
+    state:    GameState,
+    actor_id: UUID,
+    action:   CombatAction | None,
+    log:      list[str],
+) -> None:
+    """
+    Stun: set skip_action on the combatant so the action loop bypasses them.
+    The log message is emitted by the action loop itself when it sees the flag.
+    """
+    cs = state.battlefield.combatants.get(actor_id)
+    if cs is not None:
+        cs.skip_action = True
+
+
+def _hook_apply_poison_condition(
+    state:    GameState,
+    actor_id: UUID,
+    action:   CombatAction,
+    log:      list[str],
+) -> None:
+    """
+    Apply the poisoned condition to the action's target for 3 rounds.
+    Works at any range — no range_requirement on the poison action.
+    """
+    if action is None or action.target_id is None:
+        log.append("[apply_poison_condition: no target specified]")
+        return
+
+    target_id   = action.target_id
+    actor_name  = _combatant_name(state, actor_id)
+    target_name = _combatant_name(state, target_id)
+
+    cs = state.battlefield.combatants.get(target_id) if state.battlefield else None
+    if cs is None:
+        log.append(f"[apply_poison_condition: target {target_id} not on battlefield]")
+        return
+
+    # Re-applying refreshes the duration (handled inside apply_condition)
+    apply_condition(state, target_id, "poisoned", duration=3, source_id=actor_id)
+    log.append(f"{actor_name} poisons {target_name}! ({target_name} will take 1d4 damage per round for 3 rounds.)")
+
+
+def _hook_block_movement(
+    state:    GameState,
+    actor_id: UUID,
+    action:   CombatAction | None,
+    log:      list[str],
+) -> None:
+    """
+    Entangle: set movement_blocked so _hook_move_to_band cancels the move.
+    """
+    cs = state.battlefield.combatants.get(actor_id)
+    if cs is not None:
+        cs.movement_blocked = True
+        actor_name = _combatant_name(state, actor_id)
+        log.append(f"{actor_name} is entangled and cannot move!")
+
+
+# ---------------------------------------------------------------------------
+# _fire_turn_start_hooks
+# ---------------------------------------------------------------------------
+
+def _fire_turn_start_hooks(state: GameState, log: list[str]) -> None:
+    """
+    Fire on_turn_start condition hooks for every combatant with active
+    conditions that define that hook.  Called before the action loop so
+    that flags like skip_action are set before execution begins.
+    """
+    if state.battlefield is None:
+        return
+    for combatant_id, cs in list(state.battlefield.combatants.items()):
+        for cond in cs.active_conditions:
+            cond_def = CONDITION_REGISTRY.get(cond.condition_id)
+            if cond_def:
+                start_tag = cond_def.hooks.get("on_turn_start")
+                if start_tag:
+                    _dispatch_hook(start_tag, state, combatant_id, None, log)
 
 
 # ---------------------------------------------------------------------------
@@ -546,10 +723,7 @@ def _tick_conditions(state: GameState, log: list[str]) -> None:
                 cond.duration_rounds -= 1
                 still_active.append(cond)
             else:
-                # Expired this round
-                cond_name = cond.condition_id
-                if cond_def:
-                    cond_name = cond_def.label
+                cond_name = cond_def.label if cond_def else cond.condition_id
                 name = _combatant_name(state, combatant_id)
                 log.append(f"{name}'s {cond_name} condition has expired.")
 
@@ -579,11 +753,19 @@ def _dispatch_hook(
     handler(state, actor_id, action, log)
 
 
-# Registry of tag → handler.  New effects in Phase 4+ add one entry here.
+# Registry of tag → handler.  Add one entry here for each new effect.
 _HOOK_DISPATCH: dict[str, object] = {
-    "melee_damage_str_mod": _hook_melee_damage_str_mod,
-    "check_death":          _hook_check_death,
-    "move_to_band":         _hook_move_to_band,
+    # Attack / damage
+    "melee_damage_str_mod":    _hook_melee_damage_str_mod,
+    "check_death":             _hook_check_death,
+    # Movement
+    "move_to_band":            _hook_move_to_band,
+    "block_movement":          _hook_block_movement,
+    # Conditions — application
+    "apply_poison_condition":  _hook_apply_poison_condition,
+    # Conditions — per-round effects
+    "deal_1d4_poison_damage":  _hook_deal_1d4_poison_damage,
+    "skip_action":             _hook_skip_action,
 }
 
 

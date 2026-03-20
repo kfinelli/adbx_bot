@@ -23,6 +23,7 @@
     "attack",
     "move",
     "charge",
+    "poison",
     "affect"
   ]
 }

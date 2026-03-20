@@ -499,6 +499,10 @@ class CombatantState:
     Keyed by combatant_id in CombatBattlefield.combatants.
     combatant_id is a character_id (UUID) for players or an npc_id (UUID)
     for NPCs.
+
+    skip_action and movement_blocked are single-round flags set by condition
+    hooks (stunned, entangled) and cleared at the end of each round by
+    auto_resolve_round. They are never persisted.
     """
     combatant_id:      UUID                    = field(default_factory=uuid4)
     is_player:         bool                    = True
@@ -506,6 +510,8 @@ class CombatantState:
     initiative:        int                     = 0
     acted_this_round:  bool                    = False
     active_conditions: list[ActiveCondition]   = field(default_factory=list)
+    skip_action:       bool                    = False
+    movement_blocked:  bool                    = False
 
 
 @dataclass
