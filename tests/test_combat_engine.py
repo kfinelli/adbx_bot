@@ -243,8 +243,8 @@ class TestAutoResolveRound:
         assert npc.hp_current < 20, "NPC should have taken damage"
 
     def test_attack_miss_leaves_npc_hp_unchanged(self):
-        """AC=20 makes hitting impossible (max roll on d20 = 20, needs >= 20)."""
-        state, char_id, npc_id = self._setup_combat(npc_hp=5, npc_ac=20)
+        """AC=21 guarantees a miss (max d20 roll is 20, needs roll >= AC to hit)."""
+        state, char_id, npc_id = self._setup_combat(npc_hp=5, npc_ac=21)
         state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
         state.battlefield.combatants[npc_id].range_band  = RangeBand.ENGAGE
 

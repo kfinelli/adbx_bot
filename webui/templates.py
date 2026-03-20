@@ -16,6 +16,7 @@ from models import (
     DoorState,
     GameState,
     InventoryItem,
+    RangeBand,
     SessionMode,
     SpellBook,
     TurnStatus,
@@ -112,7 +113,36 @@ def page(title: str, body: str) -> str:
     .tag-closed {{ background: #4a2a1a; color: #ff9800; }}
     .tag-hold {{ background: #3a1a4a; color: #9c27b0; }}
     .tag-dead {{ background: #3a1a1a; color: #f44336; }}
+    .tag-condition {{ background: #1a3a4a; color: #64b5f6; border: 1px solid #1a5a7a; }}
     .hp-bar {{ font-family: monospace; }}
+    .combat-sub {{
+      margin-top: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      background: #0f1e36;
+      border-left: 3px solid #c9a84c;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.82rem;
+    }}
+    .combat-sub label {{ margin-top: 4px; font-size: 0.78rem; }}
+    .band-grid {{
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 4px;
+      margin: 0.4rem 0;
+      font-size: 0.75rem;
+      font-family: monospace;
+    }}
+    .band-cell {{
+      background: #0f3460;
+      border: 1px solid #1a4a8a;
+      border-radius: 3px;
+      padding: 4px 2px;
+      text-align: center;
+      min-height: 2.5rem;
+    }}
+    .band-cell.active {{ border-color: #c9a84c; background: #1a2a40; }}
+    .band-label {{ color: #888; font-size: 0.7rem; margin-bottom: 2px; }}
+    .band-name {{ color: #c9a84c; font-weight: bold; }}
     .flash {{
       background: #1a4a1a;
       border: 1px solid #1a8a4a;
@@ -247,6 +277,7 @@ def dashboard_fragment(
   {flash_html}{error_html}
   <div class="grid-2">
     <div>
+      {combat_panel(state)}
       {turn_panel(state, edit_id)}
       {dungeon_panel(state, resolved_view_id)}
       {oracle_panel(state)}
@@ -397,6 +428,232 @@ def turn_panel(state: GameState, edit_id: str = "") -> str:
 
 
 # ---------------------------------------------------------------------------
+# Combat panel — battlefield overview (ROUNDS mode only)
+# ---------------------------------------------------------------------------
+
+_BAND_ORDER = [
+    RangeBand.FAR_MINUS,
+    RangeBand.CLOSE_MINUS,
+    RangeBand.ENGAGE,
+    RangeBand.CLOSE_PLUS,
+    RangeBand.FAR_PLUS,
+]
+
+_BAND_DISPLAY = {
+    RangeBand.FAR_MINUS:   "−Far",
+    RangeBand.CLOSE_MINUS: "−Close",
+    RangeBand.ENGAGE:      "Engage",
+    RangeBand.CLOSE_PLUS:  "+Close",
+    RangeBand.FAR_PLUS:    "+Far",
+}
+
+
+def combat_panel(state: GameState) -> str:
+    """
+    Battlefield overview card shown when state.mode == ROUNDS.
+    Displays the five range bands as a grid, with each combatant's name
+    placed in their current band.  Dead combatants are omitted.
+    """
+    if state.mode != SessionMode.ROUNDS or state.battlefield is None:
+        return ""
+
+    # Group combatant names by band
+    by_band: dict[RangeBand, list[str]] = {b: [] for b in _BAND_ORDER}
+    for cid, cs in state.battlefield.combatants.items():
+        char = state.characters.get(cid)
+        if char:
+            if char.status == CharacterStatus.DEAD:
+                continue
+            name = char.name
+        else:
+            # NPC
+            name = None
+            for group in state.npc_roster.groups.values():
+                for npc in group.npcs:
+                    if npc.npc_id == cid:
+                        name = npc.name
+                        break
+                if name:
+                    break
+            if name is None or _find_npc_dead(state, cid):
+                continue
+        by_band[cs.range_band].append(name)
+
+    cells = ""
+    for band in _BAND_ORDER:
+        names = by_band[band]
+        occupants = "<br>".join(
+            f'<span style="color:#e0e0e0">{n}</span>' for n in names
+        ) if names else '<span style="color:#444">—</span>'
+        is_active = any(
+            cs.range_band == band
+            for cs in state.battlefield.combatants.values()
+        )
+        active_cls = " active" if is_active else ""
+        cells += f"""
+<div class="band-cell{active_cls}">
+  <div class="band-label">{'← players' if band == RangeBand.FAR_MINUS else ('enemies →' if band == RangeBand.FAR_PLUS else '')}</div>
+  <div class="band-name">{_BAND_DISPLAY[band]}</div>
+  <div style="margin-top:4px;font-size:0.75rem">{occupants}</div>
+</div>"""
+
+    round_log_html = ""
+    if state.battlefield.round_log:
+        entries = "".join(
+            f'<div style="margin-bottom:2px">{e}</div>'
+            for e in state.battlefield.round_log
+        )
+        round_log_html = f"""
+<hr class="divider">
+<div class="section-header" style="margin-bottom:0.3rem">
+  <h3 style="font-size:0.85rem;color:#888">Last Round Log</h3>
+</div>
+<div style="font-size:0.8rem;color:#aaa;font-family:monospace;
+     max-height:8rem;overflow-y:auto;padding:0.4rem;
+     background:#0a1628;border-radius:4px;border:1px solid #0f3460">
+  {entries}
+</div>"""
+
+    return f"""
+<div class="card">
+  <div class="section-header">
+    <h3>&#9876; Battlefield — Round {state.turn_number}</h3>
+  </div>
+  <div class="band-grid">{cells}</div>
+  {round_log_html}
+</div>"""
+
+
+def _find_npc_dead(state: GameState, npc_id) -> bool:
+    for group in state.npc_roster.groups.values():
+        for npc in group.npcs:
+            if npc.npc_id == npc_id:
+                return npc.status == "dead"
+    return False
+
+
+# ---------------------------------------------------------------------------
+# Combat sub-panel — per-combatant battlefield controls (ROUNDS mode only)
+# ---------------------------------------------------------------------------
+
+def _combat_subpanel(
+    state:        GameState,
+    combatant_id: str,        # str UUID
+    channel_id:   str,
+    view_room_id: str = "",
+    is_player:    bool = True,
+) -> str:
+    """
+    Bordered sub-panel rendered inside each character/NPC row during ROUNDS mode.
+    Shows: current range band (selectable), initiative, active conditions with
+    remove buttons, and an Apply Condition form.
+    """
+    if state.mode != SessionMode.ROUNDS or state.battlefield is None:
+        return ""
+
+    from uuid import UUID
+    try:
+        cid_uuid = UUID(combatant_id)
+    except ValueError:
+        return ""
+
+    cs = state.battlefield.combatants.get(cid_uuid)
+    if cs is None:
+        return ""
+
+    base = f"/session/{channel_id}"
+
+    # --- Range band selector
+    band_options = "".join(
+        f'<option value="{b.value}" {"selected" if b == cs.range_band else ""}>'
+        f'{_BAND_DISPLAY[b]}</option>'
+        for b in _BAND_ORDER
+    )
+    band_form = f"""
+<form hx-post="{base}/combatant/{combatant_id}/setband"
+      hx-target="#dashboard" hx-swap="outerHTML" style="display:inline-flex;gap:4px;align-items:center">
+  <input type="hidden" name="view_room_id" value="{view_room_id}">
+  <select name="band" onchange="this.form.requestSubmit()" style="font-size:0.78rem;padding:2px 4px">
+    {band_options}
+  </select>
+</form>"""
+
+    # --- Initiative
+    init_form = f"""
+<form hx-post="{base}/combatant/{combatant_id}/setinitiative"
+      hx-target="#dashboard" hx-swap="outerHTML"
+      style="display:inline-flex;gap:4px;align-items:center;margin-left:0.75rem">
+  <input type="hidden" name="view_room_id" value="{view_room_id}">
+  <label style="margin:0;color:#888">Init:</label>
+  <input type="number" name="initiative" value="{cs.initiative}"
+         style="width:50px;font-size:0.78rem;padding:2px 4px">
+  <button class="btn-sm" type="submit" style="margin-top:0">Set</button>
+</form>"""
+
+    # --- Active conditions with remove buttons
+    from engine.data_loader import CONDITION_REGISTRY
+    cond_chips = ""
+    for cond in cs.active_conditions:
+        cond_def = CONDITION_REGISTRY.get(cond.condition_id)
+        label = cond_def.label if cond_def else cond.condition_id
+        dur = f" {cond.duration_rounds}r" if cond.duration_rounds is not None else " ∞"
+        cond_chips += f"""
+<span class="tag tag-condition" style="margin-right:4px;margin-bottom:4px">
+  {label}{dur}
+  <form style="display:inline" hx-post="{base}/combatant/{combatant_id}/removecondition"
+        hx-target="#dashboard" hx-swap="outerHTML">
+    <input type="hidden" name="condition_id" value="{cond.condition_id}">
+    <input type="hidden" name="view_room_id" value="{view_room_id}">
+    <button type="submit" style="background:none;border:none;color:#64b5f6;
+            cursor:pointer;padding:0 2px;margin:0;font-size:0.8rem;line-height:1"
+            title="Remove condition">×</button>
+  </form>
+</span>"""
+
+    # --- Apply condition form
+    all_conditions = sorted(CONDITION_REGISTRY.keys())
+    cond_options = "".join(
+        f'<option value="{cid}">{CONDITION_REGISTRY[cid].label}</option>'
+        for cid in all_conditions
+    )
+    apply_form = f"""
+<form hx-post="{base}/combatant/{combatant_id}/applycondition"
+      hx-target="#dashboard" hx-swap="outerHTML"
+      style="display:flex;gap:4px;align-items:flex-end;flex-wrap:wrap;margin-top:4px">
+  <input type="hidden" name="view_room_id" value="{view_room_id}">
+  <div style="flex:1;min-width:90px">
+    <label>Condition</label>
+    <select name="condition_id" style="font-size:0.78rem">{cond_options}</select>
+  </div>
+  <div style="width:60px">
+    <label>Rounds</label>
+    <input type="number" name="duration" value="3" min="1"
+           style="font-size:0.78rem;padding:2px 4px">
+  </div>
+  <button class="btn-sm" type="submit" style="margin-bottom:1px">Apply</button>
+</form>"""
+
+    conditions_html = (
+        f'<div style="margin:4px 0">{cond_chips}</div>'
+        if cond_chips else
+        '<span class="muted" style="font-size:0.78rem">No conditions</span>'
+    )
+
+    return f"""
+<div class="combat-sub">
+  <div style="display:flex;align-items:center;flex-wrap:wrap;gap:0.25rem">
+    <span class="muted" style="font-size:0.78rem;margin-right:4px">Band:</span>
+    {band_form}
+    {init_form}
+  </div>
+  <div style="margin-top:6px">
+    {conditions_html}
+    {apply_form}
+  </div>
+</div>"""
+
+
+# ---------------------------------------------------------------------------
 # Party panel
 # ---------------------------------------------------------------------------
 
@@ -431,6 +688,7 @@ def party_panel(state: GameState) -> str:
         hx-target="#dashboard" hx-swap="outerHTML">Make Leader</button>"""
 
         # Each control is its own form so name attributes are unambiguous
+        combat_sub = _combat_subpanel(state, cid_str, channel_id, is_player=True)
         rows += f"""
 <tr>
   <td><strong>{char.name}{leader_star}</strong><br>
@@ -457,6 +715,7 @@ def party_panel(state: GameState) -> str:
       </div>
     </form>
     {make_leader_btn}
+    {combat_sub}
   </td>
 </tr>"""
 
@@ -925,10 +1184,12 @@ def npc_panel(
   </td>
 </tr>"""
         else:
+            npc_combat_sub = _combat_subpanel(state, nid, channel_id, view_room_id, is_player=False)
             rows += f"""
 <tr>
   <td><strong>{npc.name}</strong><br>
-      <span class="muted">{npc.description}</span></td>
+      <span class="muted">{npc.description}</span>
+      {npc_combat_sub}</td>
   <td class="hp-bar">{npc.hp_current}/{npc.hp_max}</td>
   <td style="white-space:nowrap">
     <form hx-post="/session/{channel_id}/npc/{nid}/sethp"
@@ -1154,25 +1415,29 @@ def _stat_block(stats: list[tuple[str, str]], cols: int | None = None, name: str
             ) if name else ""
     grid = (
             f'<div style="display:grid;'
-            f'grid-template-columns:repeat({col_count},minmax(3rem,5rem));gap:0.5rem;">'
+            f'grid-template-columns:repeat({col_count},minmax(3rem,5rem));'
+            f'gap:0.5rem;">'
             f'{cells}</div>'
             )
     return (
             f'<div style="padding:0.75rem;border:1px solid #0f3460;'
-            f'width:fit-content;border-radius:8px;margin:0.5rem 0">'
+            f'border-radius:8px;margin:0.5rem 0; width:fit-content;">'
             f'{header}{grid}'
             f'</div>'
             )
 
+
 def _display_inventory_item(item: InventoryItem) -> str:
-    """Prepare a formatted name, quantity, equip indicator for an item"""
-    quantity = (f"{item.quantity}x ") if item.quantity>1 else ""
-    equipstatus = ("(EQUIP) ") if item.is_equipped else ""
+    """Prepare a formatted name, quantity, equip indicator for an item."""
+    quantity   = f"{item.quantity}x " if item.quantity > 1 else ""
+    equipstatus = "(EQUIP) " if item.is_equipped else ""
     return f"{quantity}{equipstatus}{item.name}"
 
+
 def _display_spellbook_spell(spells: SpellBook) -> str:
-    """STUB: return nicely formatted string of a spellbook spell"""
+    """STUB: return nicely formatted string of a spellbook spell."""
     return ""
+
 
 def character_sheet_panel(
     character: Character,
@@ -1216,7 +1481,6 @@ def character_sheet_panel(
             f'{inv_cells}</div>'
             f'</div>'
             )
-
     spell_grid = _display_spellbook_spell(character.spellbook)
     spells = (
             f'<div style="padding:0.75rem;border:1px solid #0f3460;'
@@ -1234,7 +1498,7 @@ def character_sheet_panel(
 <div class="muted">{character.character_class.value} — Level {character.level} &nbsp;·&nbsp; {character.experience}
 XP &nbsp;·&nbsp; {character.gold} gp</div>
   {ability_scores}
-  <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+  <div class="grid-2">
   {hp_ac_movement}
   {saves}
   </div>
