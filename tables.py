@@ -27,11 +27,27 @@ class PlayerClass:
     Everything create_character needs to know about a class.
     Populated from data/classes/*.json via engine/data_loader.py.
     """
+
     display_name:     str   = "Unknown Class"   # shown to players, e.g. "Magic-User"
     hit_die:          int   = 6                 # die size for HP rolls
     base_ac:          int   = 9                 # unarmored AC (descending; lower = better)
     base_movement:    int   = 120               # feet per turn
     is_spellcaster:   bool  = False
+    weapon_rank:      str   = "E"
+    max_level:        int   = 5
+    base_save:        int  = 0
+    stat:             str  = "PHY"
+    abilities=        dict = {}
+    """
+    id: str
+    max_level: int = 5
+    display_name: str = "Unknown Class"
+    hit_die: int = 4
+    weapon_rank: str='E'
+    base_save: int = 0
+    stat: str = "PHY"
+    abilities={}
+    """
 
     # Saving throw targets as an opaque dict.
     # Keys can be anything the ruleset uses; engine never inspects them.
@@ -39,6 +55,7 @@ class PlayerClass:
         "death_poison": 14, "wands": 15, "paralysis_stone": 16,
         "breath_weapon": 17, "spells": 18,
     })
+
     # Class-specific bonus items for named equipment packs.
     # Maps pack_name -> (item_name, quantity, encumbrance).
     pack_bonus_items: dict = field(default_factory=dict)
