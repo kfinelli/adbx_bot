@@ -1,12 +1,12 @@
-from enum import Enum
 import json
 import math
 import random
+from enum import Enum
 
 """
 Enums, Constants, and Utils
 ><><><><><><><><><><><><><
-Enums are preferable to raw strings where applicable. 
+Enums are preferable to raw strings where applicable.
 """
 
 '''
@@ -104,7 +104,7 @@ class StatusType(Enum):
 Status Classes
 ><><><><><><><><><><><><><
 Common Types of Status should probably have their own class, just to make sure we know what components are for sure a
-part of them. I don't know how granular we want to get with it, however. 
+part of them. I don't know how granular we want to get with it, however.
 """
 class Status:
     def __init__(self, id, displayName, type, description):
@@ -128,13 +128,13 @@ class StatChangeStatus(Status):
 Jobs and Skills
 ><><><><><><><><><><><><><
 Common Types of Status should probably have their own class, just to make sure we know what components are for sure a
-part of them. I don't know how granular we want to get with it, however. 
+part of them. I don't know how granular we want to get with it, however.
 """
 
 class Job:
     def __init__(self, id, displayName, hitDie, weaponRanks, baseSave, skills = None, description = None, maxLevel = 5):
         if skills is None:
-            skills = dict()
+            skills = {}
         self.id = id
         self.displayName = displayName
         self.description = description
@@ -151,12 +151,14 @@ class Job:
         }
 
 class JobExperience:
-    def __init__(self, jobID, level=0, health=0, ranks = {'e'}):
+    def __init__(self, jobID, level=0, health=0, ranks = None):
+        if ranks is None:
+            ranks = {'e'}
         self.jobID = jobID
         self.level = level
         self.health = health
         self.weaponRanks = ranks
-        self.skills = dict()
+        self.skills = {}
         self.statChanges = {
             Stat.PHYSIQUE: 0,
             Stat.FINESSE: 0,
@@ -170,7 +172,7 @@ class JobExperience:
 
     def rebuildSkills(self):
         job = self.getJob()
-        skills = dict()
+        skills = {}
         for skillName in job.skills:
             skill = job.skills[skillName]
             if skill.level <= self.level:
@@ -217,15 +219,10 @@ class Skill:
         self.dm_notes = ""
 
 def getLowerWeaponRanks(rank):
-    if rank == "A":
-        return {"E","D","C","B","A"}
-    elif rank == "B":
-        return{"E","D","C","B"}
-    elif rank == "C":
-        return{"E","D","C"}
-    elif rank == "D":
-        return{"E","D"}
-    return{"E"}
+    lowerweaponranks = { "A": {"E","D","C","B","A"}, "B": {"E","D","C","B"},  "C": {"E","D","C"},  "D": {"E","D"}, "E":{"E"}}
+    if rank not in lowerweaponranks:
+        return "E"
+    return lowerweaponranks[rank]
 
 def createSkillFromJson(name, sData):
     skillType = SkillType(sData['type'])
@@ -239,18 +236,17 @@ def createSkillFromJson(name, sData):
         newSkill.rank = rank
     if skillType == SkillType.PASSIVE_BONUS:
         baseBonus = 1
-        stat = None
-        if sData['stat'] is "SAVE":
+        if sData['stat'] == "SAVE":
             newSkill.stat = 0
             newSkill.bonus = sData['bonus']
             return newSkill
-        if sData['stat'] is "PHY":
+        if sData['stat'] == "PHY":
             newSkill.stat = Stat.PHYSIQUE
-        elif sData['stat'] is "FNS":
+        elif sData['stat'] == "FNS":
             newSkill.stat = Stat.FINESSE
-        elif sData['stat'] is "RSN":
+        elif sData['stat'] == "RSN":
             newSkill.stat = Stat.REASON
-        elif sData['stat'] is "SVY":
+        elif sData['stat'] == "SVY":
             newSkill.stat = Stat.SAVVY
         else:
             newSkill.stat = -1
@@ -258,31 +254,29 @@ def createSkillFromJson(name, sData):
     return newSkill
 
 def importJobSkills():
-    jobSkillFile = open(SKILL_FILE)
-    skilljson = json.load(jobSkillFile)
-    jobSkillData = dict()
-    for job in skilljson:
-        jobSkillData[job] = dict()
-        for skill in skilljson[job]:
-            newSkill = createSkillFromJson(skill, skilljson[job][skill])
-            jobSkillData[job][newSkill.id] = newSkill
-    return jobSkillData
+    with open(SKILL_FILE) as jobSkillFile, json.load(jobSkillFile) as skilljson:
+        jobSkillData = {}
+        for job in skilljson:
+            jobSkillData[job] = {}
+            for skill in skilljson[job]:
+                newSkill = createSkillFromJson(skill, skilljson[job][skill])
+                jobSkillData[job][newSkill.id] = newSkill
+        return jobSkillData
 
 def importJobs():
-    jobFile = open(JOB_FILE)
-    jobson = json.load(jobFile)
-    jobData = dict()
-    skillData = importJobSkills()
-    for job in jobson:
-        cJob = jobson[job]
-        cWeaponRanks = getLowerWeaponRanks(cJob['weapon_rank'])
-        cSkills = skillData[cJob['id']]
-        skills = dict()
-        for skill in cSkills:
-            skills[skill] = (cSkills[skill])
-        newJob = Job(cJob['id'], job, cJob['hit_die'], cWeaponRanks, cJob['base_save'], skills, cJob['desc'], cJob['max_level'] * LEVEL_MULTIPLIER)
-        jobData[newJob.id] = newJob
-    return jobData
+    with open(JOB_FILE) as jobFile, json.load(jobFile) as jobson:
+        jobData = {}
+        skillData = importJobSkills()
+        for job in jobson:
+            cJob = jobson[job]
+            cWeaponRanks = getLowerWeaponRanks(cJob['weapon_rank'])
+            cSkills = skillData[cJob['id']]
+            skills = {}
+            for skill in cSkills:
+                skills[skill] = (cSkills[skill])
+            newJob = Job(cJob['id'], job, cJob['hit_die'], cWeaponRanks, cJob['base_save'], skills, cJob['desc'], cJob['max_level'] * LEVEL_MULTIPLIER)
+            jobData[newJob.id] = newJob
+        return jobData
 
 """
 Items and Equipment
@@ -306,7 +300,7 @@ class EquipItem(Item):
     def __init__(self, name, rank, tags=None, otherAbilities=None, description="", isLight=False):
         super().__init__(name, description, isLight)
         if tags is None:
-            tags = list()
+            tags = []
         self.rank = rank
         self.tags = tags
         self.otherAbilities = otherAbilities
@@ -383,7 +377,7 @@ class Character:
         self.health = 0
 
         # Contains JobExperience for all Jobs
-        self.jobs = dict()
+        self.jobs = {}
 
         #Stat Stuff
         self.baseStats = {
@@ -395,26 +389,26 @@ class Character:
 
         #Dictionary Keys should be the skill's ID.
         self.skills = {
-            SkillType.SIMPLE: dict(),
-            SkillType.TURN_ACTION: dict(),
-            SkillType.COMBAT_ACTION: dict(),
-            SkillType.ORACLE_ACTION: dict(),
-            SkillType.FREE_ACTION: dict(),
-            SkillType.PASSIVE_BONUS: dict(),
-            SkillType.WEAPON_RANK: dict(),
-            SkillType.ROLEPLAY: dict (),
-            SkillType.STATUS: dict (),
-            SkillType.COMPLEX: dict()
+            SkillType.SIMPLE: {},
+            SkillType.TURN_ACTION: {},
+            SkillType.COMBAT_ACTION: {},
+            SkillType.ORACLE_ACTION: {},
+            SkillType.FREE_ACTION: {},
+            SkillType.PASSIVE_BONUS: {},
+            SkillType.WEAPON_RANK: {},
+            SkillType.ROLEPLAY: {},
+            SkillType.STATUS: {},
+            SkillType.COMPLEX: {}
         }
 
         #Dictionary Keys should be the status's ID.
         self.status = {
-            StatusType.PERMANENT: dict(),
-            StatusType.ON_DEATH: dict(),
-            StatusType.TURN_START: dict(),
-            StatusType.TURN_END: dict(),
-            StatusType.SHORT: dict(),
-            StatusType.LONG: dict()
+            StatusType.PERMANENT: {},
+            StatusType.ON_DEATH: {},
+            StatusType.TURN_START: {},
+            StatusType.TURN_END: {},
+            StatusType.SHORT: {},
+            StatusType.LONG: {}
         }
 
         #Inventory
@@ -429,11 +423,11 @@ class Character:
             Slot.LEGS : None,
             Slot.MAIN: None,
             Slot.OFF: None,
-            Slot.ACCESSORY: list()
+            Slot.ACCESSORY: []
         }
 
         #Items
-        self.inventory = list()
+        self.inventory = []
 
     def addNewJob(self, jobID, isFirst=False):
         job = getJobFromID(jobID)
@@ -462,16 +456,16 @@ class Character:
 
     def rebuildSkills(self):
         skills = {
-            SkillType.SIMPLE: dict(),
-            SkillType.TURN_ACTION: dict(),
-            SkillType.COMBAT_ACTION: dict(),
-            SkillType.ORACLE_ACTION: dict(),
-            SkillType.FREE_ACTION: dict(),
-            SkillType.PASSIVE_BONUS: dict(),
-            SkillType.WEAPON_RANK: dict(),
-            SkillType.ROLEPLAY: dict(),
-            SkillType.STATUS: dict(),
-            SkillType.COMPLEX: dict()
+            SkillType.SIMPLE: {},
+            SkillType.TURN_ACTION: {},
+            SkillType.COMBAT_ACTION: {},
+            SkillType.ORACLE_ACTION: {},
+            SkillType.FREE_ACTION: {},
+            SkillType.PASSIVE_BONUS: {},
+            SkillType.WEAPON_RANK: {},
+            SkillType.ROLEPLAY: {},
+            SkillType.STATUS: {},
+            SkillType.COMPLEX: {}
         }
 
         for job in self.jobs:
