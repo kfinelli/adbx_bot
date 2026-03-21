@@ -1084,7 +1084,7 @@ class TestParameterizedHooks:
     # ------------------------------------------------------------------
 
     def test_plain_string_tag_dispatches(self):
-        from engine.combat import _dispatch_hook, CombatAction
+        from engine.combat import _dispatch_hook
         state, char_id, _ = self._state_with_char_and_npc()
         cs = state.battlefield.combatants[char_id]
         assert cs.skip_action is False
@@ -1223,12 +1223,16 @@ class TestHookObjectValidation:
     """Tests that data_loader correctly validates hook objects in data files."""
 
     def test_plain_string_hook_loads(self):
-        import tempfile, json
+        import json
+        import tempfile
         from pathlib import Path
+
         from engine.data_loader import load_all
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp)
-            (p / "actions").mkdir(); (p / "conditions").mkdir(); (p / "classes").mkdir()
+            (p / "actions").mkdir()
+            (p / "conditions").mkdir()
+            (p / "classes").mkdir()
             (p / "conditions" / "test.json").write_text(json.dumps({
                 "condition_id": "test", "label": "Test", "duration_type": "rounds",
                 "hooks": {"on_turn_end": "skip_action"},
@@ -1237,12 +1241,16 @@ class TestHookObjectValidation:
             assert cr["test"].hooks["on_turn_end"] == "skip_action"
 
     def test_hook_object_loads(self):
-        import tempfile, json
+        import json
+        import tempfile
         from pathlib import Path
+
         from engine.data_loader import load_all
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp)
-            (p / "actions").mkdir(); (p / "conditions").mkdir(); (p / "classes").mkdir()
+            (p / "actions").mkdir()
+            (p / "conditions").mkdir()
+            (p / "classes").mkdir()
             (p / "conditions" / "burning.json").write_text(json.dumps({
                 "condition_id": "burning", "label": "Burning", "duration_type": "rounds",
                 "hooks": {"on_turn_end": {"tag": "deal_damage", "dice": "1d6", "type": "fire"}},
@@ -1254,12 +1262,16 @@ class TestHookObjectValidation:
             assert entry["dice"] == "1d6"
 
     def test_hook_object_missing_tag_raises(self):
-        import tempfile, json
+        import json
+        import tempfile
         from pathlib import Path
+
         from engine.data_loader import load_all
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp)
-            (p / "actions").mkdir(); (p / "conditions").mkdir(); (p / "classes").mkdir()
+            (p / "actions").mkdir()
+            (p / "conditions").mkdir()
+            (p / "classes").mkdir()
             (p / "conditions" / "bad.json").write_text(json.dumps({
                 "condition_id": "bad", "label": "Bad", "duration_type": "rounds",
                 "hooks": {"on_turn_end": {"dice": "1d6"}},   # missing "tag"
@@ -1271,12 +1283,16 @@ class TestHookObjectValidation:
                 assert "tag" in str(e).lower()
 
     def test_hook_object_in_effect_tags_loads(self):
-        import tempfile, json
+        import json
+        import tempfile
         from pathlib import Path
+
         from engine.data_loader import load_all
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp)
-            (p / "actions").mkdir(); (p / "conditions").mkdir(); (p / "classes").mkdir()
+            (p / "actions").mkdir()
+            (p / "conditions").mkdir()
+            (p / "classes").mkdir()
             (p / "actions" / "stab.json").write_text(json.dumps({
                 "action_id": "stab", "label": "Stab", "button_style": "danger",
                 "action_type": "attack", "requires_target": True,
@@ -1289,12 +1305,16 @@ class TestHookObjectValidation:
             assert tags[1] == "check_death"
 
     def test_effect_tag_object_missing_tag_raises(self):
-        import tempfile, json
+        import json
+        import tempfile
         from pathlib import Path
+
         from engine.data_loader import load_all
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp)
-            (p / "actions").mkdir(); (p / "conditions").mkdir(); (p / "classes").mkdir()
+            (p / "actions").mkdir()
+            (p / "conditions").mkdir()
+            (p / "classes").mkdir()
             (p / "actions" / "bad.json").write_text(json.dumps({
                 "action_id": "bad", "label": "Bad", "button_style": "danger",
                 "action_type": "attack", "requires_target": False,
