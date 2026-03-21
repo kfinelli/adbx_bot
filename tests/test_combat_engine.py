@@ -43,7 +43,7 @@ from models import (
     TurnStatus,
 )
 from serialization import deserialize_state, serialize_state
-from tables import CharacterClass
+from azure_tables import CharacterClass
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -56,7 +56,7 @@ def _make_state_with_npc() -> GameState:
 
     state = GameState(platform_channel_id="ch", dm_user_id="dm")
     state.party = Party(name="P")
-    create_character(state, "Aldric", CharacterClass.FIGHTER, "Pack A", owner_id="u1")
+    create_character(state, "Aldric", CharacterClass.KNIGHT, "Pack A", owner_id="u1")
     start_session(state)
 
     room = Room(name="Hall", description="A stone hall.")
@@ -75,8 +75,8 @@ def _make_party_state() -> GameState:
 
     state = GameState(platform_channel_id="ch", dm_user_id="dm")
     state.party = Party(name="P")
-    create_character(state, "Aldric", CharacterClass.FIGHTER, "Pack A", owner_id="u1")
-    create_character(state, "Tomas",  CharacterClass.CLERIC,  "Pack A", owner_id="u2")
+    create_character(state, "Aldric", CharacterClass.KNIGHT, "Pack A", owner_id="u1")
+    create_character(state, "Tomas",  CharacterClass.MAGE,  "Pack A", owner_id="u2")
     start_session(state)
 
     room = Room(name="Hall", description="Stone hall.")
@@ -869,10 +869,11 @@ class TestConditions:
         state, char_id, _ = self._state_in_rounds()
 
         char = state.characters[char_id]
-        char.ability_scores.strength = 10   # base modifier = 0
+        char.ability_scores.strength = 0   # zero base stat
         base_mod = _effective_stat_mod(state, char_id, "strength")
         assert base_mod == 0
 
+        # strengthened condition adds 2 directly to the stat (pass-through model)
         apply_condition(state, char_id, "strengthened", duration=3)
         boosted_mod = _effective_stat_mod(state, char_id, "strength")
         assert boosted_mod == 2
@@ -882,9 +883,10 @@ class TestConditions:
         state, char_id, _ = self._state_in_rounds()
 
         char = state.characters[char_id]
-        char.ability_scores.strength = 16   # base modifier = +2
+        char.ability_scores.strength = 200   # base stat of 200
         apply_condition(state, char_id, "strengthened", duration=3)
-        assert _effective_stat_mod(state, char_id, "strength") == 4  # +2 base + +2 condition
+        # 200 base + 2 condition bonus = 202
+        assert _effective_stat_mod(state, char_id, "strength") == 202
 
     def test_strengthened_has_no_hooks(self):
         from engine import CONDITION_REGISTRY
@@ -984,7 +986,7 @@ class TestPoisonAction:
 
     def test_poison_not_in_fighter_actions(self):
         from engine import CLASS_DEFINITIONS
-        assert "poison" not in CLASS_DEFINITIONS["FIGHTER"].combat_actions
+        assert "poison" not in CLASS_DEFINITIONS["KNIGHT"].combat_actions
 
     def test_poison_has_no_range_requirement(self):
         from engine import ACTION_REGISTRY
@@ -1084,7 +1086,7 @@ class TestParameterizedHooks:
     # ------------------------------------------------------------------
 
     def test_plain_string_tag_dispatches(self):
-        from engine.combat import _dispatch_hook
+        from engine.combat import _dispatch_hook, CombatAction
         state, char_id, _ = self._state_with_char_and_npc()
         cs = state.battlefield.combatants[char_id]
         assert cs.skip_action is False
@@ -1223,55 +1225,43 @@ class TestHookObjectValidation:
     """Tests that data_loader correctly validates hook objects in data files."""
 
     def test_plain_string_hook_loads(self):
-        import json
-        import tempfile
+        import tempfile, json
         from pathlib import Path
-
         from engine.data_loader import load_all
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp)
-            (p / "actions").mkdir()
-            (p / "conditions").mkdir()
-            (p / "classes").mkdir()
+            (p / "actions").mkdir(); (p / "conditions").mkdir(); (p / "classes").mkdir()
             (p / "conditions" / "test.json").write_text(json.dumps({
                 "condition_id": "test", "label": "Test", "duration_type": "rounds",
                 "hooks": {"on_turn_end": "skip_action"},
             }))
-            _, cr, _ = load_all(p)
+            _, cr, _, _ = load_all(p)
             assert cr["test"].hooks["on_turn_end"] == "skip_action"
 
     def test_hook_object_loads(self):
-        import json
-        import tempfile
+        import tempfile, json
         from pathlib import Path
-
         from engine.data_loader import load_all
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp)
-            (p / "actions").mkdir()
-            (p / "conditions").mkdir()
-            (p / "classes").mkdir()
+            (p / "actions").mkdir(); (p / "conditions").mkdir(); (p / "classes").mkdir()
             (p / "conditions" / "burning.json").write_text(json.dumps({
                 "condition_id": "burning", "label": "Burning", "duration_type": "rounds",
                 "hooks": {"on_turn_end": {"tag": "deal_damage", "dice": "1d6", "type": "fire"}},
             }))
-            _, cr, _ = load_all(p)
+            _, cr, _, _ = load_all(p)
             entry = cr["burning"].hooks["on_turn_end"]
             assert isinstance(entry, dict)
             assert entry["tag"] == "deal_damage"
             assert entry["dice"] == "1d6"
 
     def test_hook_object_missing_tag_raises(self):
-        import json
-        import tempfile
+        import tempfile, json
         from pathlib import Path
-
         from engine.data_loader import load_all
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp)
-            (p / "actions").mkdir()
-            (p / "conditions").mkdir()
-            (p / "classes").mkdir()
+            (p / "actions").mkdir(); (p / "conditions").mkdir(); (p / "classes").mkdir()
             (p / "conditions" / "bad.json").write_text(json.dumps({
                 "condition_id": "bad", "label": "Bad", "duration_type": "rounds",
                 "hooks": {"on_turn_end": {"dice": "1d6"}},   # missing "tag"
@@ -1283,38 +1273,30 @@ class TestHookObjectValidation:
                 assert "tag" in str(e).lower()
 
     def test_hook_object_in_effect_tags_loads(self):
-        import json
-        import tempfile
+        import tempfile, json
         from pathlib import Path
-
         from engine.data_loader import load_all
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp)
-            (p / "actions").mkdir()
-            (p / "conditions").mkdir()
-            (p / "classes").mkdir()
+            (p / "actions").mkdir(); (p / "conditions").mkdir(); (p / "classes").mkdir()
             (p / "actions" / "stab.json").write_text(json.dumps({
                 "action_id": "stab", "label": "Stab", "button_style": "danger",
                 "action_type": "attack", "requires_target": True,
                 "requires_destination": False, "range_requirement": [],
                 "effect_tags": [{"tag": "melee_attack", "dice": "1d4"}, "check_death"],
             }))
-            ar, _, _ = load_all(p)
+            ar, _, _, _ = load_all(p)
             tags = ar["stab"].effect_tags
             assert tags[0] == {"tag": "melee_attack", "dice": "1d4"}
             assert tags[1] == "check_death"
 
     def test_effect_tag_object_missing_tag_raises(self):
-        import json
-        import tempfile
+        import tempfile, json
         from pathlib import Path
-
         from engine.data_loader import load_all
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp)
-            (p / "actions").mkdir()
-            (p / "conditions").mkdir()
-            (p / "classes").mkdir()
+            (p / "actions").mkdir(); (p / "conditions").mkdir(); (p / "classes").mkdir()
             (p / "actions" / "bad.json").write_text(json.dumps({
                 "action_id": "bad", "label": "Bad", "button_style": "danger",
                 "action_type": "attack", "requires_target": False,

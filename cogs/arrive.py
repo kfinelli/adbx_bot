@@ -22,7 +22,7 @@ from discord.ext import commands
 from engine import create_character, roll_stats
 from models import CharacterClass, SessionMode
 from store import ack, get_session, save_session, update_status
-from tables import EQUIPMENT_PACKAGE_DESCRIPTIONS, EQUIPMENT_PACKAGES
+from azure_tables import EQUIPMENT_PACKAGE_DESCRIPTIONS, EQUIPMENT_PACKAGES
 
 # ---------------------------------------------------------------------------
 # Stat display helper

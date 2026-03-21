@@ -26,9 +26,11 @@ from .data_loader import (
     ACTION_REGISTRY,
     CLASS_DEFINITIONS,
     CONDITION_REGISTRY,
+    SKILL_REGISTRY,
     ActionDef,
-    ClassDef,
     ConditionDef,
+    JobDef,
+    SkillDef,
 )
 from .dice import (
     d,
@@ -576,9 +578,11 @@ __all__ = [
     "ACTION_REGISTRY",
     "CONDITION_REGISTRY",
     "CLASS_DEFINITIONS",
+    "SKILL_REGISTRY",
     "ActionDef",
     "ConditionDef",
-    "ClassDef",
+    "JobDef",
+    "SkillDef",
     # Dice functions
     "d",
     "roll",

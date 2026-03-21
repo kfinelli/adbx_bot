@@ -16,7 +16,7 @@ from uuid import UUID, uuid4
 
 # CharacterClass is generated in tables.py from _CLASS_DEFINITIONS.
 # Import it here so the rest of the codebase can import from models as before.
-from tables import CharacterClass
+from azure_tables import CharacterClass
 
 # ---------------------------------------------------------------------------
 # Enumerations (non-ruleset — these don't change between game systems)
@@ -160,7 +160,7 @@ class Character:
     character_id:    UUID              = field(default_factory=uuid4)
     owner_id:        str | None     = None   # platform user ID (opaque string)
     name:            str               = ""
-    character_class: CharacterClass    = CharacterClass.FIGHTER
+    character_class: CharacterClass    = CharacterClass.KNIGHT
     level:           int               = 1
     experience:      int               = 0
 

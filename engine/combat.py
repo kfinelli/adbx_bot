@@ -58,7 +58,7 @@ from models import (
     GameState,
     RangeBand,
 )
-from tables import ABILITY_MODIFIERS
+from azure_tables import get_stat_modifier, POWER_LEVEL
 
 from .data_loader import ACTION_REGISTRY, CONDITION_REGISTRY
 from .dice import roll_dice_expr
@@ -160,7 +160,7 @@ def initialize_battlefield(state: GameState) -> CombatBattlefield:
     for char_id, char in state.characters.items():
         if char.status.value != "active":
             continue
-        dex_mod = ABILITY_MODIFIERS.get(char.ability_scores.dexterity, 0)
+        dex_mod = get_stat_modifier(char.ability_scores.dexterity)
         bf.combatants[char_id] = CombatantState(
             combatant_id=char_id,
             is_player=True,
@@ -380,7 +380,7 @@ def _effective_stat_mod(state: GameState, actor_id: UUID, stat: str) -> int:
         return 0
 
     base_val = getattr(actor_char.ability_scores, stat, 10)
-    base_mod = ABILITY_MODIFIERS.get(base_val, 0)
+    base_mod = get_stat_modifier(base_val)
 
     cs = state.battlefield.combatants.get(actor_id) if state.battlefield else None
     if cs is None:

@@ -54,8 +54,11 @@ def roll_expr(dCount, dSize, bonus=0):
 
 
 def d(x):
-    """Roll a single die with x sides."""
-    return random.randint(1, int(x))
+    """Roll a single die with x sides.  Returns 0 if x < 1."""
+    x = int(x)
+    if x < 1:
+        return 0
+    return random.randint(1, x)
 
 
 def roll(n: int, sides: int) -> list[int]:

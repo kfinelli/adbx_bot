@@ -38,8 +38,8 @@ def state_with_fighter(bare_state):
     create_character(
         bare_state,
         name="Aldric",
-        character_class=CharacterClass.FIGHTER,
-        equipment_package="Pack A",
+        character_class=CharacterClass.KNIGHT,
+        equipment_package="",
         owner_id="user_001",
     )
     return bare_state
@@ -64,15 +64,15 @@ def active_state(state_with_fighter):
 def party_state(bare_state):
     """PRE_START state with three characters from different classes."""
     for name, cls, owner in [
-        ("Aldric",  CharacterClass.FIGHTER,     "user_001"),
-        ("Mira",    CharacterClass.MAGIC_USER,  "user_002"),
-        ("Brother Tomas", CharacterClass.CLERIC, "user_003"),
+        ("Aldric",  CharacterClass.KNIGHT,     "user_001"),
+        ("Mira",    CharacterClass.MAGE,  "user_002"),
+        ("Brother Tomas", CharacterClass.KNIGHT, "user_003"),
     ]:
         create_character(
             bare_state,
             name=name,
             character_class=cls,
-            equipment_package="Pack A",
+            equipment_package="",
             owner_id=owner,
         )
     return bare_state

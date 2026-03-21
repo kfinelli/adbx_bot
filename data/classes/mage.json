@@ -1,0 +1,11 @@
+{
+  "key": "MAGE",
+  "display_name": "Mage",
+  "hit_die": 4,
+  "weapon_rank": "E",
+  "base_save": 2,
+  "primary_stat": "RSN",
+  "max_level": 5,
+  "description": "",
+  "combat_actions": ["attack", "move", "charge", "affect"]
+}

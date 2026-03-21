@@ -2,6 +2,7 @@ import json
 import math
 import random
 from enum import Enum
+from pathlib import Path
 
 """
 Enums, Constants, and Utils
@@ -9,12 +10,12 @@ Enums, Constants, and Utils
 Enums are preferable to raw strings where applicable.
 """
 
-'''
-MAYBE MOVE THIS TO A CONFIG FILE EVENTUALLY
-'''
-#File Paths
-JOB_FILE = "resources/Jobs/Jobs.json"
-SKILL_FILE = "resources/Jobs/JobSkills.json"
+# ---------------------------------------------------------------------------
+# Data directory — resolved relative to this file so the module works
+# regardless of the working directory the server is launched from.
+# ---------------------------------------------------------------------------
+_PROJECT_DIR = Path(__file__).parent
+_CLASSES_DIR = _PROJECT_DIR / "data" / "classes"
 
 #Character Constants
 MAX_LEVEL = 99
@@ -24,10 +25,58 @@ BASE_INVENTORY_SIZE = 6
 POWER_LEVEL = 100
 LEVEL_MULTIPLIER = 2
 
-def d(x):
-    if (x < 1):
-        return 0
-    return random.randint(1, int(x))
+# ---------------------------------------------------------------------------
+# Weapon rank helpers
+# ---------------------------------------------------------------------------
+# Physical ranks E–A, arcane ranks V–Z (for staves, tomes, etc.)
+_PHYSICAL_RANKS = ("E", "D", "C", "B", "A")
+_ARCANE_RANKS   = ("V", "W", "X", "Y", "Z")
+
+def getLowerWeaponRanks(rank):
+    lowerweaponranks = {
+        "A": {"E","D","C","B","A"},
+        "B": {"E","D","C","B"},
+        "C": {"E","D","C"},
+        "D": {"E","D"},
+        "E": {"E"},
+        "V": {"V"},
+        "W": {"V","W"},
+        "X": {"V","W","X"},
+        "Y": {"V","W","X","Y"},
+        "Z": {"V","W","X","Y","Z"},
+    }
+    if rank not in lowerweaponranks:
+        return {"E"}
+    return lowerweaponranks[rank]
+
+# ---------------------------------------------------------------------------
+# Stat helpers added for engine integration
+# ---------------------------------------------------------------------------
+
+def get_stat_modifier(stat_value: int) -> int:
+    """
+    Convert a scaled stat value to its effective modifier. Needed for some
+    backward compatibility during transition. Simply returns the stat (since we
+    use the stat itself to modify rolls in this system)
+    """
+    return stat_value
+
+def get_inventory_size(physique: int) -> int:
+    """
+    Calculate inventory slot count from a character's scaled Physique stat.
+    Base slots + floor(physique / POWER_LEVEL), minimum 1.
+    """
+    bonus = math.floor(physique / POWER_LEVEL)
+    return max(1, BASE_INVENTORY_SIZE + bonus)
+
+def get_stat_growth_die(job, stat) -> int:
+    """
+    Return the die size for stat growth on level-up for the given Job and Stat.
+    Die size = StatPriority.value * POWER_LEVEL.
+    A NONE priority means this stat never grows from this job (returns 0).
+    """
+    priority = job.statPriority.get(stat, StatPriority.NONE)
+    return priority.value * POWER_LEVEL
 
 def getJobFromID(jobID):
     return JOBS[jobID]
@@ -132,7 +181,8 @@ part of them. I don't know how granular we want to get with it, however.
 """
 
 class Job:
-    def __init__(self, id, displayName, hitDie, weaponRanks, baseSave, skills = None, description = None, maxLevel = 5):
+    def __init__(self, id, displayName, hitDie, weaponRanks, baseSave, primaryStat,
+                 skills=None, description=None, maxLevel=5):
         if skills is None:
             skills = {}
         self.id = id
@@ -141,13 +191,23 @@ class Job:
         self.hitDie = hitDie
         self.weaponRanks = weaponRanks
         self.baseSave = baseSave
+        self.primaryStat = primaryStat      # "PHY" | "FNS" | "RSN" | "SVY"
         self.skills = skills
         self.maxLevel = maxLevel
+        # Derive stat priority from primary stat:
+        # primary stat grows at GREATEST; others don't grow from this job.
+        _stat_key = {
+            "PHY": Stat.PHYSIQUE,
+            "FNS": Stat.FINESSE,
+            "RSN": Stat.REASON,
+            "SVY": Stat.SAVVY,
+        }
+        primary = _stat_key.get(primaryStat, Stat.PHYSIQUE)
         self.statPriority = {
-            Stat.PHYSIQUE: StatPriority.NONE,
-            Stat.FINESSE: StatPriority.NONE,
-            Stat.REASON: StatPriority.NONE,
-            Stat.SAVVY: StatPriority.NONE,
+            Stat.PHYSIQUE: StatPriority.GREATEST if primary == Stat.PHYSIQUE else StatPriority.NONE,
+            Stat.FINESSE:  StatPriority.GREATEST if primary == Stat.FINESSE  else StatPriority.NONE,
+            Stat.REASON:   StatPriority.GREATEST if primary == Stat.REASON   else StatPriority.NONE,
+            Stat.SAVVY:    StatPriority.GREATEST if primary == Stat.SAVVY    else StatPriority.NONE,
         }
 
 class JobExperience:
@@ -218,15 +278,9 @@ class Skill:
         self.description = description
         self.dm_notes = ""
 
-def getLowerWeaponRanks(rank):
-    lowerweaponranks = { "A": {"E","D","C","B","A"}, "B": {"E","D","C","B"},  "C": {"E","D","C"},  "D": {"E","D"}, "E":{"E"}}
-    if rank not in lowerweaponranks:
-        return "E"
-    return lowerweaponranks[rank]
-
 def createSkillFromJson(name, sData):
     skillType = SkillType(sData['type'])
-    newSkill = Skill(sData['id'], name, sData['source'], sData['level'] * LEVEL_MULTIPLIER, skillType, sData['desc'])
+    newSkill = Skill(sData['id'], name, sData['source'], sData['level'] * LEVEL_MULTIPLIER, skillType, sData.get('desc', ''))
     if 'dm_notes' in sData:
         newSkill.dm_notes = sData['dm_notes']
     if skillType == SkillType.WEAPON_RANK:
@@ -253,30 +307,68 @@ def createSkillFromJson(name, sData):
         newSkill.bonus = baseBonus * POWER_LEVEL
     return newSkill
 
-def importJobSkills():
-    with open(SKILL_FILE) as jobSkillFile, json.load(jobSkillFile) as skilljson:
-        jobSkillData = {}
-        for job in skilljson:
-            jobSkillData[job] = {}
-            for skill in skilljson[job]:
-                newSkill = createSkillFromJson(skill, skilljson[job][skill])
-                jobSkillData[job][newSkill.id] = newSkill
-        return jobSkillData
+# ---------------------------------------------------------------------------
+# Per-file loaders — reads from data/classes/<key>.json and
+# data/classes/<key>_skills.json, one file per job.
+# This replaces the original monolithic Jobs.json / JobSkills.json approach
+# so that jobs can be added simply by dropping a new file in the directory.
+# ---------------------------------------------------------------------------
 
-def importJobs():
-    with open(JOB_FILE) as jobFile, json.load(jobFile) as jobson:
-        jobData = {}
-        skillData = importJobSkills()
-        for job in jobson:
-            cJob = jobson[job]
-            cWeaponRanks = getLowerWeaponRanks(cJob['weapon_rank'])
-            cSkills = skillData[cJob['id']]
-            skills = {}
-            for skill in cSkills:
-                skills[skill] = (cSkills[skill])
-            newJob = Job(cJob['id'], job, cJob['hit_die'], cWeaponRanks, cJob['base_save'], skills, cJob['desc'], cJob['max_level'] * LEVEL_MULTIPLIER)
-            jobData[newJob.id] = newJob
+def _load_job_skills_file(skills_path: Path) -> dict:
+    """
+    Load a <key>_skills.json companion file and return a dict of
+    skill_id -> Skill.  Returns {} if the file doesn't exist.
+    """
+    if not skills_path.exists():
+        return {}
+    with open(skills_path, encoding="utf-8") as f:
+        skilljson = json.load(f)
+    skillData = {}
+    for skillName, sData in skilljson.items():
+        newSkill = createSkillFromJson(skillName, sData)
+        skillData[newSkill.id] = newSkill
+    return skillData
+
+def _load_job_file(job_path: Path) -> "Job":
+    """
+    Load a single data/classes/<key>.json file and return a Job.
+    The JSON uses snake_case keys matching the Azure job schema.
+    Skills are loaded from the companion <key>_skills.json if present.
+    """
+    with open(job_path, encoding="utf-8") as f:
+        cJob = json.load(f)
+    skills_path = job_path.parent / (job_path.stem + "_skills.json")
+    skills = _load_job_skills_file(skills_path)
+    weaponRanks = getLowerWeaponRanks(cJob['weapon_rank'])
+    # 'key' is the uppercase identifier; job id is its lowercase form
+    job_id = cJob['key'].lower()
+    return Job(
+        job_id,
+        cJob['display_name'],
+        cJob['hit_die'],
+        weaponRanks,
+        cJob['base_save'],
+        cJob['primary_stat'],
+        skills,
+        cJob.get('description', ''),
+        cJob['max_level'] * LEVEL_MULTIPLIER,
+    )
+
+def importJobs(classes_dir: Path = _CLASSES_DIR) -> dict:
+    """
+    Load all jobs from data/classes/*.json.
+    Returns a dict keyed by job id (e.g. "knight").
+    Companion <key>_skills.json files are loaded automatically.
+    """
+    jobData = {}
+    if not classes_dir.exists():
         return jobData
+    for path in sorted(classes_dir.glob("*.json")):
+        if path.stem.endswith("_skills"):
+            continue   # companion skill files are handled by _load_job_file
+        job = _load_job_file(path)
+        jobData[job.id] = job
+    return jobData
 
 """
 Items and Equipment
@@ -541,4 +633,57 @@ class Character:
     def removeItem(self, item):
         self.inventory.remove(item)
 
+# ---------------------------------------------------------------------------
+# Engine integration — CharacterClass enum and CREATION_RULES
+# ---------------------------------------------------------------------------
+# These are needed by models.py, engine/character.py, and the serialisation
+# layer.  The CharacterClass enum is generated automatically from the loaded
+# job files so adding a new job only requires dropping a JSON file in
+# data/classes/ — no Python changes needed.
+#
+# The circular import  models.py → azure_tables → engine/data_loader → models
+# is avoided by loading jobs here (importJobs) rather than going through
+# engine/__init__.  azure_tables has no dependency on models.py.
+# ---------------------------------------------------------------------------
+
+def d(x):
+    """Roll a die with x sides. Returns 0 for x < 1 (used for NONE stat priority)."""
+    x = int(x)
+    if x < 1:
+        return 0
+    return random.randint(1, x)
+
 JOBS = importJobs()
+
+# CharacterClass enum: member name = uppercase job id, value = display name
+# e.g. CharacterClass.KNIGHT.value == "Knight"
+CharacterClass = Enum(
+    "CharacterClass",
+    {job.id.upper(): job.displayName for job in JOBS.values()},
+)
+
+# CREATION_RULES: CharacterClass member → Job
+# Provides the same interface that engine/character.py and other modules
+# currently expect from tables.CREATION_RULES.
+CREATION_RULES = {
+    cls: JOBS[cls.name.lower()] for cls in CharacterClass
+}
+
+# Backward-compatibility stubs — will be removed once Stream B completes.
+ABILITY_MODIFIERS: dict  = {}   # replaced by get_stat_modifier()
+CON_HP_MODIFIER          = ABILITY_MODIFIERS
+SAVING_THROWS: dict      = {}
+SPELL_SLOTS_BY_CLASS: dict = {}
+EQUIPMENT_PACKAGES: dict   = {}
+EQUIPMENT_PACKAGE_DESCRIPTIONS: dict = {}
+PACK_BONUS_DEFAULT: dict   = {}
+
+
+def get_saving_throws(cls, level: int) -> dict:
+    """Stub: saving throws are now a single base_save integer per job."""
+    return {}
+
+
+def get_spell_slots(cls, level: int) -> list:
+    """Stub: spell slots not yet implemented in the Azure ruleset."""
+    return []

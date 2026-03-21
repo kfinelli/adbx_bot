@@ -127,7 +127,7 @@ class TestArchive:
     def test_archive_metadata_turn_number(self, db):
         """Archive entry should capture the turn number at archive time."""
         s = _make_state("ch1")
-        create_character(s, "Aldric", CharacterClass.FIGHTER, "Pack A")
+        create_character(s, "Aldric", CharacterClass.KNIGHT, "")
         start_session(s)
         s.turn_number = 7
         db.save(s)

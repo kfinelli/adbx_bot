@@ -1,0 +1,11 @@
+{
+  "key": "DILETTANTE",
+  "display_name": "Dilettante",
+  "hit_die": 8,
+  "weapon_rank": "D",
+  "base_save": 3,
+  "primary_stat": "SVY",
+  "max_level": 5,
+  "description": "",
+  "combat_actions": ["attack", "move", "charge", "affect"]
+}

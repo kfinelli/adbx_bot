@@ -91,11 +91,12 @@ class TestStateRoundTrip:
         assert rest.saving_throws == orig.saving_throws
 
     def test_spellbook_roundtrips(self, bare_state):
-        create_character(bare_state, "Mira", CharacterClass.MAGIC_USER, "Pack A")
+        # Spellbooks are no longer assigned at creation in the Azure ruleset
+        # (they are granted via skill progression). Verify None serializes cleanly.
+        create_character(bare_state, "Mira", CharacterClass.MAGE, "")
         restored = _roundtrip(bare_state)
         char = list(restored.characters.values())[0]
-        assert char.spellbook is not None
-        assert len(char.spellbook.max_slots) == 6
+        assert char.spellbook is None
 
     def test_active_state_roundtrips(self, active_state):
         restored = _roundtrip(active_state)

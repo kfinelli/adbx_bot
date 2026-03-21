@@ -1,60 +1,60 @@
 """
-test_character_creation.py — Character creation and stat generation tests.
+test_character_creation.py — Character creation tests for the Azure ruleset.
 """
 
 from engine import create_character, roll_stats
 from models import CharacterClass, CharacterStatus, GameState, Party
-from tables import EQUIPMENT_PACKAGES
+from azure_tables import POWER_LEVEL
 
 
 class TestRollStats:
-    def test_returns_six_keys(self):
+    def test_returns_expected_keys(self):
         stats = roll_stats()
-        expected = {"strength", "intelligence", "wisdom", "dexterity", "constitution", "charisma"}
-        assert set(stats.keys()) == expected
+        # roll_stats() still returns a dict; under Stream A it uses six B/X
+        # field names as a bridge until Stream B updates AbilityScores.
+        assert isinstance(stats, dict)
+        assert len(stats) > 0
 
-    def test_all_values_in_3d6_range(self):
-        for _ in range(20):
+    def test_all_values_are_integers(self):
+        for _ in range(10):
             stats = roll_stats()
             for key, val in stats.items():
-                assert 3 <= val <= 18, f"{key}={val} out of 3–18 range"
+                assert isinstance(val, int), f"{key}={val} is not an int"
 
 
 class TestCreateCharacter:
     def test_basic_creation_succeeds(self, bare_state):
         result = create_character(
-            bare_state, "Aldric", CharacterClass.FIGHTER, "Pack A", owner_id="u1"
+            bare_state, "Aldric", CharacterClass.KNIGHT, "", owner_id="u1"
         )
         assert result.ok
         assert len(bare_state.characters) == 1
 
     def test_character_added_to_party(self, bare_state):
-        create_character(
-            bare_state, "Aldric", CharacterClass.FIGHTER, "Pack A", owner_id="u1"
-        )
+        create_character(bare_state, "Aldric", CharacterClass.KNIGHT, "", owner_id="u1")
         char_id = list(bare_state.characters.keys())[0]
         assert char_id in bare_state.party.member_ids
 
     def test_empty_name_rejected(self, bare_state):
-        result = create_character(
-            bare_state, "   ", CharacterClass.FIGHTER, "Pack A"
-        )
+        result = create_character(bare_state, "   ", CharacterClass.KNIGHT, "")
         assert not result.ok
         assert "empty" in result.error.lower()
 
-    def test_invalid_package_rejected(self, bare_state):
-        result = create_character(
-            bare_state, "Aldric", CharacterClass.FIGHTER, "NonexistentPack"
-        )
-        assert not result.ok
-        assert "Unknown equipment package" in result.error
+    def test_hp_scaled_by_power_level(self, bare_state):
+        """HP at level 1 = hit_die * POWER_LEVEL (full HP, JRPG-style)."""
+        result = create_character(bare_state, "Aldric", CharacterClass.KNIGHT, "")
+        assert result.ok
+        char = list(bare_state.characters.values())[0]
+        # Knight hit_die = 12 → hp_max = 12 * 100 = 1200
+        assert char.hp_max == 12 * POWER_LEVEL
+        assert char.hp_current == char.hp_max
 
     def test_hp_minimum_one(self, bare_state):
-        """HP must be at least 1 even with a terrible CON roll."""
+        """HP must be at least 1 regardless of stats."""
         from models import AbilityScores
-        scores = AbilityScores(constitution=3)  # worst possible CON modifier
+        scores = AbilityScores(constitution=3)
         result = create_character(
-            bare_state, "Frail", CharacterClass.FIGHTER, "Pack A",
+            bare_state, "Frail", CharacterClass.KNIGHT, "",
             ability_scores=scores
         )
         assert result.ok
@@ -63,61 +63,77 @@ class TestCreateCharacter:
         assert char.hp_max >= 1
 
     def test_initial_status_active(self, bare_state):
-        create_character(bare_state, "Aldric", CharacterClass.FIGHTER, "Pack A")
+        create_character(bare_state, "Aldric", CharacterClass.KNIGHT, "")
         char = list(bare_state.characters.values())[0]
         assert char.status == CharacterStatus.ACTIVE
 
-    def test_spellcaster_has_spellbook(self, bare_state):
-        create_character(bare_state, "Mira", CharacterClass.MAGIC_USER, "Pack A")
-        char = list(bare_state.characters.values())[0]
-        assert char.spellbook is not None
-
-    def test_non_spellcaster_has_no_spellbook(self, bare_state):
-        create_character(bare_state, "Aldric", CharacterClass.FIGHTER, "Pack A")
+    def test_no_spellbook_on_creation(self, bare_state):
+        """Spells are granted via skill progression, not at creation."""
+        create_character(bare_state, "Mira", CharacterClass.MAGE, "")
         char = list(bare_state.characters.values())[0]
         assert char.spellbook is None
 
+    def test_inventory_empty_on_creation(self, bare_state):
+        """Items are assigned separately; no starting pack."""
+        create_character(bare_state, "Aldric", CharacterClass.KNIGHT, "")
+        char = list(bare_state.characters.values())[0]
+        assert char.inventory == []
+
+    def test_base_save_scaled_by_power_level(self, bare_state):
+        """base_save stored as job.baseSave * POWER_LEVEL."""
+        create_character(bare_state, "Aldric", CharacterClass.KNIGHT, "")
+        char = list(bare_state.characters.values())[0]
+        # Knight base_save = 4 → stored as 4 * 100 = 400
+        assert char.saving_throws.get("save") == 4 * POWER_LEVEL
+
     def test_prerolled_stats_used(self, bare_state):
         from models import AbilityScores
-        scores = AbilityScores(strength=18, intelligence=18, wisdom=18,
-                               dexterity=18, constitution=18, charisma=18)
+        scores = AbilityScores(strength=200, dexterity=150)
         create_character(
-            bare_state, "Demigod", CharacterClass.FIGHTER, "Pack A",
+            bare_state, "Demigod", CharacterClass.KNIGHT, "",
             ability_scores=scores
         )
         char = list(bare_state.characters.values())[0]
-        assert char.ability_scores.strength == 18
+        assert char.ability_scores.strength == 200
+        assert char.ability_scores.dexterity == 150
 
     def test_prerolled_stats_dict_used(self, bare_state):
-        stats = {"strength": 16, "intelligence": 10, "wisdom": 10,
-                 "dexterity": 14, "constitution": 12, "charisma": 8}
+        stats = {"strength": 300, "intelligence": 100, "wisdom": 100,
+                 "dexterity": 200, "constitution": 0, "charisma": 0}
         create_character(
-            bare_state, "Sturdy", CharacterClass.FIGHTER, "Pack A",
+            bare_state, "Sturdy", CharacterClass.KNIGHT, "",
             prerolled_stats=stats
         )
         char = list(bare_state.characters.values())[0]
-        assert char.ability_scores.strength == 16
-        assert char.ability_scores.dexterity == 14
+        assert char.ability_scores.strength == 300
+        assert char.ability_scores.dexterity == 200
 
-    def test_all_equipment_packages_valid(self, bare_state):
-        """Every package in the table should be accepted."""
-        for pkg in EQUIPMENT_PACKAGES:
-            s = GameState(platform_channel_id="ch", dm_user_id="dm")
-            s.party = Party(name="P")
-            result = create_character(s, "Tester", CharacterClass.FIGHTER, pkg)
-            assert result.ok, f"Package '{pkg}' failed: {result.error}"
-
-    def test_all_classes_can_be_created(self, bare_state):
+    def test_all_jobs_can_be_created(self, bare_state):
         """Every CharacterClass should produce a valid character."""
         for cls in CharacterClass:
             s = GameState(platform_channel_id="ch", dm_user_id="dm")
             s.party = Party(name="P")
-            result = create_character(s, f"Test {cls.value}", cls, "Pack A")
-            assert result.ok, f"Class {cls.value} failed: {result.error}"
+            result = create_character(s, f"Test {cls.value}", cls, "")
+            assert result.ok, f"Job {cls.value} failed: {result.error}"
 
     def test_owner_id_stored(self, bare_state):
         create_character(
-            bare_state, "Aldric", CharacterClass.FIGHTER, "Pack A", owner_id="discord_123"
+            bare_state, "Aldric", CharacterClass.KNIGHT, "", owner_id="discord_123"
         )
         char = list(bare_state.characters.values())[0]
         assert char.owner_id == "discord_123"
+
+    def test_hit_die_varies_by_job(self, bare_state):
+        """Different jobs produce different HP totals."""
+        knight_state = GameState(platform_channel_id="ch1", dm_user_id="dm")
+        knight_state.party = Party(name="P")
+        create_character(knight_state, "K", CharacterClass.KNIGHT, "")
+        knight_hp = list(knight_state.characters.values())[0].hp_max
+
+        mage_state = GameState(platform_channel_id="ch2", dm_user_id="dm")
+        mage_state.party = Party(name="P")
+        create_character(mage_state, "M", CharacterClass.MAGE, "")
+        mage_hp = list(mage_state.characters.values())[0].hp_max
+
+        # Knight (d12) should have more HP than Mage (d4)
+        assert knight_hp > mage_hp

@@ -23,12 +23,14 @@ from __future__ import annotations
 import importlib
 import os
 import sys
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from urllib.parse import parse_qs, urlparse
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
 sys.path.insert(0, _ROOT)
+
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import parse_qs, urlparse
+from uuid import UUID
 
 from engine import (
     add_exit,
@@ -37,16 +39,20 @@ from engine import (
     register_room,
     start_session,
     submit_turn,
+    close_turn,
 )
 from models import (
-    NPC,
     DoorState,
     GameState,
+    NPC,
     Party,
     Room,
     RoomFeature,
+    SessionMode,
+    TurnStatus,
 )
-from tables import CharacterClass
+from azure_tables import CharacterClass
+
 
 # ---------------------------------------------------------------------------
 # Fixture data — edit freely to test different UI states
@@ -68,9 +74,9 @@ def _build_fixture_state() -> GameState:
     state.party = Party(name="The Delvers")
 
     for name, cls, owner in [
-        ("Aldric",        CharacterClass.FIGHTER,    "u1"),
-        ("Mira",          CharacterClass.MAGIC_USER, "u2"),
-        ("Brother Tomas", CharacterClass.CLERIC,     "u3"),
+        ("Aldric",        CharacterClass.KNIGHT,    "u1"),
+        ("Mira",          CharacterClass.MAGE, "u2"),
+        ("Brother Tomas", CharacterClass.KNIGHT,     "u3"),
     ]:
         create_character(state, name, cls, "Pack A", owner_id=owner)
 
@@ -134,7 +140,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
         qs = parse_qs(parsed.query)
 
         tmpl = self._reload_templates()
-        state = _FIXTURE_STATE
+        state = _build_fixture_state()
         sessions = [(FIXTURE_CHANNEL_ID, "#fixture-channel")]
 
         try:
@@ -177,7 +183,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
 
             self._send(html)
 
-        except Exception:
+        except Exception as exc:
             import traceback
             tb = traceback.format_exc()
             # Render the traceback in the browser so you don't have to watch the terminal
@@ -187,25 +193,19 @@ font-family:monospace;padding:2rem"><h2>Template error</h2><pre>{tb}</pre></body
             self._send(error_html, 500)
 
 
-# Build once so character UUIDs are stable across requests.
-# The Show button links embed these UUIDs, so they must not change between
-# the list render and the subsequent detail fetch.
-_FIXTURE_STATE = _build_fixture_state()
-
-
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8001
-    state = _FIXTURE_STATE   # validate fixtures at startup
+    state = _build_fixture_state()   # validate fixtures at startup
     print(f"Fixture state: {len(state.characters)} characters, "
           f"session {FIXTURE_CHANNEL_ID[:8]}...")
     print(f"Preview server running at http://localhost:{port}")
-    print("  /                          → session list")
+    print(f"  /                          → session list")
     print(f"  /session/{FIXTURE_CHANNEL_ID[:16]}...  → dashboard")
-    print("  /archive                   → archive page")
-    print("  /characters                → character browser")
-    print("\nEdit templates.py and refresh — no restart needed.\n")
+    print(f"  /archive                   → archive page")
+    print(f"  /characters                → character browser")
+    print(f"\nEdit templates.py and refresh — no restart needed.\n")
     HTTPServer(("", port), PreviewHandler).serve_forever()
