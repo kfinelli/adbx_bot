@@ -1,11 +1,4 @@
 {
-  "Ability Template": {
-    "id": "ability",
-    "source": "<class id>",
-    "level": 0,
-    "type": 0,
-    "desc": "The ability text goes here!"
-  },
   "knight": {
     "Protector": {
       "id": "knight_protector",
@@ -18,7 +11,7 @@
       "id": "knight_phyBonus",
       "source": "knight",
       "level": 2,
-      "type": 6,
+      "type": 5,
       "stat": "PHY",
       "bonus": 1,
       "desc": "Increase Physique by 1!"
@@ -27,7 +20,7 @@
       "id": "martial_iii",
       "source": "knight",
       "level": 5,
-      "type": 7,
+      "type": 6,
       "rank": "B",
       "desc": "You can equip gear and weapons with Rank: B"
     },
@@ -42,7 +35,7 @@
       "id": "knight_anyBonus",
       "source": "knight",
       "level": 4,
-      "type": 6,
+      "type": 5,
       "stat": "ANY",
       "bonus": 1,
       "desc": "Increase any stat by 1!"
@@ -51,14 +44,14 @@
       "id": "knight_rep",
       "source": "knight",
       "level": 4,
-      "type": 8,
+      "type": 7,
       "desc": "When making a check to persuade an NPC, lower the DC by 2 unless they hate knights."
     },
     "Resilience": {
       "id": "knight_resilience",
       "source": "knight",
       "level": 5,
-      "type": 9,
+      "type": 8,
       "desc":"Once per day, remain at 1hp after taking lethal damage."
     }
   },
@@ -82,7 +75,7 @@
       "id": "thief_fnsBonus",
       "source": "thief",
       "level": 2,
-      "type": 6,
+      "type": 5,
       "stat": "FNS",
       "bonus": 1,
       "desc": "Increase Finesse by 1!"
@@ -105,7 +98,7 @@
       "id": "thief_anyBonus",
       "source": "thief",
       "level": 4,
-      "type": 6,
+      "type": 5,
       "stat": "ANY",
       "bonus": 1,
       "desc": "Increase any stat by 1!"
@@ -142,7 +135,7 @@
       "id": "arcane_i",
       "source": "mage",
       "level": 1,
-      "type": 7,
+      "type": 6,
       "rank": "V",
       "desc": "You can equip gear and weapons with Rank: V"
     },
@@ -150,7 +143,7 @@
       "id": "mage_rsnBonus",
       "source": "mage",
       "level": 2,
-      "type": 6,
+      "type": 5,
       "stat": "RSN",
       "bonus": 1,
       "desc": "Increase Reason by 1!"
@@ -159,7 +152,7 @@
       "id": "arcane_ii",
       "source": "mage",
       "level": 3,
-      "type": 7,
+      "type": 6,
       "rank": "W",
       "desc": "You can equip gear and weapons with Rank: W"
     },
@@ -167,7 +160,7 @@
       "id": "mage_anyBonus",
       "source": "mage",
       "level": 4,
-      "type": 6,
+      "type": 5,
       "stat": "ANY",
       "bonus": 1,
       "desc": "Increase any stat by 1!"
@@ -176,14 +169,14 @@
       "id": "mage_rep",
       "source": "mage",
       "level": 4,
-      "type": 8,
+      "type": 7,
       "desc": "When making a RSN check to persuade an NPC, lower the DC by 2 unless they distrust magic users."
     },
     "Arcane Secrets": {
       "id": "arcane_iii",
       "source": "mage",
       "level": 5,
-      "type": 7,
+      "type": 6,
       "rank": "X",
       "desc": "You can equip gear and weapons with Rank: X"
     }
@@ -208,7 +201,7 @@
       "id": "dilettante_svyBonus",
       "source": "dilettante",
       "level": 2,
-      "type": 6,
+      "type": 5,
       "stat": "SVY",
       "bonus": 1,
       "desc": "Increase Savvy by 1!"
@@ -224,7 +217,7 @@
       "id": "martial_ii",
       "source": "dilettante",
       "level": 3,
-      "type": 7,
+      "type": 6,
       "rank": "C",
       "desc":"You can equip gear and weapons with Rank: C"
     },
@@ -232,7 +225,7 @@
       "id": "arcane_i",
       "source": "dilettante",
       "level": 3,
-      "type": 7,
+      "type": 6,
       "rank": "V",
       "desc":"You can equip gear and weapons with Rank: V"
     },
@@ -240,7 +233,7 @@
       "id": "martial_iii",
       "source": "dilettante",
       "level": 5,
-      "type": 7,
+      "type": 6,
       "rank": "B",
       "desc":"You can equip gear and weapons with Rank: B"
     },
@@ -248,7 +241,7 @@
       "id": "dilettante_anyBonus",
       "source": "dilettante",
       "level": 4,
-      "type": 6,
+      "type": 5,
       "stat": "ANY",
       "bonus": 1,
       "desc": "Increase any stat by 1!"
@@ -257,7 +250,7 @@
       "id": "arcane_ii",
       "source": "dilettante",
       "level": 5,
-      "type": 7,
+      "type": 6,
       "rank": "W",
       "desc":"You can equip gear and weapons with Rank: W"
     }
