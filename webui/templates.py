@@ -8,11 +8,17 @@ a `name` attribute matching what the server expects.
 
 from __future__ import annotations
 
+from dataclasses import fields
+
 from models import (
+    Character,
     CharacterStatus,
     DoorState,
     GameState,
+    InventoryItem,
+    RangeBand,
     SessionMode,
+    SpellBook,
     TurnStatus,
 )
 
@@ -80,7 +86,7 @@ def page(title: str, body: str) -> str:
       font-size: 0.9rem;
     }}
     textarea {{ resize: vertical; min-height: 60px; }}
-    button, .btn {{
+    button, a.btn {{
       background: #0f3460;
       border: 1px solid #1a4a8a;
       color: #e0e0e0;
@@ -90,7 +96,7 @@ def page(title: str, body: str) -> str:
       font-size: 0.85rem;
       margin-top: 6px;
     }}
-    button:hover, .btn:hover {{ background: #1a4a8a; }}
+    button:hover, .btn:hover a.bt:hover {{ background: #1a4a8a; }}
     .btn-danger {{ border-color: #8a1a1a; }}
     .btn-danger:hover {{ background: #8a1a1a; }}
     .btn-success {{ border-color: #1a8a4a; }}
@@ -107,7 +113,36 @@ def page(title: str, body: str) -> str:
     .tag-closed {{ background: #4a2a1a; color: #ff9800; }}
     .tag-hold {{ background: #3a1a4a; color: #9c27b0; }}
     .tag-dead {{ background: #3a1a1a; color: #f44336; }}
+    .tag-condition {{ background: #1a3a4a; color: #64b5f6; border: 1px solid #1a5a7a; }}
     .hp-bar {{ font-family: monospace; }}
+    .combat-sub {{
+      margin-top: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      background: #0f1e36;
+      border-left: 3px solid #c9a84c;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.82rem;
+    }}
+    .combat-sub label {{ margin-top: 4px; font-size: 0.78rem; }}
+    .band-grid {{
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 4px;
+      margin: 0.4rem 0;
+      font-size: 0.75rem;
+      font-family: monospace;
+    }}
+    .band-cell {{
+      background: #0f3460;
+      border: 1px solid #1a4a8a;
+      border-radius: 3px;
+      padding: 4px 2px;
+      text-align: center;
+      min-height: 2.5rem;
+    }}
+    .band-cell.active {{ border-color: #c9a84c; background: #1a2a40; }}
+    .band-label {{ color: #888; font-size: 0.7rem; margin-bottom: 2px; }}
+    .band-name {{ color: #c9a84c; font-weight: bold; }}
     .flash {{
       background: #1a4a1a;
       border: 1px solid #1a8a4a;
@@ -155,11 +190,12 @@ def _sidebar(channel_id: str | None, sessions: list[tuple[str, str]]) -> str:
         links += f'<a href="/session/{cid}" {active}>{name}</a>\n'
     return f"""
 <div class="sidebar">
-  <h1 style="font-size:1.1rem; margin-bottom:1.5rem;">&#127922; DM Panel</h1>
+  <h1 style="font-size:1.1rem; margin-bottom:1.5rem;">DM Panel</h1>
   <h2>Sessions</h2>
   {links or '<p class="muted">No active sessions</p>'}
   <hr class="divider" style="margin:1rem 0">
-  <a href="/archive">&#128196; Archive</a>
+  <a href="/archive">Archive</a>
+  <a href="/characters">Character Sheets</a>
 </div>"""
 
 
@@ -169,7 +205,7 @@ def session_list_page(sessions: list[tuple[str, str]]) -> str:
   {_sidebar(None, sessions)}
   <div class="main">
     <h1>DM Control Panel</h1>
-    <p class="muted">Select a session from the sidebar, or start one in Discord with /embark.</p>
+    <p class="muted">Select a session from the sidebar, or start one in Discord with Embark.</p>
   </div>
 </div>"""
     return page("DM Panel", body)
@@ -241,6 +277,7 @@ def dashboard_fragment(
   {flash_html}{error_html}
   <div class="grid-2">
     <div>
+      {combat_panel(state)}
       {turn_panel(state, edit_id)}
       {dungeon_panel(state, resolved_view_id)}
       {oracle_panel(state)}
@@ -305,7 +342,14 @@ def turn_panel(state: GameState, edit_id: str = "") -> str:
                 continue
             sub = state.latest_submission(cid)
             sub_text = f'<em>"{sub.action_text}"</em>' if sub else '<span class="muted">—</span>'
-            rows += f"<tr><td>{char.name}</td><td>{sub_text}</td></tr>"
+            unsubmit_btn = ""
+            if sub and turn.status == TurnStatus.OPEN:
+                cid_str = str(cid)
+                unsubmit_btn = f""" <button class="btn-sm btn-danger"
+                    hx-post="/session/{channel_id}/turn/{cid_str}/unsubmit"
+                    hx-target="#dashboard" hx-swap="outerHTML"
+                    hx-confirm="Send this turn back to {char.name} for revision?">Return</button>"""
+            rows += f"<tr><td>{char.name}</td><td>{sub_text}{unsubmit_btn}</td></tr>"
         if rows:
             subs_html = f'<table><tr><th>Character</th><th>Submitted Action</th></tr>{rows}</table>'
 
@@ -384,6 +428,232 @@ def turn_panel(state: GameState, edit_id: str = "") -> str:
 
 
 # ---------------------------------------------------------------------------
+# Combat panel — battlefield overview (ROUNDS mode only)
+# ---------------------------------------------------------------------------
+
+_BAND_ORDER = [
+    RangeBand.FAR_MINUS,
+    RangeBand.CLOSE_MINUS,
+    RangeBand.ENGAGE,
+    RangeBand.CLOSE_PLUS,
+    RangeBand.FAR_PLUS,
+]
+
+_BAND_DISPLAY = {
+    RangeBand.FAR_MINUS:   "−Far",
+    RangeBand.CLOSE_MINUS: "−Close",
+    RangeBand.ENGAGE:      "Engage",
+    RangeBand.CLOSE_PLUS:  "+Close",
+    RangeBand.FAR_PLUS:    "+Far",
+}
+
+
+def combat_panel(state: GameState) -> str:
+    """
+    Battlefield overview card shown when state.mode == ROUNDS.
+    Displays the five range bands as a grid, with each combatant's name
+    placed in their current band.  Dead combatants are omitted.
+    """
+    if state.mode != SessionMode.ROUNDS or state.battlefield is None:
+        return ""
+
+    # Group combatant names by band
+    by_band: dict[RangeBand, list[str]] = {b: [] for b in _BAND_ORDER}
+    for cid, cs in state.battlefield.combatants.items():
+        char = state.characters.get(cid)
+        if char:
+            if char.status == CharacterStatus.DEAD:
+                continue
+            name = char.name
+        else:
+            # NPC
+            name = None
+            for group in state.npc_roster.groups.values():
+                for npc in group.npcs:
+                    if npc.npc_id == cid:
+                        name = npc.name
+                        break
+                if name:
+                    break
+            if name is None or _find_npc_dead(state, cid):
+                continue
+        by_band[cs.range_band].append(name)
+
+    cells = ""
+    for band in _BAND_ORDER:
+        names = by_band[band]
+        occupants = "<br>".join(
+            f'<span style="color:#e0e0e0">{n}</span>' for n in names
+        ) if names else '<span style="color:#444">—</span>'
+        is_active = any(
+            cs.range_band == band
+            for cs in state.battlefield.combatants.values()
+        )
+        active_cls = " active" if is_active else ""
+        cells += f"""
+<div class="band-cell{active_cls}">
+  <div class="band-label">{'← players' if band == RangeBand.FAR_MINUS else ('enemies →' if band == RangeBand.FAR_PLUS else '')}</div>
+  <div class="band-name">{_BAND_DISPLAY[band]}</div>
+  <div style="margin-top:4px;font-size:0.75rem">{occupants}</div>
+</div>"""
+
+    round_log_html = ""
+    if state.battlefield.round_log:
+        entries = "".join(
+            f'<div style="margin-bottom:2px">{e}</div>'
+            for e in state.battlefield.round_log
+        )
+        round_log_html = f"""
+<hr class="divider">
+<div class="section-header" style="margin-bottom:0.3rem">
+  <h3 style="font-size:0.85rem;color:#888">Last Round Log</h3>
+</div>
+<div style="font-size:0.8rem;color:#aaa;font-family:monospace;
+     max-height:8rem;overflow-y:auto;padding:0.4rem;
+     background:#0a1628;border-radius:4px;border:1px solid #0f3460">
+  {entries}
+</div>"""
+
+    return f"""
+<div class="card">
+  <div class="section-header">
+    <h3>&#9876; Battlefield — Round {state.turn_number}</h3>
+  </div>
+  <div class="band-grid">{cells}</div>
+  {round_log_html}
+</div>"""
+
+
+def _find_npc_dead(state: GameState, npc_id) -> bool:
+    for group in state.npc_roster.groups.values():
+        for npc in group.npcs:
+            if npc.npc_id == npc_id:
+                return npc.status == "dead"
+    return False
+
+
+# ---------------------------------------------------------------------------
+# Combat sub-panel — per-combatant battlefield controls (ROUNDS mode only)
+# ---------------------------------------------------------------------------
+
+def _combat_subpanel(
+    state:        GameState,
+    combatant_id: str,        # str UUID
+    channel_id:   str,
+    view_room_id: str = "",
+    is_player:    bool = True,
+) -> str:
+    """
+    Bordered sub-panel rendered inside each character/NPC row during ROUNDS mode.
+    Shows: current range band (selectable), initiative, active conditions with
+    remove buttons, and an Apply Condition form.
+    """
+    if state.mode != SessionMode.ROUNDS or state.battlefield is None:
+        return ""
+
+    from uuid import UUID
+    try:
+        cid_uuid = UUID(combatant_id)
+    except ValueError:
+        return ""
+
+    cs = state.battlefield.combatants.get(cid_uuid)
+    if cs is None:
+        return ""
+
+    base = f"/session/{channel_id}"
+
+    # --- Range band selector
+    band_options = "".join(
+        f'<option value="{b.value}" {"selected" if b == cs.range_band else ""}>'
+        f'{_BAND_DISPLAY[b]}</option>'
+        for b in _BAND_ORDER
+    )
+    band_form = f"""
+<form hx-post="{base}/combatant/{combatant_id}/setband"
+      hx-target="#dashboard" hx-swap="outerHTML" style="display:inline-flex;gap:4px;align-items:center">
+  <input type="hidden" name="view_room_id" value="{view_room_id}">
+  <select name="band" onchange="this.form.requestSubmit()" style="font-size:0.78rem;padding:2px 4px">
+    {band_options}
+  </select>
+</form>"""
+
+    # --- Initiative
+    init_form = f"""
+<form hx-post="{base}/combatant/{combatant_id}/setinitiative"
+      hx-target="#dashboard" hx-swap="outerHTML"
+      style="display:inline-flex;gap:4px;align-items:center;margin-left:0.75rem">
+  <input type="hidden" name="view_room_id" value="{view_room_id}">
+  <label style="margin:0;color:#888">Init:</label>
+  <input type="number" name="initiative" value="{cs.initiative}"
+         style="width:50px;font-size:0.78rem;padding:2px 4px">
+  <button class="btn-sm" type="submit" style="margin-top:0">Set</button>
+</form>"""
+
+    # --- Active conditions with remove buttons
+    from engine.data_loader import CONDITION_REGISTRY
+    cond_chips = ""
+    for cond in cs.active_conditions:
+        cond_def = CONDITION_REGISTRY.get(cond.condition_id)
+        label = cond_def.label if cond_def else cond.condition_id
+        dur = f" {cond.duration_rounds}r" if cond.duration_rounds is not None else " ∞"
+        cond_chips += f"""
+<span class="tag tag-condition" style="margin-right:4px;margin-bottom:4px">
+  {label}{dur}
+  <form style="display:inline" hx-post="{base}/combatant/{combatant_id}/removecondition"
+        hx-target="#dashboard" hx-swap="outerHTML">
+    <input type="hidden" name="condition_id" value="{cond.condition_id}">
+    <input type="hidden" name="view_room_id" value="{view_room_id}">
+    <button type="submit" style="background:none;border:none;color:#64b5f6;
+            cursor:pointer;padding:0 2px;margin:0;font-size:0.8rem;line-height:1"
+            title="Remove condition">×</button>
+  </form>
+</span>"""
+
+    # --- Apply condition form
+    all_conditions = sorted(CONDITION_REGISTRY.keys())
+    cond_options = "".join(
+        f'<option value="{cid}">{CONDITION_REGISTRY[cid].label}</option>'
+        for cid in all_conditions
+    )
+    apply_form = f"""
+<form hx-post="{base}/combatant/{combatant_id}/applycondition"
+      hx-target="#dashboard" hx-swap="outerHTML"
+      style="display:flex;gap:4px;align-items:flex-end;flex-wrap:wrap;margin-top:4px">
+  <input type="hidden" name="view_room_id" value="{view_room_id}">
+  <div style="flex:1;min-width:90px">
+    <label>Condition</label>
+    <select name="condition_id" style="font-size:0.78rem">{cond_options}</select>
+  </div>
+  <div style="width:60px">
+    <label>Rounds</label>
+    <input type="number" name="duration" value="3" min="1"
+           style="font-size:0.78rem;padding:2px 4px">
+  </div>
+  <button class="btn-sm" type="submit" style="margin-bottom:1px">Apply</button>
+</form>"""
+
+    conditions_html = (
+        f'<div style="margin:4px 0">{cond_chips}</div>'
+        if cond_chips else
+        '<span class="muted" style="font-size:0.78rem">No conditions</span>'
+    )
+
+    return f"""
+<div class="combat-sub">
+  <div style="display:flex;align-items:center;flex-wrap:wrap;gap:0.25rem">
+    <span class="muted" style="font-size:0.78rem;margin-right:4px">Band:</span>
+    {band_form}
+    {init_form}
+  </div>
+  <div style="margin-top:6px">
+    {conditions_html}
+    {apply_form}
+  </div>
+</div>"""
+
+
+# ---------------------------------------------------------------------------
 # Party panel
 # ---------------------------------------------------------------------------
 
@@ -418,6 +688,7 @@ def party_panel(state: GameState) -> str:
         hx-target="#dashboard" hx-swap="outerHTML">Make Leader</button>"""
 
         # Each control is its own form so name attributes are unambiguous
+        combat_sub = _combat_subpanel(state, cid_str, channel_id, is_player=True)
         rows += f"""
 <tr>
   <td><strong>{char.name}{leader_star}</strong><br>
@@ -444,6 +715,7 @@ def party_panel(state: GameState) -> str:
       </div>
     </form>
     {make_leader_btn}
+    {combat_sub}
   </td>
 </tr>"""
 
@@ -466,8 +738,24 @@ def party_panel(state: GameState) -> str:
 <div class="card">
   <div class="section-header">
     <h3>Party</h3>
-    <span class="muted">Gold: {state.party.gold}</span>
+    <span class="muted">Gold: {state.party.gold} | XP: {state.party.experience}</span>
   </div>
+  <form hx-post="/session/{channel_id}/party/addgold"
+        hx-target="#dashboard" hx-swap="outerHTML" style="margin-bottom:0.5rem">
+    <div class="row">
+      <div><label>Add Gold</label>
+      <input type="number" name="amount" value="0" min="0"></div>
+      <button type="submit">Add Gold</button>
+    </div>
+  </form>
+  <form hx-post="/session/{channel_id}/party/addxp"
+        hx-target="#dashboard" hx-swap="outerHTML" style="margin-bottom:0.5rem">
+    <div class="row">
+      <div><label>Add XP</label>
+      <input type="number" name="amount" value="0" min="0"></div>
+      <button type="submit">Add XP</button>
+    </div>
+  </form>
   <table>
     <tr><th>Character</th><th>HP</th><th>Status</th><th>Controls</th></tr>
     {rows}
@@ -856,8 +1144,19 @@ def npc_panel(
         channel_id = state.platform_channel_id
     base_url = f"/session/{channel_id}?view_room={view_room_id}"
 
+    # Use npcs_in_current_room to get NPCs from the roster for the current room
+    npcs_to_show = state.npcs_in_current_room if view_room_id == "" else []
+    # If viewing a specific room, get NPCs from that room in the roster
+    if view_room_id:
+        from uuid import UUID
+        try:
+            room_uuid = UUID(view_room_id)
+            npcs_to_show = state.npc_roster.get_npcs_in_room(room_uuid)
+        except ValueError:
+            npcs_to_show = []
+
     rows = ""
-    for npc in state.npcs:
+    for npc in npcs_to_show:
         nid = str(npc.npc_id)
         npc_base = f"{base_url}&edit={nid}"
         if edit_id == nid:
@@ -885,10 +1184,12 @@ def npc_panel(
   </td>
 </tr>"""
         else:
+            npc_combat_sub = _combat_subpanel(state, nid, channel_id, view_room_id, is_player=False)
             rows += f"""
 <tr>
   <td><strong>{npc.name}</strong><br>
-      <span class="muted">{npc.description}</span></td>
+      <span class="muted">{npc.description}</span>
+      {npc_combat_sub}</td>
   <td class="hp-bar">{npc.hp_current}/{npc.hp_max}</td>
   <td style="white-space:nowrap">
     <form hx-post="/session/{channel_id}/npc/{nid}/sethp"
@@ -1022,3 +1323,185 @@ def archive_page(
   </div>
 </div>"""
     return page("Archive — DM Panel", body)
+
+# ---------------------------------------------------------------------------
+# Character browser page
+# ---------------------------------------------------------------------------
+
+def character_page(
+        sessions: list[tuple[str, str]],
+        entries: dict,
+        flash: str = "",
+        error: str = "",
+        view_char_id: str = "",
+        ) -> str:
+    flash_html = f'<div class="flash">{flash}</div>' if flash else ""
+    error_html = f'<div class="error">{error}</div>' if error else ""
+    char_sheet_html =""
+
+    if not entries:
+        rows_html = '<p class="muted">No characters available.</p>'
+    else:
+        rows = ""
+        for e in entries.values():
+            cid       = e.character_id
+            cname     = e.name
+            cclass    = e.character_class.value
+            clevel    = e.level
+            status    = e.status.value
+            created   = e.created_at.strftime("%Y/%m/%d")
+            rows += f"""
+<tr>
+  <td>
+    <strong>{cname}</strong><br>
+    <span class="muted" style="font-size:0.75rem">{cid}</span>
+  </td>
+  <td class="muted">{cclass}</td>
+  <td style="text-align:center">{clevel}</td>
+  <td class="muted">{status}</td>
+  <td class="muted">{created}</td>
+  <td style="white-space:nowrap;min-width:220px">
+    <a href="/characters?view_char={cid}" class="btn btn-sm btn-success">Show</a>
+  </td>
+</tr>"""
+
+            if str(e.character_id) == view_char_id:
+                char_sheet_html = f"""
+    <div class="card">
+      {character_sheet_panel(e)}
+    </div>"""
+
+        rows_html = f"""
+<table>
+  <tr>
+    <th>Name</th>
+    <th>Class</th>
+    <th>Level</th>
+    <th>Status</th>
+    <th>Created</th>
+    <th>Actions</th>
+  </tr>
+  {rows}
+</table>"""
+
+    body = f"""
+<div class="layout">
+  {_sidebar(None, sessions)}
+  <div class="main">
+    {flash_html}{error_html}
+    <div class="card">
+      <div class="section-header"><h3>Character Sheet Browser</h3></div>
+      {rows_html}
+    </div>
+    {char_sheet_html}
+  </div>
+</div>"""
+    return page("Characters — DM Panel", body)
+
+def _stat_block(stats: list[tuple[str, str]], cols: int | None = None, name: str | None = None) -> str:
+    """Render a row of label/value pairs, e.g. [('HP', '8/10'), ('AC', '5')]"""
+    col_count = cols or len(stats)
+    cells = "".join(
+            f'<div style="text-align:center">'
+            f'  <div class="muted" style="font-size:0.7rem">{label}</div>'
+            f'  <div style="font-size:1.1rem;font-weight:bold">{value}</div>'
+            f'</div>'
+            for label, value in stats
+            )
+    header = (
+            f'<div class="section-header" style="margin-bottom:0.5rem">'
+            f'  <h3>{name}</h3>'
+            f'</div>'
+            ) if name else ""
+    grid = (
+            f'<div style="display:grid;'
+            f'grid-template-columns:repeat({col_count},minmax(3rem,5rem));'
+            f'gap:0.5rem;">'
+            f'{cells}</div>'
+            )
+    return (
+            f'<div style="padding:0.75rem;border:1px solid #0f3460;'
+            f'border-radius:8px;margin:0.5rem 0; width:fit-content;">'
+            f'{header}{grid}'
+            f'</div>'
+            )
+
+
+def _display_inventory_item(item: InventoryItem) -> str:
+    """Prepare a formatted name, quantity, equip indicator for an item."""
+    quantity   = f"{item.quantity}x " if item.quantity > 1 else ""
+    equipstatus = "(EQUIP) " if item.is_equipped else ""
+    return f"{quantity}{equipstatus}{item.name}"
+
+
+def _display_spellbook_spell(spells: SpellBook) -> str:
+    """STUB: return nicely formatted string of a spellbook spell."""
+    return ""
+
+
+def character_sheet_panel(
+    character: Character,
+) -> str:
+    score_rows = ""
+    for f in fields(character.ability_scores):
+        val = getattr(character.ability_scores, f.name)
+        score_rows += f"""<div style="text-align:center">
+            <div class="muted" style="font-size:0.7rem">{f.name.capitalize()}</div>
+            <div style="font-size:1.1rem;font-weight:bold">{val}</div>
+            </div>"""
+
+    ability_scores = _stat_block([("STR", character.ability_scores.strength),
+                                  ("DEX", character.ability_scores.dexterity),
+                                  ("CON", character.ability_scores.constitution),
+                                  ("INT", character.ability_scores.intelligence),
+                                  ("WIS", character.ability_scores.wisdom),
+                                  ("CHA", character.ability_scores.charisma)], name="Ability Scores")
+    hp_ac_movement = _stat_block([("HP", f"{character.hp_current}/{character.hp_max}"),
+                                  ("AC", character.armor_class),
+                                  ("Move", f"{character.movement_speed}'")], 1)
+    saves = _stat_block([("Death/Poison",    character.saving_throws["death_poison"]),
+                         ("Wands",           character.saving_throws["wands"]),
+                         ("Paralysis/Stone", character.saving_throws["paralysis_stone"]),
+                         ("Breath",          character.saving_throws["breath_weapon"]),
+                         ("Spells",          character.saving_throws["spells"])], 2, name="Saves")
+    inv_cells = "".join(
+            f'<div style="text-align:left">'
+            f'  <div style="font-size:0.9rem">{_display_inventory_item(inv_item)}</div>'
+            f'</div>'
+            for inv_item in character.inventory
+            )
+    inventory = (
+            f'<div style="padding:0.75rem;border:1px solid #0f3460;'
+            f'width:fit-content;border-radius:8px;margin:0.5rem 0">'
+            f'<div class="section-header" style="margin-bottom:0.5rem">'
+            f'  <h3>Inventory</h3>'
+            f'</div>'
+            f'<div style="display:grid;'
+            f'grid-template-columns:repeat(2,max-content);gap:0.5rem;">'
+            f'{inv_cells}</div>'
+            f'</div>'
+            )
+    spell_grid = _display_spellbook_spell(character.spellbook)
+    spells = (
+            f'<div style="padding:0.75rem;border:1px solid #0f3460;'
+            f'width:fit-content;border-radius:8px;margin:0.5rem 0">'
+            f'<div class="section-header" style="margin-bottom:0.5rem">'
+            f'  <h3>Spellbook</h3>'
+            f'</div>'
+            f'{spell_grid}'
+            f'</div>'
+              ) if character.spellbook else ""
+
+    return f"""
+<div class="card">
+<div class="section-header"> <h3>{character.name}</h3> </div>
+<div class="muted">{character.character_class.value} — Level {character.level} &nbsp;·&nbsp; {character.experience}
+XP &nbsp;·&nbsp; {character.gold} gp</div>
+  {ability_scores}
+  <div class="grid-2">
+  {hp_ac_movement}
+  {saves}
+  </div>
+  {inventory}
+  {spells}
+</div>"""

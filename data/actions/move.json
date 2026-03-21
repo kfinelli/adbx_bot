@@ -1,0 +1,11 @@
+{
+  "action_id": "move",
+  "label": "Move",
+  "button_style": "primary",
+  "action_type": "move",
+  "description": "Move to an adjacent range band.",
+  "requires_target": false,
+  "requires_destination": true,
+  "range_requirement": [],
+  "effect_tags": ["move_to_band"]
+}

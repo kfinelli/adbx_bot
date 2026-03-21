@@ -1,0 +1,22 @@
+{
+  "key": "FIGHTER",
+  "display_name": "Fighter",
+  "hit_die": 8,
+  "base_ac": 9,
+  "base_movement": 120,
+  "is_spellcaster": false,
+  "default_saves": {
+    "death_poison": 12,
+    "wands": 13,
+    "paralysis_stone": 14,
+    "breath_weapon": 15,
+    "spells": 16
+  },
+  "pack_bonus_items": {},
+  "combat_actions": [
+    "attack",
+    "move",
+    "charge",
+    "affect"
+  ]
+}

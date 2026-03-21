@@ -24,6 +24,7 @@ from discord_tasks import dispatch_oracle_answer, dispatch_turn_resolved
 from engine import (
     add_exit,
     answer_oracle,
+    apply_condition,
     close_turn,
     delete_exit,
     delete_feature,
@@ -44,6 +45,7 @@ from engine import (
     set_npc_status,
     set_turn_number,
     start_session,
+    unsubmit_turn,
     update_exit,
     update_feature,
     update_npc,
@@ -56,6 +58,7 @@ from models import (
     NPC,
     CharacterStatus,
     DoorState,
+    RangeBand,
     Room,
     RoomFeature,
 )
@@ -63,6 +66,7 @@ from serialization import deserialize_dungeon_file, serialize_dungeon_file
 from store import archive_session, repost_status, save_session_async
 from webui.templates import (
     archive_page,
+    character_page,
     dashboard_fragment,
     session_list_page,
     session_page,
@@ -226,6 +230,35 @@ async def route_resume(channel_id: str):
     return _respond(channel_id, flash="Session resumed.")
 
 
+@app.post("/session/{channel_id}/turn/{char_id}/unsubmit", response_class=HTMLResponse)
+async def route_unsubmit_turn(
+    channel_id: str,
+    char_id: str,
+):
+    """DM rejects a player's turn submission, sending it back for revision."""
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    result = unsubmit_turn(state, UUID(char_id))
+    if not result.ok:
+        return _respond(channel_id, error=result.error)
+    await save_session_async(state)
+    # Notify the player via Discord DM
+    if _bot:
+        char = state.characters.get(UUID(char_id))
+        if char and char.owner_id:
+            try:
+                user = await _bot.fetch_user(int(char.owner_id))
+                await user.send(
+                    f"**Turn Submission Returned**\n\n"
+                    f"The DM has returned your turn submission for **{char.name}**. "
+                    f"Please review and re-submit your action for the current turn."
+                )
+            except Exception:
+                pass  # Could not DM user (privacy settings, etc.)
+    return _respond(channel_id, flash=result.message)
+
+
 # ---------------------------------------------------------------------------
 # Character routes
 # ---------------------------------------------------------------------------
@@ -277,6 +310,40 @@ async def route_setleader(channel_id: str, char_id: str):
     await save_session_async(state)
     char = state.characters[cid]
     return _respond(channel_id, flash=f"{char.name} is now party leader.")
+
+
+# ---------------------------------------------------------------------------
+# Party routes (gold, XP)
+# ---------------------------------------------------------------------------
+
+@app.post("/session/{channel_id}/party/addgold", response_class=HTMLResponse)
+async def route_party_addgold(
+    channel_id: str,
+    amount: Annotated[int, Form()],
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    if state.party is None:
+        return _respond(channel_id, error="No party.")
+    state.party.gold += amount
+    await save_session_async(state)
+    return _respond(channel_id, flash=f"Added {amount} gold to party.")
+
+
+@app.post("/session/{channel_id}/party/addxp", response_class=HTMLResponse)
+async def route_party_addxp(
+    channel_id: str,
+    amount: Annotated[int, Form()],
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    if state.party is None:
+        return _respond(channel_id, error="No party.")
+    state.party.experience += amount
+    await save_session_async(state)
+    return _respond(channel_id, flash=f"Added {amount} XP to party.")
 
 
 # ---------------------------------------------------------------------------
@@ -489,9 +556,10 @@ async def route_oracle_answer(
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse("Session not found.", status_code=404)
-    result, oracle = answer_oracle(state, number, answer)
+    result = answer_oracle(state, number, answer)
     if not result.ok:
         return _respond(channel_id, error=result.error)
+    oracle = result.data
     await save_session_async(state)
     if _bot:
         channel = _bot.get_channel(int(channel_id))
@@ -511,10 +579,10 @@ async def route_dungeon_import(channel_id: str, file: UploadFile = File(...)):
         return HTMLResponse("Session not found.", status_code=404)
     raw = await file.read()
     try:
-        dungeon = deserialize_dungeon_file(raw.decode("utf-8"))
+        dungeon, npc_roster = deserialize_dungeon_file(raw.decode("utf-8"))
     except (ValueError, UnicodeDecodeError) as e:
         return _respond(channel_id, error=f"Import failed: {e}")
-    result = import_dungeon(state, dungeon)
+    result = import_dungeon(state, dungeon, npc_roster)
     if not result.ok:
         return _respond(channel_id, error=result.error)
     await save_session_async(state)
@@ -528,7 +596,7 @@ async def route_dungeon_export(channel_id: str):
         return HTMLResponse("Session not found.", status_code=404)
     if state.dungeon is None:
         return HTMLResponse("No dungeon loaded.", status_code=404)
-    json_str = serialize_dungeon_file(state.dungeon)
+    json_str = serialize_dungeon_file(state.dungeon, state.npc_roster)
     safe_name = state.dungeon.name.replace(" ", "_").lower()
     return Response(
         content=json_str,
@@ -714,6 +782,113 @@ async def route_npc_delete(
     return _respond(channel_id, view_room_id=view_room_id)
 
 
+
+# ---------------------------------------------------------------------------
+# Combatant battlefield controls (ROUNDS mode)
+# ---------------------------------------------------------------------------
+
+@app.post("/session/{channel_id}/combatant/{combatant_id}/setband", response_class=HTMLResponse)
+async def route_combatant_setband(
+    channel_id:    str,
+    combatant_id:  str,
+    band:          Annotated[str, Form()],
+    view_room_id:  Annotated[str, Form()] = "",
+):
+    """Move a combatant to a different range band."""
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    if state.battlefield is None:
+        return _respond(channel_id, error="No active battlefield.", view_room_id=view_room_id)
+    try:
+        cid  = UUID(combatant_id)
+        rb   = RangeBand(band)
+    except ValueError as e:
+        return _respond(channel_id, error=str(e), view_room_id=view_room_id)
+    cs = state.battlefield.combatants.get(cid)
+    if cs is None:
+        return _respond(channel_id, error="Combatant not on battlefield.", view_room_id=view_room_id)
+    cs.range_band = rb
+    await save_session_async(state)
+    return _respond(channel_id, view_room_id=view_room_id)
+
+
+@app.post("/session/{channel_id}/combatant/{combatant_id}/setinitiative", response_class=HTMLResponse)
+async def route_combatant_setinitiative(
+    channel_id:    str,
+    combatant_id:  str,
+    initiative:    Annotated[int, Form()],
+    view_room_id:  Annotated[str, Form()] = "",
+):
+    """Override a combatant's initiative value."""
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    if state.battlefield is None:
+        return _respond(channel_id, error="No active battlefield.", view_room_id=view_room_id)
+    try:
+        cid = UUID(combatant_id)
+    except ValueError as e:
+        return _respond(channel_id, error=str(e), view_room_id=view_room_id)
+    cs = state.battlefield.combatants.get(cid)
+    if cs is None:
+        return _respond(channel_id, error="Combatant not on battlefield.", view_room_id=view_room_id)
+    cs.initiative = initiative
+    await save_session_async(state)
+    return _respond(channel_id, view_room_id=view_room_id)
+
+
+@app.post("/session/{channel_id}/combatant/{combatant_id}/applycondition", response_class=HTMLResponse)
+async def route_combatant_applycondition(
+    channel_id:    str,
+    combatant_id:  str,
+    condition_id:  Annotated[str, Form()],
+    duration:      Annotated[int, Form()] = 3,
+    view_room_id:  Annotated[str, Form()] = "",
+):
+    """Apply a status condition to a combatant."""
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    try:
+        cid = UUID(combatant_id)
+    except ValueError as e:
+        return _respond(channel_id, error=str(e), view_room_id=view_room_id)
+    result = apply_condition(state, cid, condition_id, duration=max(1, duration))
+    if not result.ok:
+        return _respond(channel_id, error=result.error, view_room_id=view_room_id)
+    await save_session_async(state)
+    return _respond(channel_id, flash=result.message, view_room_id=view_room_id)
+
+
+@app.post("/session/{channel_id}/combatant/{combatant_id}/removecondition", response_class=HTMLResponse)
+async def route_combatant_removecondition(
+    channel_id:    str,
+    combatant_id:  str,
+    condition_id:  Annotated[str, Form()],
+    view_room_id:  Annotated[str, Form()] = "",
+):
+    """Remove a specific condition from a combatant."""
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    if state.battlefield is None:
+        return _respond(channel_id, error="No active battlefield.", view_room_id=view_room_id)
+    try:
+        cid = UUID(combatant_id)
+    except ValueError as e:
+        return _respond(channel_id, error=str(e), view_room_id=view_room_id)
+    cs = state.battlefield.combatants.get(cid)
+    if cs is None:
+        return _respond(channel_id, error="Combatant not on battlefield.", view_room_id=view_room_id)
+    before = len(cs.active_conditions)
+    cs.active_conditions = [c for c in cs.active_conditions if c.condition_id != condition_id]
+    if len(cs.active_conditions) == before:
+        return _respond(channel_id, error=f"Condition '{condition_id}' not found.", view_room_id=view_room_id)
+    await save_session_async(state)
+    return _respond(channel_id, view_room_id=view_room_id)
+
+
 # ---------------------------------------------------------------------------
 # Embark / End session
 # ---------------------------------------------------------------------------
@@ -801,3 +976,20 @@ async def archive_delete(session_id: str):
     await store.db.delete_archive_async(session_id)
     entries = await store.db.list_archive_async()
     return HTMLResponse(archive_page(_session_list(), entries, flash="Archive entry deleted."))
+
+
+# ---------------------------------------------------------------------------
+# Character sheet browser
+# ---------------------------------------------------------------------------
+
+@app.get("/characters", response_class=HTMLResponse)
+async def character_index(view_char: str = "", flash: str = "", error: str = ""):
+    #STUB - need character persistence code - this just gets the first active session and ignores everything else!!!
+    channel_ids = store.db.list_channels()
+    entries = None
+    if channel_ids is not None:
+        state = store.get_session(channel_ids[0])
+        entries = state.characters
+    #/STUB
+    return character_page(_session_list(), entries, flash=flash, error=error, view_char_id=view_char)
+

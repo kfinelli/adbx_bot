@@ -33,28 +33,32 @@ class TestSayLog:
 
 class TestOracles:
     def test_ask_oracle_creates_entry(self, active_state):
-        result, oracle = ask_oracle(active_state, "Aldric", "What lurks ahead?")
+        result = ask_oracle(active_state, "Aldric", "What lurks ahead?")
         assert result.ok
+        oracle = result.data
         assert oracle.number == 1
         assert oracle.question == "What lurks ahead?"
         assert oracle.answer is None
 
     def test_oracle_counter_increments(self, active_state):
-        _, o1 = ask_oracle(active_state, "Aldric", "Q1?")
-        _, o2 = ask_oracle(active_state, "Mira", "Q2?")
+        r1 = ask_oracle(active_state, "Aldric", "Q1?")
+        r2 = ask_oracle(active_state, "Mira", "Q2?")
+        o1, o2 = r1.data, r2.data
         assert o1.number == 1
         assert o2.number == 2
 
     def test_answer_oracle(self, active_state):
-        _, oracle = ask_oracle(active_state, "Aldric", "Is it safe?")
-        result, answered = answer_oracle(active_state, oracle.number, "No.")
+        r_ask = ask_oracle(active_state, "Aldric", "Is it safe?")
+        oracle = r_ask.data
+        result = answer_oracle(active_state, oracle.number, "No.")
         assert result.ok
+        answered = result.data
         assert answered.answer == "No."
 
     def test_answer_unknown_oracle_fails(self, active_state):
-        result, oracle = answer_oracle(active_state, 99, "Answer.")
+        result = answer_oracle(active_state, 99, "Answer.")
         assert not result.ok
-        assert oracle is None
+        assert result.data is None
 
     def test_oracle_counter_resets_on_resolve(self, active_state):
         from engine import close_turn, resolve_turn

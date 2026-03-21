@@ -56,6 +56,7 @@ async def on_message(message: discord.Message):
         with contextlib.suppress(discord.Forbidden, discord.NotFound):
             await message.delete()
 
+
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user} ({bot.user.id})")
@@ -134,6 +135,7 @@ async def main():
         await bot.load_extension("cogs.session")
         await bot.load_extension("cogs.dm_commands")
         await bot.load_extension("cogs.timer")
+        await bot.load_extension("cogs.action_buttons")
         # Run bot and web UI concurrently in the same event loop
         await asyncio.gather(
             bot.start(TOKEN),

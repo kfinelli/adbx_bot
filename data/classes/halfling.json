@@ -1,0 +1,22 @@
+{
+  "key": "HALFLING",
+  "display_name": "Halfling",
+  "hit_die": 6,
+  "base_ac": 9,
+  "base_movement": 60,
+  "is_spellcaster": false,
+  "default_saves": {
+    "death_poison": 10,
+    "wands": 13,
+    "paralysis_stone": 12,
+    "breath_weapon": 13,
+    "spells": 15
+  },
+  "pack_bonus_items": {},
+  "combat_actions": [
+    "attack",
+    "move",
+    "charge",
+    "affect"
+  ]
+}

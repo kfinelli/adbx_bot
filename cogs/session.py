@@ -247,12 +247,13 @@ class SessionCog(commands.Cog):
             return
         char = _find_character(state, str(interaction.user.id))
         asker = char.name if char else interaction.user.display_name
-        result, oracle = ask_oracle(
+        result = ask_oracle(
             state, asker, question, asker_owner_id=str(interaction.user.id)
         )
         if not result.ok:
             await ack_err(interaction, result.error)
             return
+        oracle = result.data
         await ack_done(interaction)
         msg = await post_oracle_question(interaction.channel, oracle)
         oracle.message_id = msg.id

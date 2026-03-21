@@ -13,13 +13,15 @@ Flow:
 
 from __future__ import annotations
 
+import contextlib
+
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 from engine import create_character, roll_stats
 from models import CharacterClass, SessionMode
-from store import ack, get_session, update_status
+from store import ack, get_session, save_session, update_status
 from tables import EQUIPMENT_PACKAGE_DESCRIPTIONS, EQUIPMENT_PACKAGES
 
 # ---------------------------------------------------------------------------
@@ -57,7 +59,6 @@ class LoadoutView(discord.ui.View):
         self.owner_id = owner_id
 
         for package_name in EQUIPMENT_PACKAGES:
-            EQUIPMENT_PACKAGE_DESCRIPTIONS.get(package_name, "")
             btn = discord.ui.Button(
                 label=package_name,
                 style=discord.ButtonStyle.secondary,
@@ -82,45 +83,60 @@ class LoadoutView(discord.ui.View):
                 view=self,
             )
 
-            state = get_session(self.channel_id)
-            if state is None:
-                await interaction.followup.send(
-                    "Session no longer exists.", ephemeral=True
-                )
-                return
-
-            result = create_character(
-                state=state,
-                name=self.character_name,
-                character_class=self.character_class,
-                equipment_package=package_name,
-                owner_id=self.owner_id,
-                prerolled_stats=self.stats,
-            )
-
-            if not result.ok:
-                await interaction.followup.send(
-                    f"Error creating character: {result.error}", ephemeral=True
-                )
-                return
-
-            # Auto-assign leader if none set
-            if state.party.leader_id is None:
-                state.party.leader_id = state.party.member_ids[-1]
-
-            await interaction.followup.send(
-                f"**{self.character_name}** has arrived! "
-                f"Head back to the game channel.",
-                ephemeral=False,
-            )
-
-            # Update channel status
             try:
+                state = get_session(self.channel_id)
+                if state is None:
+                    await interaction.followup.send(
+                        "⚠ Session no longer exists.", ephemeral=True
+                    )
+                    return
+
+                result = create_character(
+                    state=state,
+                    name=self.character_name,
+                    character_class=self.character_class,
+                    equipment_package=package_name,
+                    owner_id=self.owner_id,
+                    prerolled_stats=self.stats,
+                )
+
+                if not result.ok:
+                    await interaction.followup.send(
+                        f"⚠ Error creating character: {result.error}", ephemeral=True
+                    )
+                    return
+
+                # Auto-assign leader if none set
+                if state.party.leader_id is None:
+                    state.party.leader_id = state.party.member_ids[-1]
+
+                # Save unconditionally — don't rely on get_channel succeeding.
+                save_session(state)
+
+                await interaction.followup.send(
+                    f"✓ **{self.character_name}** has arrived! "
+                    f"Head back to the game channel.",
+                    ephemeral=False,
+                )
+
+                # Best-effort channel status update (get_channel may miss uncached guilds).
                 channel = interaction.client.get_channel(int(self.channel_id))
-                if channel:
+                if channel is None:
+                    # Fall back to a fetch if not in cache
+                    try:
+                        channel = await interaction.client.fetch_channel(int(self.channel_id))
+                    except discord.HTTPException:
+                        channel = None
+                if channel is not None:
                     await update_status(channel, state)
-            except Exception:
-                pass
+
+            except Exception as exc:
+                # Surface any unexpected error to the player rather than silently failing.
+                with contextlib.suppress(discord.HTTPException):
+                    await interaction.followup.send(
+                        f"⚠ Something went wrong: {exc}", ephemeral=True
+                    )
+                raise  # re-raise so the traceback still hits bot stderr
 
         return callback
 

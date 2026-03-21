@@ -3,3 +3,4 @@ dungeon.db
 venv
 .env
 *.swp
+.aider*

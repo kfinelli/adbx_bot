@@ -1,0 +1,10 @@
+{
+  "condition_id": "entangled",
+  "label": "Entangled",
+  "duration_type": "rounds",
+  "hooks": {
+    "on_move": "block_movement"
+  },
+  "stat_modifiers": {},
+  "grants_actions": []
+}

@@ -21,9 +21,12 @@ from uuid import UUID
 from models import (
     NPC,
     AbilityScores,
+    ActiveCondition,
     Character,
     CharacterClass,
     CharacterStatus,
+    CombatantState,
+    CombatBattlefield,
     DoorState,
     Dungeon,
     Exit,
@@ -31,9 +34,13 @@ from models import (
     GameState,
     InventoryItem,
     LightSource,
+    NPCGroup,
+    NPCMovementLogic,
+    NPCRoster,
     Party,
     PlayerTurnSubmission,
     PreparedSpell,
+    RangeBand,
     Room,
     RoomFeature,
     SessionMode,
@@ -206,6 +213,24 @@ def serialize_npc(n: NPC) -> dict:
     }
 
 
+def serialize_npc_group(g: NPCGroup) -> dict:
+    return {
+        "group_id":        _uuid(g.group_id),
+        "name":            g.name,
+        "npcs":            [serialize_npc(n) for n in g.npcs],
+        "possible_rooms":  [_uuid(r) for r in g.possible_rooms],
+        "movement_logic":  g.movement_logic.value,
+        "current_room_id": _uuid(g.current_room_id),
+        "patrol_route":    [_uuid(r) for r in g.patrol_route],
+    }
+
+
+def serialize_npc_roster(roster: NPCRoster) -> dict:
+    return {
+        "groups": {str(gid): serialize_npc_group(g) for gid, g in roster.groups.items()},
+    }
+
+
 def serialize_light_source(ls: LightSource) -> dict:
     return {
         "label":           ls.label,
@@ -225,12 +250,42 @@ def serialize_party(p: Party) -> dict:
     }
 
 
+def serialize_active_condition(c: ActiveCondition) -> dict:
+    return {
+        "condition_id":    c.condition_id,
+        "duration_rounds": c.duration_rounds,
+        "source_id":       _uuid(c.source_id),
+    }
+
+
+def serialize_combatant_state(cs: CombatantState) -> dict:
+    return {
+        "combatant_id":      _uuid(cs.combatant_id),
+        "is_player":         cs.is_player,
+        "range_band":        _enum(cs.range_band),
+        "initiative":        cs.initiative,
+        "acted_this_round":  cs.acted_this_round,
+        "active_conditions": [serialize_active_condition(c) for c in cs.active_conditions],
+    }
+
+
+def serialize_battlefield(bf: CombatBattlefield) -> dict:
+    return {
+        "combatants": {
+            str(cid): serialize_combatant_state(cs)
+            for cid, cs in bf.combatants.items()
+        },
+        "round_log": list(bf.round_log),
+    }
+
+
 def serialize_submission(s: PlayerTurnSubmission) -> dict:
     return {
-        "character_id": _uuid(s.character_id),
-        "submitted_at": _dt(s.submitted_at),
-        "action_text":  s.action_text,
-        "is_latest":    s.is_latest,
+        "character_id":  _uuid(s.character_id),
+        "submitted_at":  _dt(s.submitted_at),
+        "action_text":   s.action_text,
+        "is_latest":     s.is_latest,
+        "combat_action": s.combat_action,   # plain dict or None — passes through unchanged
     }
 
 
@@ -258,7 +313,7 @@ def serialize_state(state: GameState) -> str:
         "current_room_id":      _uuid(state.current_room_id),
         "party":                serialize_party(state.party) if state.party else None,
         "characters":           {str(k): serialize_character(v) for k, v in state.characters.items()},
-        "npcs":                 [serialize_npc(n) for n in state.npcs],
+        "npc_roster":           serialize_npc_roster(state.npc_roster),
         "mode":                 _enum(state.mode),
         "turn_number":          state.turn_number,
         "current_turn":         serialize_turn_record(state.current_turn) if state.current_turn else None,
@@ -267,6 +322,7 @@ def serialize_state(state: GameState) -> str:
         "oracles":              [serialize_oracle(o) for o in state.oracles],
         "oracle_counter":       state.oracle_counter,
         "session_active":       state.session_active,
+        "battlefield":          serialize_battlefield(state.battlefield) if state.battlefield else None,
         "rounds_started_at_turn": state.rounds_started_at_turn,
         "default_turn_hours":   state.default_turn_hours,
         "created_at":           _dt(state.created_at),
@@ -414,6 +470,27 @@ def deserialize_npc(d: dict) -> NPC:
     )
 
 
+def deserialize_npc_group(d: dict) -> NPCGroup:
+    return NPCGroup(
+        group_id=_load_uuid(d["group_id"]),
+        name=d["name"],
+        npcs=[deserialize_npc(n) for n in d["npcs"]],
+        possible_rooms=[_load_uuid(r) for r in d["possible_rooms"]],
+        movement_logic=NPCMovementLogic(d["movement_logic"]),
+        current_room_id=_load_uuid(d["current_room_id"]),
+        patrol_route=[_load_uuid(r) for r in d["patrol_route"]],
+    )
+
+
+def deserialize_npc_roster(d: dict) -> NPCRoster:
+    roster = NPCRoster()
+    groups_data = d.get("groups", {})
+    for gid_str, gdata in groups_data.items():
+        group = deserialize_npc_group(gdata)
+        roster.groups[UUID(gid_str)] = group
+    return roster
+
+
 def deserialize_light_source(d: dict) -> LightSource:
     return LightSource(
         label=d["label"],
@@ -433,12 +510,44 @@ def deserialize_party(d: dict) -> Party:
     )
 
 
+def deserialize_active_condition(d: dict) -> ActiveCondition:
+    return ActiveCondition(
+        condition_id=d["condition_id"],
+        duration_rounds=d.get("duration_rounds"),
+        source_id=_load_uuid(d.get("source_id")),
+    )
+
+
+def deserialize_combatant_state(d: dict) -> CombatantState:
+    return CombatantState(
+        combatant_id=_load_uuid(d["combatant_id"]),
+        is_player=d["is_player"],
+        range_band=RangeBand(d["range_band"]),
+        initiative=d.get("initiative", 0),
+        acted_this_round=d.get("acted_this_round", False),
+        active_conditions=[
+            deserialize_active_condition(c) for c in d.get("active_conditions", [])
+        ],
+    )
+
+
+def deserialize_battlefield(d: dict) -> CombatBattlefield:
+    return CombatBattlefield(
+        combatants={
+            UUID(cid): deserialize_combatant_state(cs)
+            for cid, cs in d.get("combatants", {}).items()
+        },
+        round_log=list(d.get("round_log", [])),
+    )
+
+
 def deserialize_submission(d: dict) -> PlayerTurnSubmission:
     return PlayerTurnSubmission(
         character_id=_load_uuid(d["character_id"]),
         submitted_at=_load_dt(d["submitted_at"]),
         action_text=d["action_text"],
         is_latest=d["is_latest"],
+        combat_action=d.get("combat_action"),   # None for old saves and exploration turns
     )
 
 
@@ -461,6 +570,15 @@ def deserialize_turn_record(d: dict) -> TurnRecord:
 def deserialize_state(json_str: str) -> GameState:
     """Reconstruct a GameState from a JSON string."""
     d = json.loads(json_str)
+
+    # Deserialize NPC roster (new field)
+    npc_roster_data = d.get("npc_roster")
+    if npc_roster_data:
+        npc_roster = deserialize_npc_roster(npc_roster_data)
+    else:
+        # Backward compatibility: if no npc_roster, create empty one
+        npc_roster = NPCRoster()
+
     return GameState(
         session_id=_load_uuid(d["session_id"]),
         dungeon=deserialize_dungeon(d["dungeon"]) if d["dungeon"] else None,
@@ -470,7 +588,7 @@ def deserialize_state(json_str: str) -> GameState:
             UUID(k): deserialize_character(v)
             for k, v in d["characters"].items()
         },
-        npcs=[deserialize_npc(n) for n in d["npcs"]],
+        npc_roster=npc_roster,
         mode=SessionMode(d["mode"]),
         turn_number=d["turn_number"],
         current_turn=deserialize_turn_record(d["current_turn"]) if d["current_turn"] else None,
@@ -479,6 +597,10 @@ def deserialize_state(json_str: str) -> GameState:
         oracles=[deserialize_oracle(o) for o in d.get("oracles", [])],
         oracle_counter=d.get("oracle_counter", 0),
         session_active=d.get("session_active", True),
+        battlefield=(
+            deserialize_battlefield(d["battlefield"])
+            if d.get("battlefield") else None
+        ),
         rounds_started_at_turn=d.get("rounds_started_at_turn", None),
         default_turn_hours=d.get("default_turn_hours", 24.0),
         created_at=_load_dt(d["created_at"]),
@@ -492,33 +614,36 @@ def deserialize_state(json_str: str) -> GameState:
 # Standalone dungeon file (import / export)
 # ---------------------------------------------------------------------------
 # A dungeon file is a self-contained JSON document representing only the
-# Dungeon object — no session state, no characters, no party. This is the
-# format used for the web UI importer/exporter and for sharing dungeons.
+# Dungeon object and NPC roster — no session state, no characters, no party.
+# This is the format used for the web UI importer/exporter and for sharing
+# dungeons.
 #
 # Schema:
 #   {
 #     "format":  "adbx-dungeon",   // sentinel to catch wrong file types
-#     "version": 1,
+#     "version": 2,
 #     "dungeon": { ...serialize_dungeon() output... }
+#     "npc_roster": { ... serialize_npc_roster() output ... }
 #   }
 
 _DUNGEON_FILE_FORMAT  = "adbx-dungeon"
-_DUNGEON_FILE_VERSION = 1
+_DUNGEON_FILE_VERSION = 2
 
 
-def serialize_dungeon_file(dungeon: Dungeon) -> str:
+def serialize_dungeon_file(dungeon: Dungeon, npc_roster: NPCRoster | None = None) -> str:
     """Produce a pretty-printed JSON string suitable for download."""
     doc = {
         "format":  _DUNGEON_FILE_FORMAT,
         "version": _DUNGEON_FILE_VERSION,
         "dungeon": serialize_dungeon(dungeon),
+        "npc_roster": serialize_npc_roster(npc_roster) if npc_roster is not None else serialize_npc_roster(NPCRoster()),
     }
     return json.dumps(doc, indent=2)
 
 
-def deserialize_dungeon_file(json_str: str) -> Dungeon:
+def deserialize_dungeon_file(json_str: str) -> tuple[Dungeon, NPCRoster]:
     """
-    Parse a dungeon file JSON string and return a Dungeon.
+    Parse a dungeon file JSON string and return a (Dungeon, NPCRoster) tuple.
     Raises ValueError with a human-readable message on any problem.
     """
     try:
@@ -541,6 +666,18 @@ def deserialize_dungeon_file(json_str: str) -> Dungeon:
         raise ValueError("Missing 'dungeon' key in dungeon file.")
 
     try:
-        return deserialize_dungeon(doc["dungeon"])
+        dungeon = deserialize_dungeon(doc["dungeon"])
     except (KeyError, TypeError, ValueError) as e:
         raise ValueError(f"Dungeon data is malformed: {e}") from e
+
+    # Deserialize NPC roster (may be missing in older files, but we require v2)
+    npc_roster_data = doc.get("npc_roster")
+    if npc_roster_data is None:
+        npc_roster = NPCRoster()
+    else:
+        try:
+            npc_roster = deserialize_npc_roster(npc_roster_data)
+        except (KeyError, TypeError, ValueError) as e:
+            raise ValueError(f"NPC roster data is malformed: {e}") from e
+
+    return dungeon, npc_roster

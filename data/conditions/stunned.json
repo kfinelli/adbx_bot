@@ -1,0 +1,10 @@
+{
+  "condition_id": "stunned",
+  "label": "Stunned",
+  "duration_type": "rounds",
+  "hooks": {
+    "on_turn_start": "skip_action"
+  },
+  "stat_modifiers": {},
+  "grants_actions": []
+}

@@ -1,0 +1,28 @@
+{
+  "key": "CLERIC",
+  "display_name": "Cleric",
+  "hit_die": 6,
+  "base_ac": 9,
+  "base_movement": 120,
+  "is_spellcaster": true,
+  "default_saves": {
+    "death_poison": 11,
+    "wands": 12,
+    "paralysis_stone": 14,
+    "breath_weapon": 16,
+    "spells": 15
+  },
+  "pack_bonus_items": {
+    "Pack C": [
+      "Holy Symbol",
+      1,
+      0.0
+    ]
+  },
+  "combat_actions": [
+    "attack",
+    "move",
+    "charge",
+    "affect"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "condition_id": "strengthened",
+  "label": "Strengthened",
+  "duration_type": "rounds",
+  "hooks": {},
+  "stat_modifiers": {
+    "strength": 2
+  },
+  "grants_actions": []
+}

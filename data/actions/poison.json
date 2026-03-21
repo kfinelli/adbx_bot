@@ -1,0 +1,13 @@
+{
+  "action_id": "poison",
+  "label": "Poison",
+  "button_style": "secondary",
+  "action_type": "attack",
+  "description": "Apply poison to a target at any range. The target takes 1d4 damage at the end of each round.",
+  "requires_target": true,
+  "requires_destination": false,
+  "range_requirement": [],
+  "effect_tags": [
+    {"tag": "apply_condition", "condition": "poisoned", "duration": 3}
+  ]
+}

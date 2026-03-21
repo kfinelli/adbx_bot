@@ -5,10 +5,10 @@ All data is read-only. No game state, no I/O.
 Ruleset: B/X D&D (Moldvay/Cook, 1981)
 
 To adapt to a different ruleset:
-  1. Edit _CLASS_DEFINITIONS to add/remove/rename classes
+  1. Edit data/classes/*.json to add/remove/rename classes
   2. Replace ability modifiers, saving throw tables, spell slots as needed
   3. Replace EQUIPMENT_PACKAGES
-  The CharacterClass enum is generated from _CLASS_DEFINITIONS automatically,
+  The CharacterClass enum is generated from the JSON class files automatically,
   so models.py, engine.py, and all platform code require no changes.
 """
 
@@ -20,18 +20,24 @@ from enum import Enum
 # ---------------------------------------------------------------------------
 # Character creation rules
 # ---------------------------------------------------------------------------
-@dataclass
-class Ability:
-    source: str
-    desc: str
-    source_level: int = 0
-    name: str = "Unnamed Ability"
 
 @dataclass
 class PlayerClass:
     """
     Everything create_character needs to know about a class.
-    Defaults are generic fantasy RPG values; override per class as needed.
+    Populated from data/classes/*.json via engine/data_loader.py.
+    """
+
+    display_name:     str   = "Unknown Class"   # shown to players, e.g. "Magic-User"
+    hit_die:          int   = 6                 # die size for HP rolls
+    base_ac:          int   = 9                 # unarmored AC (descending; lower = better)
+    base_movement:    int   = 120               # feet per turn
+    is_spellcaster:   bool  = False
+    weapon_rank:      str   = "E"
+    max_level:        int   = 5
+    base_save:        int  = 0
+    stat:             str  = "PHY"
+    abilities=        dict = {}
     """
     id: str
     max_level: int = 5
@@ -42,11 +48,6 @@ class PlayerClass:
     stat: str = "PHY"
     abilities={}
     """
-    display_name:    str        # shown to players, e.g. "Magic-User"
-    hit_die:         int = 8    # die size for HP rolls
-    base_ac:         int = 9    # unarmored AC (descending; lower = better)
-    base_movement:   int = 120  # feet per turn
-    is_spellcaster:  bool = False
 
     # Saving throw targets as an opaque dict.
     # Keys can be anything the ruleset uses; engine never inspects them.
@@ -54,66 +55,69 @@ class PlayerClass:
         "death_poison": 14, "wands": 15, "paralysis_stone": 16,
         "breath_weapon": 17, "spells": 18,
     })
-"""
+
     # Class-specific bonus items for named equipment packs.
     # Maps pack_name -> (item_name, quantity, encumbrance).
     pack_bonus_items: dict = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
-# Class definitions
-# Edit this dict to add, remove, or rename classes.
-# The CharacterClass enum is generated from these keys automatically.
+# Class definitions — loaded from data/classes/*.json
+# Edit those files to add, remove, or rename classes.
+# The CharacterClass enum is generated from the loaded keys automatically.
 # ---------------------------------------------------------------------------
 
-_CLASS_DEFINITIONS: dict = {
-    "FIGHTER": PlayerClass(
-        display_name="Fighter", hit_die=8, base_movement=120,
-        default_saves={"death_poison": 12, "wands": 13, "paralysis_stone": 14,
-                       "breath_weapon": 15, "spells": 16},
-    ),
-    "THIEF": PlayerClass(
-        display_name="Thief", hit_die=4, base_movement=120,
-        default_saves={"death_poison": 13, "wands": 14, "paralysis_stone": 13,
-                       "breath_weapon": 16, "spells": 15},
-        pack_bonus_items={"Pack C": ("Thief's Tools", 1, 0.5)},
-    ),
-    "CLERIC": PlayerClass(
-        display_name="Cleric", hit_die=6, base_movement=120, is_spellcaster=True,
-        default_saves={"death_poison": 11, "wands": 12, "paralysis_stone": 14,
-                       "breath_weapon": 16, "spells": 15},
-        pack_bonus_items={"Pack C": ("Holy Symbol", 1, 0.0)},
-    ),
-    "MAGIC_USER": PlayerClass(
-        display_name="Magic-User", hit_die=4, base_movement=120, is_spellcaster=True,
-        default_saves={"death_poison": 13, "wands": 14, "paralysis_stone": 13,
-                       "breath_weapon": 16, "spells": 15},
-    ),
-    "ELF": PlayerClass(
-        display_name="Elf", hit_die=6, base_movement=120, is_spellcaster=True,
-        default_saves={"death_poison": 12, "wands": 13, "paralysis_stone": 13,
-                       "breath_weapon": 15, "spells": 15},
-    ),
-    "DWARF": PlayerClass(
-        display_name="Dwarf", hit_die=8, base_movement=60,
-        default_saves={"death_poison": 12, "wands": 13, "paralysis_stone": 14,
-                       "breath_weapon": 15, "spells": 16},
-    ),
-    "HALFLING": PlayerClass(
-        display_name="Halfling", hit_die=6, base_movement=60,
-        default_saves={"death_poison": 10, "wands": 13, "paralysis_stone": 12,
-                       "breath_weapon": 13, "spells": 15},
-    ),
-}
+def _build_class_definitions() -> dict[str, PlayerClass]:
+    """
+    Load ClassDef entries from engine/data_loader and convert them to
+    PlayerClass instances that the rest of the codebase already knows.
+    Raises ValueError (from data_loader) if any class file is malformed.
+    """
+    # Import the module directly by path to avoid the circular chain:
+    #   tables → engine/__init__ → models → tables
+    # engine/data_loader has no dependency on tables or models, so this is safe.
+    # We must register the module in sys.modules before exec_module so that
+    # Python 3.12's dataclass machinery can resolve the module's __dict__.
+    import importlib.util
+    import pathlib
+    import sys
 
-# Generate CharacterClass enum from the keys above.
+    _mod_name = "engine.data_loader"
+    if _mod_name in sys.modules:
+        # Already loaded (e.g. second import of tables) — reuse it.
+        _mod = sys.modules[_mod_name]
+    else:
+        _loader_path = pathlib.Path(__file__).parent / "engine" / "data_loader.py"
+        _spec = importlib.util.spec_from_file_location(_mod_name, _loader_path)
+        _mod  = importlib.util.module_from_spec(_spec)
+        sys.modules[_mod_name] = _mod   # register BEFORE exec so dataclasses can find it
+        _spec.loader.exec_module(_mod)
+
+    _json_defs = _mod.CLASS_DEFINITIONS
+    result: dict[str, PlayerClass] = {}
+    for key, cls_def in _json_defs.items():
+        result[key] = PlayerClass(
+            display_name=cls_def.display_name,
+            hit_die=cls_def.hit_die,
+            base_ac=cls_def.base_ac,
+            base_movement=cls_def.base_movement,
+            is_spellcaster=cls_def.is_spellcaster,
+            default_saves=dict(cls_def.default_saves),
+            pack_bonus_items=dict(cls_def.pack_bonus_items),
+        )
+    return result
+
+
+_CLASS_DEFINITIONS: dict[str, PlayerClass] = _build_class_definitions()
+
+# Generate CharacterClass enum from the loaded keys.
 # cls.value == display_name (e.g. CharacterClass.FIGHTER.value == "Fighter")
 CharacterClass = Enum(
     "CharacterClass",
     {key: rules.display_name for key, rules in _CLASS_DEFINITIONS.items()},
 )
 
-# Lookup: CharacterClass member -> CharacterCreationRules
+# Lookup: CharacterClass member -> PlayerClass
 CREATION_RULES: dict = {
     cls: _CLASS_DEFINITIONS[cls.name] for cls in CharacterClass
 }

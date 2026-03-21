@@ -17,6 +17,10 @@ from engine import render_status, render_status_header
 from models import GameState, Party
 from persistence import Database
 
+# build_action_view is imported lazily inside _build_view() to avoid a
+# circular import: action_buttons.py imports store.py at module level,
+# so store.py must not import action_buttons.py at module level.
+
 # ---------------------------------------------------------------------------
 # Database (single shared instance for the whole bot process)
 # ---------------------------------------------------------------------------
@@ -102,9 +106,23 @@ def _build_content(state: GameState) -> str:
     return header + "\n```\n" + body + "\n```"
 
 
+def _build_view(state: GameState):
+    """
+    Return the action button view for the current session state, or None.
+    Lazily imports build_action_view to avoid a circular import
+    (action_buttons.py imports store.py at module level).
+    """
+    try:
+        from cogs.action_buttons import build_action_view
+        return build_action_view(state)
+    except ImportError:
+        return None
+
+
 async def _post_fresh_status(channel: discord.TextChannel, state: GameState) -> None:
     """Post a new status message at the bottom of the channel."""
-    msg = await channel.send(_build_content(state))
+    view = _build_view(state)
+    msg = await channel.send(_build_content(state), view=view)
     _status_messages[str(channel.id)] = msg
 
 
@@ -121,7 +139,7 @@ async def update_status(
     existing = _status_messages.get(str(channel.id))
     if existing is not None:
         try:
-            await existing.edit(content=_build_content(state))
+            await existing.edit(content=_build_content(state), view=_build_view(state))
             return
         except discord.NotFound:
             pass
@@ -189,7 +207,7 @@ async def restore_status_message(bot: discord.Client, channel_id: str) -> None:
         if candidates:
             _, best = max(candidates, key=lambda x: x[0])
             _status_messages[channel_id] = best
-            await best.edit(content=_build_content(state))
+            await best.edit(content=_build_content(state), view=_build_view(state))
             return
     except discord.Forbidden:
         pass
@@ -271,7 +289,7 @@ async def require_session(interaction: discord.Interaction) -> GameState | None:
     state = get_session(str(interaction.channel_id))
     if state is None:
         await interaction.response.send_message(
-            "No active session in this channel. Use /embark to start one.",
+            "No active session in this channel. Use embark (via the web interface) to start one.",
             ephemeral=True,
         )
         return None
@@ -290,7 +308,6 @@ async def ack(interaction: discord.Interaction) -> None:
 async def ack_done(interaction: discord.Interaction) -> None:
     """Delete the 'Command received' ephemeral on successful completion."""
     with contextlib.suppress(discord.NotFound, discord.HTTPException):
-        # already gone or token expired — silently ignore
         await interaction.delete_original_response()
 
 
