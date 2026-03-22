@@ -70,7 +70,7 @@ import sqlite3
 from datetime import UTC, datetime
 
 from models import GameState
-from serialization import deserialize_state, serialize_state
+from serialization import deserialize_state
 
 
 # Use a UTC-aware now() throughout to avoid the deprecation warning.
@@ -163,18 +163,18 @@ class Database:
 
     def _save_sync(self, state: GameState) -> None:
         """Save session state (without characters) to the sessions table.
-        
+
         Characters are saved separately via save_character() and linked via
         session_characters join table.
         """
         from serialization import serialize_state_without_characters
-        
+
         # Save each character to the characters table
         for char in state.characters.values():
             self._save_character_sync(char)
             # Link character to this session
             self._enroll_character_in_session_sync(str(state.session_id), str(char.character_id))
-        
+
         # Save session state without character data
         self._conn.execute(
             """
@@ -204,13 +204,12 @@ class Database:
         ).fetchone()
         if row is None:
             return None
-        
+
         # Load characters enrolled in this session
         session_id = row["session_id"]
         characters = self._get_characters_for_session_sync(session_id)
-        
+
         # Deserialize state with loaded characters
-        from serialization import deserialize_state
         return deserialize_state(row["state_json"], characters=characters)
 
     def _delete_sync(self, channel_id: str) -> None:
@@ -228,7 +227,6 @@ class Database:
         """Save or update a single Character to the characters table."""
         from serialization import (
             serialize_character,
-            serialize_ability_scores,
         )
         char_data = serialize_character(character)
         self._conn.execute(
@@ -289,9 +287,6 @@ class Database:
         """Load a single Character by UUID string. Returns Character or None."""
         from serialization import (
             deserialize_character,
-            deserialize_ability_scores,
-            deserialize_inventory_item,
-            deserialize_spellbook,
         )
         row = self._conn.execute(
             "SELECT * FROM characters WHERE character_id = ?",
@@ -406,7 +401,7 @@ class Database:
         Copy the active session for channel_id into archived_sessions,
         then delete it from sessions. Returns True if a row was archived,
         False if no session existed.
-        
+
         Note: Characters are NOT deleted when archiving — they persist in
         the characters table and can be enrolled in new sessions later.
         Only the session_characters links are removed when the session is deleted.

@@ -7,7 +7,6 @@ import warnings
 from engine.azure_constants import BUNDLE_SIZE, BundleData, ItemData, Slot, SortMode, Stat, ItemType, POWER_LEVEL, \
     RechargePeriod
 
-
 # ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
 # Items have a field called "prototype", which contains the UNMODIFIED item data as a dictionary.
 # This means we can freely change the item stats and tags while still being able to reset it to normal, if things break.
@@ -98,7 +97,7 @@ class LightContainer(Item):
     def __init__(self, name=defaultName, description=defaultDescription, maxSize = BUNDLE_SIZE):
         super().__init__(name, description)
         self.maxSize = maxSize
-        self.contents = list()
+        self.contents = []
         if self.ITEM_TYPE is LightContainer.ITEM_TYPE:
             self.updatePrototype()
 
@@ -138,6 +137,7 @@ class LightContainer(Item):
 # This is a helper class purely for managing more specific types of equipment.
 # No items should ever be of type EquipItem, only subclasses thereof.
 # ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
+
 class EquipItem(Item):
     def __init__(self, name, rank, tags=None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight=False):
         super().__init__(name, description, isLight)
@@ -146,7 +146,7 @@ class EquipItem(Item):
         if heldStatus is None:
             heldStatus = list()
         if tags is None:
-            tags = list()
+            tags = []
         self.rank = rank
         self.tags = tags
         self.otherAbilities = otherAbilities

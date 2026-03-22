@@ -1,6 +1,9 @@
-from engine.azure_constants import *
+from enum import Enum
+
+from engine.azure_constants import POWER_LEVEL, Stat
+from engine.azure_helpers import d, JOBS
 from engine.hero import Character
-from engine.azure_helpers import *
+
 
 def rollStats():
     dieSize = 4 * POWER_LEVEL

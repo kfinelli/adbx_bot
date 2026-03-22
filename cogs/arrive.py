@@ -19,8 +19,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from engine.azure_constants import POWER_LEVEL
 from engine import create_character, roll_stats
+from engine.azure_constants import POWER_LEVEL
 from models import CharacterClass, SessionMode
 from store import ack, get_session, save_session, update_status
 
