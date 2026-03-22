@@ -8,8 +8,6 @@ a `name` attribute matching what the server expects.
 
 from __future__ import annotations
 
-from dataclasses import fields
-
 from models import (
     Character,
     CharacterStatus,

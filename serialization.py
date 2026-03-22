@@ -19,8 +19,9 @@ from datetime import datetime
 from uuid import UUID
 
 from models import (
-    AzureStats,
+    NPC,
     ActiveCondition,
+    AzureStats,
     Character,
     CharacterClass,
     CharacterStatus,
@@ -33,7 +34,6 @@ from models import (
     GameState,
     InventoryItem,
     LightSource,
-    NPC,
     NPCGroup,
     NPCMovementLogic,
     NPCRoster,

@@ -50,6 +50,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
+from azure_tables import get_stat_modifier
 from models import (
     NPC,
     ActiveCondition,
@@ -58,7 +59,6 @@ from models import (
     GameState,
     RangeBand,
 )
-from azure_tables import get_stat_modifier, POWER_LEVEL
 
 from .data_loader import ACTION_REGISTRY, CONDITION_REGISTRY
 from .dice import roll_dice_expr

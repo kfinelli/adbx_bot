@@ -2,6 +2,7 @@
 Character management for the dungeon crawler engine.
 """
 
+from azure_tables import CREATION_RULES, POWER_LEVEL
 from models import (
     AzureStats,
     Character,
@@ -9,7 +10,6 @@ from models import (
     CharacterStatus,
     GameState,
 )
-from azure_tables import CREATION_RULES, POWER_LEVEL
 from validation import validate_hp_value
 
 from .dice import roll_stat_block

@@ -19,10 +19,10 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from azure_tables import POWER_LEVEL
 from engine import create_character, roll_stats
 from models import CharacterClass, SessionMode
 from store import ack, get_session, save_session, update_status
-from azure_tables import POWER_LEVEL
 
 # ---------------------------------------------------------------------------
 # Stat display helper
