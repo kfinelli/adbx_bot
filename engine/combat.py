@@ -50,7 +50,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
-from azure_tables import get_stat_modifier
+from engine.azure_engine import get_stat_modifier
 from models import (
     NPC,
     ActiveCondition,

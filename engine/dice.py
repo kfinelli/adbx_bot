@@ -5,7 +5,7 @@ Dice rolling utilities for the dungeon crawler engine.
 import random
 import re
 
-from azure_tables import POWER_LEVEL
+from engine.azure_constants import POWER_LEVEL
 from models import AzureStats
 
 
@@ -52,7 +52,6 @@ def roll_expr(dCount, dSize, bonus=0):
         result['total'] += list[i]
     result['dice'] = list
     return result
-
 
 def d(x):
     """Roll a single die with x sides.  Returns 0 if x < 1."""

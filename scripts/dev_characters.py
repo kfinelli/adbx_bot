@@ -1,4 +1,4 @@
-import AzureTables as az
+import engine.azure_engine as az
 
 stats = az.rollStats()
 azure = az.createCharacter("Azure", stats, 'knight')

@@ -21,7 +21,7 @@ from uuid import uuid4
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from azure_tables import CharacterClass
+from engine.azure_engine import CharacterClass
 from engine import (
     apply_condition,
     auto_resolve_round,

@@ -9,7 +9,7 @@ at import time and exposes three registries:
     CLASS_DEFINITIONS  : dict[str, JobDef]     (keyed by UPPERCASE job key)
     SKILL_REGISTRY     : dict[str, SkillDef]   (keyed by skill id, all jobs)
 
-These are consumed by azure_tables.py (to build CharacterClass / Job enum and
+These are consumed by azure_engine.py (to build CharacterClass / Job enum and
 CREATION_RULES) and by engine/combat.py (action dispatch, condition hooks,
 skill lookups).
 
@@ -152,7 +152,7 @@ class SkillDef:
     source      : Job id this skill originates from (e.g. "knight").
     level       : Job level at which this skill is unlocked (pre-multiplied by
                   LEVEL_MULTIPLIER from the raw JSON "level" field).
-    skill_type  : Integer matching SkillType enum in azure_tables.py:
+    skill_type  : Integer matching SkillType enum in azure_engine.py:
                     0 SIMPLE, 1 TURN_ACTION, 2 COMBAT_ACTION, 3 ORACLE_ACTION,
                     4 FREE_ACTION, 5 PASSIVE_BONUS, 6 WEAPON_RANK, 7 ROLEPLAY,
                     8 STATUS, 9 COMPLEX
@@ -414,7 +414,7 @@ def _load_skill(name: str, sdata: dict, path: Path) -> SkillDef:
         skill_id=sdata["id"],
         name=name,
         source=sdata["source"],
-        level=int(sdata["level"]),     # raw level; azure_tables.py multiplies by LEVEL_MULTIPLIER
+        level=int(sdata["level"]),     # raw level; azure_engine.py multiplies by LEVEL_MULTIPLIER
         skill_type=skill_type,
         description=sdata.get("desc", ""),
         dm_notes=sdata.get("dm_notes", ""),

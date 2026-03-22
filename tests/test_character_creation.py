@@ -2,7 +2,7 @@
 test_character_creation.py — Character creation tests for the Azure ruleset.
 """
 
-from azure_tables import POWER_LEVEL
+from engine.azure_engine import POWER_LEVEL
 from engine import create_character, roll_stats
 from models import AzureStats, CharacterClass, CharacterStatus, GameState, Party
 
