@@ -5,7 +5,8 @@ Items and Equipment
 import warnings
 from hmac import new
 
-from engine.azure_constants import BUNDLE_SIZE, BundleData, ItemData, Slot, SortMode, Stat
+from engine.azure_constants import BUNDLE_SIZE, BundleData, ItemData, Slot, SortMode, Stat, ItemType
+
 
 # ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
 # Items have a field called "prototype", which contains the UNMODIFIED item data as a dictionary.
@@ -17,17 +18,8 @@ class Item:
         self.name = name
         self.description = description
         self.isLight = isLight
+        self.updatePrototype()
 
-        # ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
-        # This is the base prototype dictionary.
-        # All subclasses create prototypes by updating this dictionary, meaning fields
-        # added here will appear in the prototypes of ALL items, including bundles.
-        # ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
-        self.prototype = {
-            ItemData.NAME: self.name,
-            ItemData.DESCRIPTION: self.description,
-            ItemData.IS_LIGHT: self.isLight,
-        }
     def setName(self, name):
         self.name = name
     def setDescription(self, description):
@@ -41,7 +33,13 @@ class Item:
     # The subclasses will then update this dictionary with their respective fields
     # ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
     def toDictionary(self):
+        # ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
+        # This is the base item dictionary.
+        # All subclasses create prototypes by updating this dictionary, meaning fields
+        # added here will appear in the prototypes of ALL items, including bundles.
+        # ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
         return {
+            ItemData.ITEM_TYPE: ItemType.ITEM,
             ItemData.NAME: self.name,
             ItemData.DESCRIPTION: self.description,
             ItemData.IS_LIGHT: self.isLight,
@@ -58,7 +56,7 @@ class Item:
                 f"\n'{item.name}': '{type(item)}', '{self.name}': '{type(self)}'"
             )
             pass
-        if item is not None:
+        elif item is not None:
             prototype = item.toDictionary()
         else:
             prototype = self.toDictionary()
@@ -80,10 +78,7 @@ class LightContainer(Item):
         super().__init__(name, description)
         self.maxSize = maxSize
         self.contents = list()
-        self.prototype.update({
-            BundleData.MAX_SIZE: self.maxSize,
-            BundleData.CONTENTS: self.contents,
-        })
+        self.updatePrototype()
 
     def addItem(self, item):
         if item.isLight and len(self.contents) < self.maxSize:
@@ -111,6 +106,7 @@ class LightContainer(Item):
         for item in self.contents:
             contents.append(item.toDictionary())
         exportData.update({
+            ItemData.ITEM_TYPE: ItemType.LIGHT_CONTAINER,
             BundleData.MAX_SIZE: self.maxSize,
             BundleData.CONTENTS: contents,
         })
@@ -124,12 +120,7 @@ class EquipItem(Item):
         self.rank = rank
         self.tags = tags
         self.otherAbilities = otherAbilities
-        self.prototype.update({
-            ItemData.RANK: self.name,
-            ItemData.TAGS: self.tags,
-            ItemData.OTHER_ABILITIES: self.otherAbilities,
-        })
-
+        self.updatePrototype()
 
     def setRank (self, rank):
         self.rank = rank
@@ -158,7 +149,6 @@ class EquipItem(Item):
         })
         return exportData
 
-
 class Weapon(EquipItem):
     def __init__(self, name, rank, type, stat, damage, range=0, tags = None, otherAbilities=None, description="", isLight = False):
         super().__init__(name, rank, tags, otherAbilities, description, isLight)
@@ -166,12 +156,7 @@ class Weapon(EquipItem):
         self.stat = stat
         self.damage = max(0, damage)
         self.range = max(0, range)
-        self.prototype.update({
-            ItemData.TYPE: self.type,
-            ItemData.STAT: self.stat,
-            ItemData.DAMAGE: self.damage,
-            ItemData.RANGE: self.range,
-        })
+        self.updatePrototype()
 
     def setType(self, type):
         self.type = type
@@ -204,11 +189,7 @@ class ChargeWeapon(Weapon):
         self.charges = uses
         self.maxCharges = uses
         self.destroyOnEmpty = destroyOnEmpty
-        self.prototype.update({
-            ItemData.CHARGES: self.charges,
-            ItemData.MAX_CHARGES: self.maxCharges,
-            ItemData.DESTROY_ON_EMPTY: self.destroyOnEmpty,
-        })
+        self.updatePrototype()
 
     def chageCharges(self,delta):
         charges = max(0, self.charges + delta)
@@ -230,6 +211,7 @@ class ChargeWeapon(Weapon):
             ItemData.DESTROY_ON_EMPTY: self.destroyOnEmpty,
             ItemData.PROTOTYPE: self.prototype,
         })
+        return exportData
 
 class Gear(EquipItem):
     def __init__(self, name, rank, slot, health, defense, resistance, tags=None, otherAbilities=None, description="", isLight = False):
@@ -238,12 +220,7 @@ class Gear(EquipItem):
         self.health = health
         self.defense = defense
         self.resistance = resistance
-        self.prototype.update({
-            ItemData.SLOT: self.slot,
-            ItemData.HEALTH: self.health,
-            ItemData.DEFENSE: self.defense,
-            ItemData.RESISTANCE: self.resistance,
-        })
+        self.updatePrototype()
 
     def toDictionary(self):
         exportData = super().toDictionary()

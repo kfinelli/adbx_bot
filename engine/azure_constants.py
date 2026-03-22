@@ -43,6 +43,7 @@ class ItemData(StrEnum):
     TAGS = "tags"
     OTHER_ABILITIES = "otherAbilities"
     RANK = "rank"
+    ITEM_TYPE = "itemType"
     TYPE = "type"
     STAT = "stat"
     DAMAGE = "damage"
@@ -55,6 +56,12 @@ class ItemData(StrEnum):
     DEFENSE = "defense"
     RESISTANCE = "resistance"
 
+class ItemType(StrEnum):
+    LIGHT_CONTAINER = "lightContainer"
+    ITEM = "item"
+    GEAR = "gear"
+    WEAPON = "weapon"
+    CHARGE_WEAPON = "chargeWeapon"
 
 class SkillType(Enum):
     SIMPLE = 0
