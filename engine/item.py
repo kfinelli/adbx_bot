@@ -2,11 +2,9 @@
 Items and Equipment
 ><><><><><><><><><><><><><
 """
+import json
 import warnings
-from hmac import new
-
 from engine.azure_constants import BUNDLE_SIZE, BundleData, ItemData, Slot, SortMode, Stat, ItemType
-
 
 # ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
 # Items have a field called "prototype", which contains the UNMODIFIED item data as a dictionary.
@@ -14,11 +12,14 @@ from engine.azure_constants import BUNDLE_SIZE, BundleData, ItemData, Slot, Sort
 # ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
 
 class Item:
+    ITEM_TYPE = ItemType.ITEM.value
     def __init__(self, name, description = "", isLight = False):
         self.name = name
         self.description = description
         self.isLight = isLight
-        self.updatePrototype()
+        self.prototype = None
+        if self.ITEM_TYPE is Item.ITEM_TYPE:
+            self.updatePrototype()
 
     def setName(self, name):
         self.name = name
@@ -72,12 +73,15 @@ class Item:
         # added here will appear in the prototypes of ALL items, including bundles.
         # ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
         return {
-            ItemData.ITEM_TYPE: ItemType.ITEM,
-            ItemData.NAME: self.name,
-            ItemData.DESCRIPTION: self.description,
-            ItemData.IS_LIGHT: self.isLight,
-            ItemData.PROTOTYPE: self.prototype,
+            ItemData.NAME.value: self.name,
+            ItemData.ITEM_TYPE.value: Item.ITEM_TYPE,
+            ItemData.DESCRIPTION.value: self.description,
+            ItemData.IS_LIGHT.value: self.isLight,
+            ItemData.PROTOTYPE.value: self.prototype,
         }
+
+    def toJSON(self):
+        return json.dumps(self.toDictionary())
 
 # ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
 # LightContainer is used for carrying light items.
@@ -88,12 +92,13 @@ class Item:
 class LightContainer(Item):
     defaultName = "Bundle"
     defaultDescription = "A collection of light items"
-
+    ITEM_TYPE = ItemType.LIGHT_CONTAINER.value
     def __init__(self, name=defaultName, description=defaultDescription, maxSize = BUNDLE_SIZE):
         super().__init__(name, description)
         self.maxSize = maxSize
         self.contents = list()
-        self.updatePrototype()
+        if self.ITEM_TYPE is LightContainer.ITEM_TYPE:
+            self.updatePrototype()
 
     def addItem(self, item):
         if item.isLight and len(self.contents) < self.maxSize:
@@ -121,12 +126,16 @@ class LightContainer(Item):
         for item in self.contents:
             contents.append(item.toDictionary())
         exportData.update({
-            ItemData.ITEM_TYPE: ItemType.LIGHT_CONTAINER,
-            BundleData.MAX_SIZE: self.maxSize,
-            BundleData.CONTENTS: contents,
+            ItemData.ITEM_TYPE.value: LightContainer.ITEM_TYPE,
+            BundleData.MAX_SIZE.value: self.maxSize,
+            BundleData.CONTENTS.value: contents,
         })
         return exportData
 
+# ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
+# This is a helper class purely for managing more specific types of equipment.
+# No items should ever be of type EquipItem, only subclasses thereof.
+# ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
 class EquipItem(Item):
     def __init__(self, name, rank, tags=None, otherAbilities=None, description="", isLight=False):
         super().__init__(name, description, isLight)
@@ -135,7 +144,8 @@ class EquipItem(Item):
         self.rank = rank
         self.tags = tags
         self.otherAbilities = otherAbilities
-        self.updatePrototype()
+        if type(self) is type(EquipItem):
+            self.updatePrototype()
 
     def setRank (self, rank):
         self.rank = rank
@@ -157,21 +167,25 @@ class EquipItem(Item):
     def toDictionary(self):
         exportData = super().toDictionary()
         exportData.update({
-            ItemData.TAGS: self.tags,
-            ItemData.OTHER_ABILITIES: self.otherAbilities,
-            ItemData.RANK: self.rank,
-            ItemData.PROTOTYPE: self.prototype,
+            ItemData.TAGS.value: self.tags,
+            ItemData.OTHER_ABILITIES.value: self.otherAbilities,
+            ItemData.RANK.value: self.rank,
+            ItemData.PROTOTYPE.value: self.prototype,
         })
         return exportData
 
+
+
 class Weapon(EquipItem):
-    def __init__(self, name, rank, type, stat, damage, range=0, tags = None, otherAbilities=None, description="", isLight = False):
+    ITEM_TYPE = ItemType.WEAPON.value
+    def __init__(self, name, rank, weaponType, stat, damage, range=0, tags = None, otherAbilities=None, description="", isLight = False):
         super().__init__(name, rank, tags, otherAbilities, description, isLight)
-        self.type = type
+        self.type = weaponType
         self.stat = stat
         self.damage = max(0, damage)
         self.range = max(0, range)
-        self.updatePrototype()
+        if self.ITEM_TYPE is Weapon.ITEM_TYPE:
+            self.updatePrototype()
 
     def setType(self, type):
         self.type = type
@@ -190,22 +204,24 @@ class Weapon(EquipItem):
     def toDictionary(self):
         exportData = super().toDictionary()
         exportData.update({
-            ItemData.ITEM_TYPE: ItemType.WEAPON,
-            ItemData.TYPE: self.type,
-            ItemData.STAT: self.stat,
-            ItemData.DAMAGE: self.damage,
-            ItemData.RANGE: self.range,
-            ItemData.PROTOTYPE: self.prototype,
+            ItemData.ITEM_TYPE.value: Weapon.ITEM_TYPE,
+            ItemData.TYPE.value: self.type,
+            ItemData.STAT.value: self.stat,
+            ItemData.DAMAGE.value: self.damage,
+            ItemData.RANGE.value: self.range,
+            ItemData.PROTOTYPE.value: self.prototype,
         })
         return exportData
 
 class ChargeWeapon(Weapon):
-    def __init__(self, name, rank, type, stat, damage, range=0, maxCharges = 1, destroyOnEmpty=False, tags = None, otherAbilities=None, description="", isLight = False):
-        super().__init__(name, rank, type, stat, damage, range, tags, otherAbilities, description, isLight)
+    ITEM_TYPE = ItemType.CHARGE_WEAPON.value
+    def __init__(self, name, rank, weaponType, stat, damage, range=0, maxCharges = 1, destroyOnEmpty=False, tags = None, otherAbilities=None, description="", isLight = False):
+        super().__init__(name, rank, weaponType, stat, damage, range, tags, otherAbilities, description, isLight)
         self.charges = maxCharges
         self.maxCharges = maxCharges
         self.destroyOnEmpty = destroyOnEmpty
-        self.updatePrototype()
+        if self.ITEM_TYPE is ChargeWeapon.ITEM_TYPE:
+            self.updatePrototype()
 
     def chageCharges(self,delta):
         charges = max(0, self.charges + delta)
@@ -220,34 +236,36 @@ class ChargeWeapon(Weapon):
         self.destroyOnEmpty = destroyOnEmpty
 
     def toDictionary(self):
-        exportData = super.toDictionary()
+        exportData = super().toDictionary()
         exportData.update({
-            ItemData.ITEM_TYPE: ItemType.CHARGE_WEAPON,
-            ItemData.CHARGES: self.charges,
-            ItemData.MAX_CHARGES: self.maxCharges,
-            ItemData.DESTROY_ON_EMPTY: self.destroyOnEmpty,
-            ItemData.PROTOTYPE: self.prototype,
+            ItemData.ITEM_TYPE.value: ChargeWeapon.ITEM_TYPE,
+            ItemData.CHARGES.value: self.charges,
+            ItemData.MAX_CHARGES.value: self.maxCharges,
+            ItemData.DESTROY_ON_EMPTY.value: self.destroyOnEmpty,
+            ItemData.PROTOTYPE.value: self.prototype,
         })
         return exportData
 
 class Gear(EquipItem):
+    ITEM_TYPE = ItemType.GEAR.value
     def __init__(self, name, rank, slot, health, defense, resistance, tags=None, otherAbilities=None, description="", isLight = False):
         super().__init__(name, rank, tags, otherAbilities, description, isLight)
         self.slot = slot
         self.health = health
         self.defense = defense
         self.resistance = resistance
-        self.updatePrototype()
+        if self.ITEM_TYPE is Gear.ITEM_TYPE:
+            self.updatePrototype()
 
     def toDictionary(self):
         exportData = super().toDictionary()
         exportData.update({
-            ItemData.ITEM_TYPE: ItemType.GEAR,
-            ItemData.SLOT: self.slot,
-            ItemData.HEALTH: self.health,
-            ItemData.DEFENSE: self.defense,
-            ItemData.RESISTANCE: self.resistance,
-            ItemData.PROTOTYPE: self.prototype,
+            ItemData.ITEM_TYPE.value: ItemType.GEAR.value,
+            ItemData.SLOT.value: self.slot,
+            ItemData.HEALTH.value: self.health,
+            ItemData.DEFENSE.value: self.defense,
+            ItemData.RESISTANCE.value: self.resistance,
+            ItemData.PROTOTYPE.value: self.prototype,
         })
         return exportData
 
@@ -257,7 +275,9 @@ def resetItemToPrototype(item):
 
 
 def createItemFromData(itemData):
-    if isinstance(itemData, Item):
+    if isinstance(itemData, str):
+        itemData = json.loads(itemData)
+    elif isinstance(itemData, Item):
         itemData = itemData.toDictionary()
     newItem = None
     match itemData[ItemData.ITEM_TYPE]:
@@ -321,5 +341,3 @@ def createItemFromData(itemData):
             warnings.warn(f"Unknown item type: {itemData[ItemData.ITEM_TYPE]}")
             return None
     return newItem
-
-
