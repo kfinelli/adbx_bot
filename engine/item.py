@@ -27,6 +27,39 @@ class Item:
     def setLightness(self, isLight):
         self.isLight = isLight
 
+    #Prototype Functions
+    def resetToPrototype(self):
+        resetItemToPrototype(self)
+
+    def setPrototype(self, item=None):
+        prototype = None
+        # No item = update
+        if item is None:
+            self.updatePrototype()
+            return
+        # If dictionary and the item types match, set to the dictionary
+        elif isinstance(item, dict) and self.prototype[ItemData.ITEM_TYPE] is item[ItemData.ITEM_TYPE]:
+            prototype = item
+        # Make sure items are the same item type, and leave if not
+        elif type(item) is not type(self):
+            warnings.warn(
+                f"\n'{item.name}' is a different item type than '{self.name}'"
+                f"\n'{item.name}': '{type(item)}', '{self.name}': '{type(self)}'"
+            )
+            return
+        #Export the item as a dictionary if we got to this point
+        elif item is not None:
+            prototype = item.toDictionary()
+
+        # prototypes should probably not have a prototype. I am not sure we want that recursive weirdness.
+        prototype.pop(ItemData.PROTOTYPE)
+        self.prototype = prototype
+
+    def updatePrototype(self):
+        prototype = self.toDictionary()
+        prototype.pop(ItemData.PROTOTYPE)
+        self.prototype = prototype
+
     # ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
     # This is a function that LOVES to eat itself.
     # Each subclass calls to its superclass, until we end up back here.
@@ -45,24 +78,6 @@ class Item:
             ItemData.IS_LIGHT: self.isLight,
             ItemData.PROTOTYPE: self.prototype,
         }
-
-    def updatePrototype(self, item=None):
-        prototype = None
-        if item is None:
-            prototype = self.toDictionary()
-        elif type(item) is not type(self):
-            warnings.warn(
-                f"\n'{item.name}' is a different item type than '{self.name}'"
-                f"\n'{item.name}': '{type(item)}', '{self.name}': '{type(self)}'"
-            )
-            pass
-        elif item is not None:
-            prototype = item.toDictionary()
-        else:
-            prototype = self.toDictionary()
-        #prototypes should probably not have a prototype, otherwise things could get weird.
-        prototype.pop(ItemData.PROTOTYPE)
-        self.prototype = prototype
 
 # ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
 # LightContainer is used for carrying light items.
@@ -175,6 +190,7 @@ class Weapon(EquipItem):
     def toDictionary(self):
         exportData = super().toDictionary()
         exportData.update({
+            ItemData.ITEM_TYPE: ItemType.WEAPON,
             ItemData.TYPE: self.type,
             ItemData.STAT: self.stat,
             ItemData.DAMAGE: self.damage,
@@ -184,10 +200,10 @@ class Weapon(EquipItem):
         return exportData
 
 class ChargeWeapon(Weapon):
-    def __init__(self,name, rank, type, stat, damage, range=0, uses = 1, destroyOnEmpty=False, tags = None, otherAbilities=None, description="", isLight = False):
+    def __init__(self, name, rank, type, stat, damage, range=0, maxCharges = 1, destroyOnEmpty=False, tags = None, otherAbilities=None, description="", isLight = False):
         super().__init__(name, rank, type, stat, damage, range, tags, otherAbilities, description, isLight)
-        self.charges = uses
-        self.maxCharges = uses
+        self.charges = maxCharges
+        self.maxCharges = maxCharges
         self.destroyOnEmpty = destroyOnEmpty
         self.updatePrototype()
 
@@ -206,6 +222,7 @@ class ChargeWeapon(Weapon):
     def toDictionary(self):
         exportData = super.toDictionary()
         exportData.update({
+            ItemData.ITEM_TYPE: ItemType.CHARGE_WEAPON,
             ItemData.CHARGES: self.charges,
             ItemData.MAX_CHARGES: self.maxCharges,
             ItemData.DESTROY_ON_EMPTY: self.destroyOnEmpty,
@@ -225,6 +242,7 @@ class Gear(EquipItem):
     def toDictionary(self):
         exportData = super().toDictionary()
         exportData.update({
+            ItemData.ITEM_TYPE: ItemType.GEAR,
             ItemData.SLOT: self.slot,
             ItemData.HEALTH: self.health,
             ItemData.DEFENSE: self.defense,
@@ -232,3 +250,76 @@ class Gear(EquipItem):
             ItemData.PROTOTYPE: self.prototype,
         })
         return exportData
+
+
+def resetItemToPrototype(item):
+    item = createItemFromData(item.prototype)
+
+
+def createItemFromData(itemData):
+    if isinstance(itemData, Item):
+        itemData = itemData.toDictionary()
+    newItem = None
+    match itemData[ItemData.ITEM_TYPE]:
+        case ItemType.ITEM:
+            newItem = Item(itemData[ItemData.NAME], itemData[ItemData.DESCRIPTION], itemData[ItemData.IS_LIGHT])
+        case ItemType.WEAPON:
+            newItem = Weapon(
+                itemData[ItemData.NAME],
+                itemData[ItemData.RANK],
+                itemData[ItemData.TYPE],
+                itemData[ItemData.STAT],
+                itemData[ItemData.DAMAGE],
+                itemData[ItemData.RANGE],
+                itemData[ItemData.TAGS],
+                itemData[ItemData.OTHER_ABILITIES],
+                itemData[ItemData.DESCRIPTION],
+                itemData[ItemData.IS_LIGHT]
+            )
+        case ItemType.CHARGE_WEAPON:
+            newItem = ChargeWeapon(
+                itemData[ItemData.NAME],
+                itemData[ItemData.RANK],
+                itemData[ItemData.TYPE],
+                itemData[ItemData.STAT],
+                itemData[ItemData.DAMAGE],
+                itemData[ItemData.RANGE],
+                itemData[ItemData.MAX_CHARGES],
+                itemData[ItemData.DESTROY_ON_EMPTY],
+                itemData[ItemData.TAGS],
+                itemData[ItemData.OTHER_ABILITIES],
+                itemData[ItemData.DESCRIPTION],
+                itemData[ItemData.IS_LIGHT]
+            )
+            newItem.setMaxCharges(itemData[ItemData.CHARGES])
+        case ItemType.GEAR:
+            newItem = Gear(
+                itemData[ItemData.NAME],
+                itemData[ItemData.RANK],
+                itemData[ItemData.SLOT],
+                itemData[ItemData.HEALTH],
+                itemData[ItemData.DEFENSE],
+                itemData[ItemData.RESISTANCE],
+                itemData[ItemData.TAGS],
+                itemData[ItemData.OTHER_ABILITIES],
+                itemData[ItemData.DESCRIPTION],
+                itemData[ItemData.IS_LIGHT]
+            )
+
+        case ItemType.LIGHT_CONTAINER:
+            newItem = LightContainer(
+                itemData[ItemData.NAME],
+                itemData[ItemData.DESCRIPTION],
+                itemData[BundleData.MAX_SIZE],
+            )
+            contentList = itemData[BundleData.CONTENTS]
+            contents = list()
+            for i in contentList:
+                contents.append(createItemFromData(i))
+            newItem.contents = contents
+        case _:
+            warnings.warn(f"Unknown item type: {itemData[ItemData.ITEM_TYPE]}")
+            return None
+    return newItem
+
+
