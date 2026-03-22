@@ -1,7 +1,7 @@
 from enum import Enum
 
-from engine.azure_constants import JOBS, POWER_LEVEL, Stat
-from engine.azure_helpers import d
+from engine.azure_constants import POWER_LEVEL, Stat
+from engine.azure_helpers import JOBS, d
 from engine.hero import Character
 
 
