@@ -984,12 +984,12 @@ async def archive_delete(session_id: str):
 
 @app.get("/characters", response_class=HTMLResponse)
 async def character_index(view_char: str = "", flash: str = "", error: str = ""):
-    #STUB - need character persistence code - this just gets the first active session and ignores everything else!!!
-    channel_ids = store.db.list_channels()
-    entries = None
-    if channel_ids is not None:
-        state = store.get_session(channel_ids[0])
-        entries = state.characters
-    #/STUB
+    # Get all characters from persistent character store
+    char_ids = store.db.list_all_characters()
+    entries = {}
+    for cid in char_ids:
+        char = store.db.load_character(cid)
+        if char:
+            entries[cid] = char
     return character_page(_session_list(), entries, flash=flash, error=error, view_char_id=view_char)
 
