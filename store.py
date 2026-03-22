@@ -58,11 +58,24 @@ def create_session(channel_id: str, dm_user_id: str) -> GameState:
     return state
 
 
-def delete_session(channel_id: str) -> None:
+def delete_session(channel_id: str, keep_characters: bool = True) -> None:
     """
     Hard-delete a session from memory and database entirely.
     Prefer archive_session() unless you genuinely want no trace.
+    
+    Args:
+        channel_id: The Discord channel ID of the session to delete.
+        keep_characters: If True (default), characters persist in the database
+            and can be enrolled in new sessions later. Only the session-state
+            and session-character links are deleted. Set to False to also
+            delete all characters that were enrolled in this session.
     """
+    state = _sessions.get(channel_id)
+    if state is not None and not keep_characters:
+        # Delete all characters enrolled in this session
+        for char_id in list(state.characters.keys()):
+            db.delete_character(str(char_id))
+    
     _sessions.pop(channel_id, None)
     _status_messages.pop(channel_id, None)
     db.delete(channel_id)

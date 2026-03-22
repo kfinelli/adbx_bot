@@ -1,7 +1,7 @@
 """
-persistence.py — SQLite-backed save/load for GameState.
+persistence.py — SQLite-backed save/load for GameState and Characters.
 
-Database schema (single table):
+Database schema:
 
     sessions
     --------
@@ -9,18 +9,63 @@ Database schema (single table):
     session_id   TEXT               -- GameState.session_id (UUID string)
     dm_user_id   TEXT               -- Discord user ID of DM
     updated_at   TEXT               -- ISO 8601 timestamp of last save
-    state_json   TEXT               -- Full serialized GameState
+    state_json   TEXT               -- Full serialized GameState (minus characters)
+
+    characters
+    ----------
+    character_id  TEXT PRIMARY KEY  -- UUID string
+    owner_id      TEXT              -- Discord user ID of owner
+    name          TEXT              -- Character name
+    character_class TEXT            -- Class enum value
+    level         INTEGER           -- Character level
+    experience    INTEGER           -- XP total
+    ability_scores_json TEXT        -- JSON blob for AzureStats
+    hp_max        INTEGER           -- Max HP
+    hp_current    INTEGER           -- Current HP
+    armor_class   INTEGER           -- AC
+    movement_speed INTEGER          -- Movement speed
+    saving_throws_json TEXT         -- JSON blob for saving throws dict
+    status        TEXT              -- CharacterStatus enum value
+    status_notes  TEXT              -- Status notes
+    inventory_json TEXT             -- JSON array of InventoryItem dicts
+    gold          INTEGER           -- Gold pieces
+    spellbook_json TEXT             -- JSON blob for SpellBook or NULL
+    created_at    TEXT              -- ISO 8601 timestamp
+    is_pregenerated INTEGER         -- 0 or 1
+    updated_at    TEXT              -- ISO 8601 timestamp of last update
+
+    session_characters
+    ------------------
+    session_id    TEXT              -- GameState.session_id UUID
+    character_id  TEXT              -- Character.character_id UUID
+    joined_at     TEXT              -- ISO 8601 timestamp when enrolled
+    PRIMARY KEY (session_id, character_id)
+
+    archived_sessions
+    -----------------
+    session_id   TEXT PRIMARY KEY  -- GameState.session_id UUID
+    channel_id   TEXT NOT NULL     -- original channel
+    channel_name TEXT              -- human-readable name at archive time
+    dm_user_id   TEXT
+    turn_number  INTEGER NOT NULL DEFAULT 0
+    created_at   TEXT
+    updated_at   TEXT NOT NULL
+    archived_at  TEXT NOT NULL
+    state_json   TEXT NOT NULL
 
 Usage:
     db = Database("dungeon.db")
     db.save(state)
     state = db.load(channel_id)
+    db.save_character(char)
+    char = db.load_character(character_id)
     all_ids = db.list_channels()
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import sqlite3
 from datetime import UTC, datetime
 
@@ -61,6 +106,39 @@ class Database:
             )
         """)
         self._conn.execute("""
+            CREATE TABLE IF NOT EXISTS characters (
+                character_id      TEXT PRIMARY KEY,
+                owner_id          TEXT,
+                name              TEXT NOT NULL,
+                character_class   TEXT NOT NULL,
+                level             INTEGER NOT NULL DEFAULT 1,
+                experience        INTEGER NOT NULL DEFAULT 0,
+                ability_scores_json TEXT NOT NULL,
+                hp_max            INTEGER NOT NULL,
+                hp_current        INTEGER NOT NULL,
+                armor_class       INTEGER NOT NULL,
+                movement_speed    INTEGER NOT NULL,
+                saving_throws_json TEXT NOT NULL,
+                status            TEXT NOT NULL,
+                status_notes      TEXT NOT NULL DEFAULT '',
+                inventory_json    TEXT NOT NULL,
+                gold              INTEGER NOT NULL DEFAULT 0,
+                spellbook_json    TEXT,
+                created_at        TEXT NOT NULL,
+                is_pregenerated   INTEGER NOT NULL DEFAULT 0,
+                updated_at        TEXT NOT NULL
+            )
+        """)
+        self._conn.execute("""
+            CREATE TABLE IF NOT EXISTS session_characters (
+                session_id    TEXT NOT NULL,
+                character_id  TEXT NOT NULL,
+                joined_at     TEXT NOT NULL,
+                PRIMARY KEY (session_id, character_id),
+                FOREIGN KEY (character_id) REFERENCES characters(character_id)
+            )
+        """)
+        self._conn.execute("""
             CREATE TABLE IF NOT EXISTS archived_sessions (
                 session_id   TEXT PRIMARY KEY,  -- GameState.session_id UUID
                 channel_id   TEXT NOT NULL,     -- original channel
@@ -84,6 +162,20 @@ class Database:
     # ------------------------------------------------------------------
 
     def _save_sync(self, state: GameState) -> None:
+        """Save session state (without characters) to the sessions table.
+        
+        Characters are saved separately via save_character() and linked via
+        session_characters join table.
+        """
+        from serialization import serialize_state_without_characters
+        
+        # Save each character to the characters table
+        for char in state.characters.values():
+            self._save_character_sync(char)
+            # Link character to this session
+            self._enroll_character_in_session_sync(str(state.session_id), str(char.character_id))
+        
+        # Save session state without character data
         self._conn.execute(
             """
             INSERT INTO sessions (channel_id, session_id, dm_user_id, updated_at, state_json)
@@ -99,19 +191,27 @@ class Database:
                 str(state.session_id),
                 state.dm_user_id,
                 _now_iso(),
-                serialize_state(state),
+                serialize_state_without_characters(state),
             ),
         )
         self._conn.commit()
 
     def _load_sync(self, channel_id: str) -> GameState | None:
+        """Load session state and populate characters from the characters table."""
         row = self._conn.execute(
-            "SELECT state_json FROM sessions WHERE channel_id = ?",
+            "SELECT state_json, session_id FROM sessions WHERE channel_id = ?",
             (channel_id,),
         ).fetchone()
         if row is None:
             return None
-        return deserialize_state(row["state_json"])
+        
+        # Load characters enrolled in this session
+        session_id = row["session_id"]
+        characters = self._get_characters_for_session_sync(session_id)
+        
+        # Deserialize state with loaded characters
+        from serialization import deserialize_state
+        return deserialize_state(row["state_json"], characters=characters)
 
     def _delete_sync(self, channel_id: str) -> None:
         self._conn.execute(
@@ -119,6 +219,181 @@ class Database:
             (channel_id,),
         )
         self._conn.commit()
+
+    # ------------------------------------------------------------------
+    # Character persistence
+    # ------------------------------------------------------------------
+
+    def _save_character_sync(self, character) -> None:
+        """Save or update a single Character to the characters table."""
+        from serialization import (
+            serialize_character,
+            serialize_ability_scores,
+        )
+        char_data = serialize_character(character)
+        self._conn.execute(
+            """
+            INSERT INTO characters (
+                character_id, owner_id, name, character_class, level,
+                experience, ability_scores_json, hp_max, hp_current,
+                armor_class, movement_speed, saving_throws_json, status,
+                status_notes, inventory_json, gold, spellbook_json,
+                created_at, is_pregenerated, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(character_id) DO UPDATE SET
+                owner_id = excluded.owner_id,
+                name = excluded.name,
+                character_class = excluded.character_class,
+                level = excluded.level,
+                experience = excluded.experience,
+                ability_scores_json = excluded.ability_scores_json,
+                hp_max = excluded.hp_max,
+                hp_current = excluded.hp_current,
+                armor_class = excluded.armor_class,
+                movement_speed = excluded.movement_speed,
+                saving_throws_json = excluded.saving_throws_json,
+                status = excluded.status,
+                status_notes = excluded.status_notes,
+                inventory_json = excluded.inventory_json,
+                gold = excluded.gold,
+                spellbook_json = excluded.spellbook_json,
+                is_pregenerated = excluded.is_pregenerated,
+                updated_at = excluded.updated_at
+            """,
+            (
+                char_data["character_id"],
+                char_data["owner_id"],
+                char_data["name"],
+                char_data["character_class"],
+                char_data["level"],
+                char_data["experience"],
+                json.dumps(char_data["ability_scores"]),
+                char_data["hp_max"],
+                char_data["hp_current"],
+                char_data["armor_class"],
+                char_data["movement_speed"],
+                json.dumps(char_data["saving_throws"]),
+                char_data["status"],
+                char_data["status_notes"],
+                json.dumps(char_data["inventory"]),
+                char_data["gold"],
+                json.dumps(char_data["spellbook"]) if char_data["spellbook"] else None,
+                char_data["created_at"],
+                1 if char_data["is_pregenerated"] else 0,
+                _now_iso(),
+            ),
+        )
+        self._conn.commit()
+
+    def _load_character_sync(self, character_id: str):
+        """Load a single Character by UUID string. Returns Character or None."""
+        from serialization import (
+            deserialize_character,
+            deserialize_ability_scores,
+            deserialize_inventory_item,
+            deserialize_spellbook,
+        )
+        row = self._conn.execute(
+            "SELECT * FROM characters WHERE character_id = ?",
+            (character_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        # Reconstruct the dict format expected by deserialize_character
+        char_dict = {
+            "character_id": row["character_id"],
+            "owner_id": row["owner_id"],
+            "name": row["name"],
+            "character_class": row["character_class"],
+            "level": row["level"],
+            "experience": row["experience"],
+            "ability_scores": json.loads(row["ability_scores_json"]),
+            "hp_max": row["hp_max"],
+            "hp_current": row["hp_current"],
+            "armor_class": row["armor_class"],
+            "movement_speed": row["movement_speed"],
+            "saving_throws": json.loads(row["saving_throws_json"]),
+            "status": row["status"],
+            "status_notes": row["status_notes"],
+            "inventory": json.loads(row["inventory_json"]),
+            "gold": row["gold"],
+            "spellbook": json.loads(row["spellbook_json"]) if row["spellbook_json"] else None,
+            "created_at": row["created_at"],
+            "is_pregenerated": bool(row["is_pregenerated"]),
+        }
+        return deserialize_character(char_dict)
+
+    def _delete_character_sync(self, character_id: str) -> None:
+        """Delete a character from the characters table."""
+        self._conn.execute(
+            "DELETE FROM characters WHERE character_id = ?",
+            (character_id,),
+        )
+        self._conn.commit()
+
+    def _enroll_character_in_session_sync(self, session_id: str, character_id: str) -> None:
+        """Link a character to a session via session_characters join table."""
+        self._conn.execute(
+            """
+            INSERT OR REPLACE INTO session_characters (session_id, character_id, joined_at)
+            VALUES (?, ?, ?)
+            """,
+            (session_id, character_id, _now_iso()),
+        )
+        self._conn.commit()
+
+    def _unenroll_character_from_session_sync(self, session_id: str, character_id: str) -> None:
+        """Remove a character-session link."""
+        self._conn.execute(
+            "DELETE FROM session_characters WHERE session_id = ? AND character_id = ?",
+            (session_id, character_id),
+        )
+        self._conn.commit()
+
+    def _get_characters_for_session_sync(self, session_id: str) -> dict:
+        """Load all characters enrolled in a session as a dict keyed by UUID."""
+        rows = self._conn.execute(
+            """
+            SELECT c.* FROM characters c
+            JOIN session_characters sc ON c.character_id = sc.character_id
+            WHERE sc.session_id = ?
+            """,
+            (session_id,),
+        ).fetchall()
+        from serialization import deserialize_character
+        characters = {}
+        for row in rows:
+            char_dict = {
+                "character_id": row["character_id"],
+                "owner_id": row["owner_id"],
+                "name": row["name"],
+                "character_class": row["character_class"],
+                "level": row["level"],
+                "experience": row["experience"],
+                "ability_scores": json.loads(row["ability_scores_json"]),
+                "hp_max": row["hp_max"],
+                "hp_current": row["hp_current"],
+                "armor_class": row["armor_class"],
+                "movement_speed": row["movement_speed"],
+                "saving_throws": json.loads(row["saving_throws_json"]),
+                "status": row["status"],
+                "status_notes": row["status_notes"],
+                "inventory": json.loads(row["inventory_json"]),
+                "gold": row["gold"],
+                "spellbook": json.loads(row["spellbook_json"]) if row["spellbook_json"] else None,
+                "created_at": row["created_at"],
+                "is_pregenerated": bool(row["is_pregenerated"]),
+            }
+            char = deserialize_character(char_dict)
+            characters[char.character_id] = char
+        return characters
+
+    def _list_all_characters_sync(self) -> list:
+        """Return a list of all character IDs in the database."""
+        rows = self._conn.execute(
+            "SELECT character_id FROM characters ORDER BY updated_at DESC"
+        ).fetchall()
+        return [row["character_id"] for row in rows]
 
     def _list_sync(self) -> list[str]:
         rows = self._conn.execute(
@@ -131,6 +406,10 @@ class Database:
         Copy the active session for channel_id into archived_sessions,
         then delete it from sessions. Returns True if a row was archived,
         False if no session existed.
+        
+        Note: Characters are NOT deleted when archiving — they persist in
+        the characters table and can be enrolled in new sessions later.
+        Only the session_characters links are removed when the session is deleted.
         """
         row = self._conn.execute(
             "SELECT * FROM sessions WHERE channel_id = ?",
@@ -165,6 +444,12 @@ class Database:
                 _now_iso(),
                 row["state_json"],
             ),
+        )
+        # Delete session-character links but keep characters
+        session_id = row["session_id"]
+        self._conn.execute(
+            "DELETE FROM session_characters WHERE session_id = ?",
+            (session_id,),
         )
         self._conn.execute(
             "DELETE FROM sessions WHERE channel_id = ?",
@@ -274,6 +559,45 @@ class Database:
             return self._resurrect_sync(session_id, channel_id)
 
     # ------------------------------------------------------------------
+    # Character persistence — async wrappers
+    # ------------------------------------------------------------------
+
+    async def save_character_async(self, character) -> None:
+        """Persist a single Character."""
+        async with self._lock:
+            self._save_character_sync(character)
+
+    async def load_character_async(self, character_id: str):
+        """Load a single Character by UUID string."""
+        async with self._lock:
+            return self._load_character_sync(character_id)
+
+    async def delete_character_async(self, character_id: str) -> None:
+        """Delete a Character from the database."""
+        async with self._lock:
+            self._delete_character_sync(character_id)
+
+    async def enroll_character_in_session_async(self, session_id: str, character_id: str) -> None:
+        """Link a character to a session."""
+        async with self._lock:
+            self._enroll_character_in_session_sync(session_id, character_id)
+
+    async def unenroll_character_from_session_async(self, session_id: str, character_id: str) -> None:
+        """Remove a character-session link."""
+        async with self._lock:
+            self._unenroll_character_from_session_sync(session_id, character_id)
+
+    async def get_characters_for_session_async(self, session_id: str) -> dict:
+        """Load all characters enrolled in a session."""
+        async with self._lock:
+            return self._get_characters_for_session_sync(session_id)
+
+    async def list_all_characters_async(self) -> list:
+        """Return a list of all character IDs in the database."""
+        async with self._lock:
+            return self._list_all_characters_sync()
+
+    # ------------------------------------------------------------------
     # Public API — sync convenience wrappers (safe for startup / tests)
     # ------------------------------------------------------------------
 
@@ -307,6 +631,35 @@ class Database:
 
     def resurrect(self, session_id: str, channel_id: str) -> GameState | None:
         return self._resurrect_sync(session_id, channel_id)
+
+    # Character persistence — sync wrappers
+    def save_character(self, character) -> None:
+        """Sync save for a single Character."""
+        self._save_character_sync(character)
+
+    def load_character(self, character_id: str):
+        """Sync load for a single Character."""
+        return self._load_character_sync(character_id)
+
+    def delete_character(self, character_id: str) -> None:
+        """Sync delete for a Character."""
+        self._delete_character_sync(character_id)
+
+    def enroll_character_in_session(self, session_id: str, character_id: str) -> None:
+        """Sync enroll a character in a session."""
+        self._enroll_character_in_session_sync(session_id, character_id)
+
+    def unenroll_character_from_session(self, session_id: str, character_id: str) -> None:
+        """Sync unenroll a character from a session."""
+        self._unenroll_character_from_session_sync(session_id, character_id)
+
+    def get_characters_for_session(self, session_id: str) -> dict:
+        """Sync load all characters for a session."""
+        return self._get_characters_for_session_sync(session_id)
+
+    def list_all_characters(self) -> list:
+        """Sync list all character IDs."""
+        return self._list_all_characters_sync()
 
     def close(self) -> None:
         self._conn.close()

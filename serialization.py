@@ -303,14 +303,20 @@ def serialize_turn_record(t: TurnRecord) -> dict:
     }
 
 
-def serialize_state(state: GameState) -> str:
-    """Serialize a GameState to a JSON string for storage."""
+def serialize_state(state: GameState, include_characters: bool = True) -> str:
+    """Serialize a GameState to a JSON string for storage.
+
+    Args:
+        state: The GameState to serialize.
+        include_characters: If True (default), characters are included in the JSON.
+            Set to False when storing session state separately from character data.
+    """
     d = {
         "session_id":           _uuid(state.session_id),
         "dungeon":              serialize_dungeon(state.dungeon) if state.dungeon else None,
         "current_room_id":      _uuid(state.current_room_id),
         "party":                serialize_party(state.party) if state.party else None,
-        "characters":           {str(k): serialize_character(v) for k, v in state.characters.items()},
+        "characters":           {str(k): serialize_character(v) for k, v in state.characters.items()} if include_characters else {},
         "npc_roster":           serialize_npc_roster(state.npc_roster),
         "mode":                 _enum(state.mode),
         "turn_number":          state.turn_number,
@@ -329,6 +335,11 @@ def serialize_state(state: GameState) -> str:
         "dm_user_id":           state.dm_user_id,
     }
     return json.dumps(d, indent=2)
+
+
+def serialize_state_without_characters(state: GameState) -> str:
+    """Serialize a GameState excluding character data (for separate storage)."""
+    return serialize_state(state, include_characters=False)
 
 
 # ---------------------------------------------------------------------------
@@ -563,8 +574,15 @@ def deserialize_turn_record(d: dict) -> TurnRecord:
     )
 
 
-def deserialize_state(json_str: str) -> GameState:
-    """Reconstruct a GameState from a JSON string."""
+def deserialize_state(json_str: str, characters: dict | None = None) -> GameState:
+    """Reconstruct a GameState from a JSON string.
+
+    Args:
+        json_str: The JSON string to deserialize.
+        characters: Optional dict of Character objects keyed by UUID string.
+            If provided, these characters are used instead of deserializing
+            from the JSON (for loading session state with separate character store).
+    """
     d = json.loads(json_str)
 
     # Deserialize NPC roster (new field)
@@ -575,15 +593,21 @@ def deserialize_state(json_str: str) -> GameState:
         # Backward compatibility: if no npc_roster, create empty one
         npc_roster = NPCRoster()
 
+    # Use provided characters or deserialize from JSON
+    if characters is not None:
+        char_dict = characters
+    else:
+        char_dict = {
+            UUID(k): deserialize_character(v)
+            for k, v in d.get("characters", {}).items()
+        }
+
     return GameState(
         session_id=_load_uuid(d["session_id"]),
         dungeon=deserialize_dungeon(d["dungeon"]) if d["dungeon"] else None,
         current_room_id=_load_uuid(d["current_room_id"]),
         party=deserialize_party(d["party"]) if d["party"] else None,
-        characters={
-            UUID(k): deserialize_character(v)
-            for k, v in d["characters"].items()
-        },
+        characters=char_dict,
         npc_roster=npc_roster,
         mode=SessionMode(d["mode"]),
         turn_number=d["turn_number"],
