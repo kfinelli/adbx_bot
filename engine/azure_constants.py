@@ -17,6 +17,8 @@ _CLASSES_DIR = _PROJECT_DIR / "data" / "classes"
 #Character Constants
 MAX_LEVEL = 99
 BASE_INVENTORY_SIZE = 6
+#Number of light items can fit in a bundle by default.
+BUNDLE_SIZE = 10
 
 #Multipliers
 POWER_LEVEL = 100
@@ -28,6 +30,31 @@ _ARCANE_RANKS   = ("V", "W", "X", "Y", "Z")
 
 
 #Enums
+
+class BundleData(StrEnum):
+    MAX_SIZE = "maxSize"
+    CONTENTS = "contents"
+
+class ItemData(StrEnum):
+    PROTOTYPE = "prototype"
+    NAME = "name"
+    DESCRIPTION = "description"
+    IS_LIGHT = "isLight"
+    TAGS = "tags"
+    OTHER_ABILITIES = "otherAbilities"
+    RANK = "rank"
+    TYPE = "type"
+    STAT = "stat"
+    DAMAGE = "damage"
+    RANGE = "range"
+    CHARGES = "charges"
+    MAX_CHARGES = "maxCharges"
+    DESTROY_ON_EMPTY = "destroyOnEmpty"
+    SLOT = "slot"
+    HEALTH = "health"
+    DEFENSE = "defense"
+    RESISTANCE = "resistance"
+
 
 class SkillType(Enum):
     SIMPLE = 0
