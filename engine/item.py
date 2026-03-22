@@ -2,8 +2,7 @@
 Items and Equipment
 ><><><><><><><><><><><><><
 """
-from engine.azure_constants import Stat, Slot, SortMode
-
+from engine.azure_constants import SortMode, Stat
 
 
 class Item:
@@ -27,7 +26,7 @@ class LightContainer(Item):
     def __init__(self, name=defaultName, description=defaultDescription, maxSize = defaultMaxSize):
         super().__init__(name, description)
         self.maxSize = maxSize
-        self.contents = list()
+        self.contents = []
 
     def addItem(self, item):
         if item.isLight and len(self.contents) < self.maxSize:
@@ -49,12 +48,12 @@ class LightContainer(Item):
     def sortContents(self, sortMode):
         if sortMode is SortMode.ALPHABETICAL:
             self.contents.sort(key=lambda x: x.name, reverse=True)
-        
+
 class EquipItem(Item):
     def __init__(self, name, rank, tags=None, otherAbilities=None, description="", isLight=False):
         super().__init__(name, description, isLight)
         if tags is None:
-            tags = list ()
+            tags = []
         self.rank = rank
         self.tags = tags
         self.otherAbilities = otherAbilities

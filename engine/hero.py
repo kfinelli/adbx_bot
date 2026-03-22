@@ -1,7 +1,15 @@
-from engine.azure_constants import Stat, Slot, SkillType, StatusType, POWER_LEVEL, MAX_LEVEL, BASE_INVENTORY_SIZE
-from engine.azure_helpers import d, getJobFromID
 import json
 import math
+
+from engine.azure_constants import (
+    BASE_INVENTORY_SIZE,
+    POWER_LEVEL,
+    SkillType,
+    Slot,
+    Stat,
+    StatusType,
+)
+from engine.azure_helpers import d, getJobFromID
 
 """
 Character Sheet & Generation
@@ -190,8 +198,8 @@ class Character:
 
     def removeItem(self, item):
         self.inventory.remove(item)
-        
-          
+
+
 class JobExperience:
     def __init__(self, jobID, level=0, health=0, ranks = None):
         if ranks is None:

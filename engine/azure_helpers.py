@@ -1,8 +1,19 @@
 import json
+import math
 import random
+
+from engine.azure_constants import (
+    _CLASSES_DIR,
+    BASE_INVENTORY_SIZE,
+    LEVEL_MULTIPLIER,
+    POWER_LEVEL,
+    Path,
+    SkillType,
+    Stat,
+    StatPriority,
+)
 from engine.jobs import Job, Skill
-from engine.azure_constants import *
-from engine.azure_constants import _CLASSES_DIR
+
 
 # ---------------------------------------------------------------------------
 # cant use dice.py because of circular import

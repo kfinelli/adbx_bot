@@ -31,7 +31,6 @@ sys.path.insert(0, _ROOT)
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from engine.azure_engine import CharacterClass
 from engine import (
     add_exit,
     add_npc,
@@ -40,6 +39,7 @@ from engine import (
     start_session,
     submit_turn,
 )
+from engine.azure_engine import CharacterClass
 from models import (
     NPC,
     DoorState,
