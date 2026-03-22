@@ -1442,28 +1442,21 @@ def _display_spellbook_spell(spells: SpellBook) -> str:
 def character_sheet_panel(
     character: Character,
 ) -> str:
-    score_rows = ""
-    for f in fields(character.ability_scores):
-        val = getattr(character.ability_scores, f.name)
-        score_rows += f"""<div style="text-align:center">
-            <div class="muted" style="font-size:0.7rem">{f.name.capitalize()}</div>
-            <div style="font-size:1.1rem;font-weight:bold">{val}</div>
-            </div>"""
-
-    ability_scores = _stat_block([("STR", character.ability_scores.strength),
-                                  ("DEX", character.ability_scores.dexterity),
-                                  ("CON", character.ability_scores.constitution),
-                                  ("INT", character.ability_scores.intelligence),
-                                  ("WIS", character.ability_scores.wisdom),
-                                  ("CHA", character.ability_scores.charisma)], name="Ability Scores")
+    a = character.ability_scores
+    def _fmt_stat(val: int) -> str:
+        return f"{val / 100:+.2f}"
+    ability_scores = _stat_block([
+        ("PHY", _fmt_stat(a.physique)),
+        ("FNS", _fmt_stat(a.finesse)),
+        ("RSN", _fmt_stat(a.reason)),
+        ("SVY", _fmt_stat(a.savvy)),
+    ], name="Stats")
     hp_ac_movement = _stat_block([("HP", f"{character.hp_current}/{character.hp_max}"),
                                   ("AC", character.armor_class),
                                   ("Move", f"{character.movement_speed}'")], 1)
-    saves = _stat_block([("Death/Poison",    character.saving_throws["death_poison"]),
-                         ("Wands",           character.saving_throws["wands"]),
-                         ("Paralysis/Stone", character.saving_throws["paralysis_stone"]),
-                         ("Breath",          character.saving_throws["breath_weapon"]),
-                         ("Spells",          character.saving_throws["spells"])], 2, name="Saves")
+    saves = _stat_block([
+        ("Save", character.saving_throws.get("save", "—")),
+    ], 2, name="Saves")
     inv_cells = "".join(
             f'<div style="text-align:left">'
             f'  <div style="font-size:0.9rem">{_display_inventory_item(inv_item)}</div>'

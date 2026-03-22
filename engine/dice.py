@@ -5,7 +5,8 @@ Dice rolling utilities for the dungeon crawler engine.
 import random
 import re
 
-from models import AbilityScores
+from azure_tables import POWER_LEVEL
+from models import AzureStats
 
 
 def print_dice_results(results):
@@ -71,34 +72,37 @@ def roll_sum(n: int, sides: int) -> int:
     return sum(roll(n, sides))
 
 
-def roll_3d6() -> int:
-    """Roll 3d6 and return the sum."""
-    return roll_sum(3, 6)
+def roll_azure_stat() -> int:
+    """
+    Roll one Azure stat using the formula 2d(4×POWER_LEVEL) − 5×POWER_LEVEL.
+    Result is a scaled integer; divide by POWER_LEVEL to get the human value.
+    Range: −500 to +300 (i.e. −5.00 to +3.00).
+    """
+    die = 4 * POWER_LEVEL
+    penalty = 5 * POWER_LEVEL
+    return d(die) + d(die) - penalty
 
 
-def roll_stat_block() -> AbilityScores:
-    """Roll 3d6 straight down the line for ability scores."""
-    return AbilityScores(
-        strength=roll_3d6(),
-        intelligence=roll_3d6(),
-        wisdom=roll_3d6(),
-        dexterity=roll_3d6(),
-        constitution=roll_3d6(),
-        charisma=roll_3d6(),
+def roll_stat_block() -> AzureStats:
+    """Roll all four Azure stats and return an AzureStats instance."""
+    return AzureStats(
+        physique=roll_azure_stat(),
+        finesse=roll_azure_stat(),
+        reason=roll_azure_stat(),
+        savvy=roll_azure_stat(),
     )
 
 
 def roll_stats() -> dict:
     """
-    Public helper: roll 3d6 stats and return as a plain dict.
+    Roll stats for a new character and return as a plain dict.
+    Keys are the four Azure stat names; values are POWER_LEVEL-scaled integers.
     Used by the /arrive DM conversation before character creation.
     """
     block = roll_stat_block()
     return {
-        "strength":     block.strength,
-        "intelligence": block.intelligence,
-        "wisdom":       block.wisdom,
-        "dexterity":    block.dexterity,
-        "constitution": block.constitution,
-        "charisma":     block.charisma,
+        "physique": block.physique,
+        "finesse":  block.finesse,
+        "reason":   block.reason,
+        "savvy":    block.savvy,
     }

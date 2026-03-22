@@ -3,23 +3,22 @@ test_character_creation.py — Character creation tests for the Azure ruleset.
 """
 
 from engine import create_character, roll_stats
-from models import CharacterClass, CharacterStatus, GameState, Party
+from models import AzureStats, CharacterClass, CharacterStatus, GameState, Party
 from azure_tables import POWER_LEVEL
 
 
 class TestRollStats:
-    def test_returns_expected_keys(self):
+    def test_returns_four_azure_keys(self):
         stats = roll_stats()
-        # roll_stats() still returns a dict; under Stream A it uses six B/X
-        # field names as a bridge until Stream B updates AbilityScores.
-        assert isinstance(stats, dict)
-        assert len(stats) > 0
+        assert set(stats.keys()) == {"physique", "finesse", "reason", "savvy"}
 
-    def test_all_values_are_integers(self):
-        for _ in range(10):
+    def test_all_values_are_scaled_integers(self):
+        for _ in range(20):
             stats = roll_stats()
             for key, val in stats.items():
                 assert isinstance(val, int), f"{key}={val} is not an int"
+                # Azure formula: 2d(4*PL) - 5*PL, range -500 to +300
+                assert -500 <= val <= 300, f"{key}={val} out of expected range"
 
 
 class TestCreateCharacter:
@@ -51,8 +50,7 @@ class TestCreateCharacter:
 
     def test_hp_minimum_one(self, bare_state):
         """HP must be at least 1 regardless of stats."""
-        from models import AbilityScores
-        scores = AbilityScores(constitution=3)
+        scores = AzureStats()   # all stats zero
         result = create_character(
             bare_state, "Frail", CharacterClass.KNIGHT, "",
             ability_scores=scores
@@ -83,30 +81,28 @@ class TestCreateCharacter:
         """base_save stored as job.baseSave * POWER_LEVEL."""
         create_character(bare_state, "Aldric", CharacterClass.KNIGHT, "")
         char = list(bare_state.characters.values())[0]
-        # Knight base_save = 4 → stored as 4 * 100 = 400
+        # Knight base_save = 4 → stored as 400
         assert char.saving_throws.get("save") == 4 * POWER_LEVEL
 
     def test_prerolled_stats_used(self, bare_state):
-        from models import AbilityScores
-        scores = AbilityScores(strength=200, dexterity=150)
+        scores = AzureStats(physique=300, finesse=200, reason=100, savvy=50)
         create_character(
             bare_state, "Demigod", CharacterClass.KNIGHT, "",
             ability_scores=scores
         )
         char = list(bare_state.characters.values())[0]
-        assert char.ability_scores.strength == 200
-        assert char.ability_scores.dexterity == 150
+        assert char.ability_scores.physique == 300
+        assert char.ability_scores.finesse  == 200
 
     def test_prerolled_stats_dict_used(self, bare_state):
-        stats = {"strength": 300, "intelligence": 100, "wisdom": 100,
-                 "dexterity": 200, "constitution": 0, "charisma": 0}
+        stats = {"physique": 300, "finesse": 200, "reason": 100, "savvy": 50}
         create_character(
             bare_state, "Sturdy", CharacterClass.KNIGHT, "",
             prerolled_stats=stats
         )
         char = list(bare_state.characters.values())[0]
-        assert char.ability_scores.strength == 300
-        assert char.ability_scores.dexterity == 200
+        assert char.ability_scores.physique == 300
+        assert char.ability_scores.finesse  == 200
 
     def test_all_jobs_can_be_created(self, bare_state):
         """Every CharacterClass should produce a valid character."""

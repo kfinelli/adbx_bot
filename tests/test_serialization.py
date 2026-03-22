@@ -81,8 +81,8 @@ class TestStateRoundTrip:
         rest_char = list(restored.characters.values())[0]
         orig_scores = orig_char.ability_scores
         rest_scores = rest_char.ability_scores
-        assert rest_scores.strength == orig_scores.strength
-        assert rest_scores.constitution == orig_scores.constitution
+        assert rest_scores.physique == orig_scores.physique
+        assert rest_scores.finesse  == orig_scores.finesse
 
     def test_saving_throws_preserved(self, state_with_fighter):
         orig = list(state_with_fighter.characters.values())[0]

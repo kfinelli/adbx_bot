@@ -750,7 +750,7 @@ class TestConditions:
 
     def test_strengthened_has_str_modifier(self):
         from engine import CONDITION_REGISTRY
-        assert CONDITION_REGISTRY["strengthened"].stat_modifiers.get("strength") == 2
+        assert CONDITION_REGISTRY["strengthened"].stat_modifiers.get("physique") == 2
 
     def test_entangled_has_on_move_hook(self):
         from engine import CONDITION_REGISTRY
@@ -869,13 +869,13 @@ class TestConditions:
         state, char_id, _ = self._state_in_rounds()
 
         char = state.characters[char_id]
-        char.ability_scores.strength = 0   # zero base stat
-        base_mod = _effective_stat_mod(state, char_id, "strength")
+        char.ability_scores.physique = 0   # zero base stat
+        base_mod = _effective_stat_mod(state, char_id, "physique")
         assert base_mod == 0
 
         # strengthened condition adds 2 directly to the stat (pass-through model)
         apply_condition(state, char_id, "strengthened", duration=3)
-        boosted_mod = _effective_stat_mod(state, char_id, "strength")
+        boosted_mod = _effective_stat_mod(state, char_id, "physique")
         assert boosted_mod == 2
 
     def test_strengthened_stacks_with_base_strength(self):
@@ -883,10 +883,10 @@ class TestConditions:
         state, char_id, _ = self._state_in_rounds()
 
         char = state.characters[char_id]
-        char.ability_scores.strength = 200   # base stat of 200
+        char.ability_scores.physique = 200   # base stat of 200
         apply_condition(state, char_id, "strengthened", duration=3)
         # 200 base + 2 condition bonus = 202
-        assert _effective_stat_mod(state, char_id, "strength") == 202
+        assert _effective_stat_mod(state, char_id, "physique") == 202
 
     def test_strengthened_has_no_hooks(self):
         from engine import CONDITION_REGISTRY

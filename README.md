@@ -22,8 +22,8 @@ A Discord bot for asynchronous B/X D&D dungeon crawling, mediated via slash comm
 3. Under **Bot Permissions**, check:
    - Send Messages
    - Read Message History
-   - Manage Messages (needed to pin the status message)
-   - Read Messages / View Channels
+   - Manage Messages (for pinning messages if needed)
+   - View Channels
 4. Copy the generated URL and open it in your browser.
 5. Select your server and authorize.
 
@@ -39,7 +39,7 @@ channel permissions if you like, but it's not required for the demo.
 
 ### Requirements
 
-- Python 3.11+
+- Python 3.11+ (tested with python 3.12.3)
 - `discord.py` 2.x
 
 ### Install dependencies

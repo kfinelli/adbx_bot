@@ -14,7 +14,7 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID, uuid4
 
-# CharacterClass is generated in tables.py from _CLASS_DEFINITIONS.
+# CharacterClass is generated in azure_tables.py from job JSON files.
 # Import it here so the rest of the codebase can import from models as before.
 from azure_tables import CharacterClass
 
@@ -83,13 +83,18 @@ class ExitDirection(Enum):
 # ---------------------------------------------------------------------------
 
 @dataclass
-class AbilityScores:
-    strength:     int = 10
-    intelligence: int = 10
-    wisdom:       int = 10
-    dexterity:    int = 10
-    constitution: int = 10
-    charisma:     int = 10
+class AzureStats:
+    """
+    The four core stats of the Azure ruleset, stored as integers scaled by
+    POWER_LEVEL (100).  A value of 200 means a stat of 2.00.
+    """
+    physique: int = 0
+    finesse:  int = 0
+    reason:   int = 0
+    savvy:    int = 0
+
+# Backward-compatibility alias — removed once all call sites are updated.
+AbilityScores = AzureStats
 
 
 @dataclass
@@ -164,7 +169,7 @@ class Character:
     level:           int               = 1
     experience:      int               = 0
 
-    ability_scores:  AbilityScores     = field(default_factory=AbilityScores)
+    ability_scores:  AzureStats        = field(default_factory=AzureStats)
 
     hp_max:          int               = 1
     hp_current:      int               = 1

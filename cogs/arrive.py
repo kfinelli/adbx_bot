@@ -2,13 +2,13 @@
 cogs/arrive.py — /arrive command for player character creation.
 
 Flow:
-  1. Player uses /arrive in the game channel
-  2. Bot sends them a DM with their rolled stats and Accept/Reroll buttons
-  3. On accept, bot sends class selection buttons
-  4. On class select, bot sends loadout selection buttons
-  5. On loadout select, character is created and channel status updates
+  1. Player uses /arrive in the game channel.
+  2. Bot DMs them their rolled stats and Accept/Reroll buttons.
+  3. On Accept, bot sends job (class) selection buttons.
+  4. On job select, character is created immediately — no loadout step.
 
-/arrive is only valid during PRE_START mode.
+Stats use the Azure system: four stats (Physique, Finesse, Reason, Savvy),
+stored as large integers scaled by POWER_LEVEL.
 """
 
 from __future__ import annotations
@@ -22,64 +22,59 @@ from discord.ext import commands
 from engine import create_character, roll_stats
 from models import CharacterClass, SessionMode
 from store import ack, get_session, save_session, update_status
-from azure_tables import EQUIPMENT_PACKAGE_DESCRIPTIONS, EQUIPMENT_PACKAGES
+from azure_tables import POWER_LEVEL
 
 # ---------------------------------------------------------------------------
 # Stat display helper
 # ---------------------------------------------------------------------------
 
 def _fmt_stats(stats: dict) -> str:
-    """Format rolled stats for display in a DM message."""
-    lines = [
-        f"**STR** {stats['strength']:2d}   **INT** {stats['intelligence']:2d}",
-        f"**DEX** {stats['dexterity']:2d}   **WIS** {stats['wisdom']:2d}",
-        f"**CON** {stats['constitution']:2d}   **CHA** {stats['charisma']:2d}",
-    ]
-    return "\n".join(lines)
+    """Format rolled Azure stats for display in a DM message."""
+    def _fmt(val: int) -> str:
+        # Display scaled integer as a decimal, e.g. 250 → "+2.50"
+        fval = val / POWER_LEVEL
+        return f"{fval:+.2f}"
+
+    return (
+        f"**PHY** {_fmt(stats['physique'])}   "
+        f"**FNS** {_fmt(stats['finesse'])}\n"
+        f"**RSN** {_fmt(stats['reason'])}   "
+        f"**SVY** {_fmt(stats['savvy'])}"
+    )
 
 
 # ---------------------------------------------------------------------------
-# Step 3: Loadout selection view
+# Step 2: Job selection view
 # ---------------------------------------------------------------------------
 
-class LoadoutView(discord.ui.View):
-    def __init__(
-        self,
-        channel_id: str,
-        character_name: str,
-        character_class: CharacterClass,
-        stats: dict,
-        owner_id: str,
-    ):
+class JobView(discord.ui.View):
+    """
+    Second step: the player picks their job (character class).
+    Character is created immediately on selection — no loadout step.
+    """
+
+    def __init__(self, channel_id: str, character_name: str, stats: dict, owner_id: str):
         super().__init__(timeout=300)
-        self.channel_id = channel_id
+        self.channel_id     = channel_id
         self.character_name = character_name
-        self.character_class = character_class
-        self.stats = stats
-        self.owner_id = owner_id
+        self.stats          = stats
+        self.owner_id       = owner_id
 
-        for package_name in EQUIPMENT_PACKAGES:
+        for cls in CharacterClass:
             btn = discord.ui.Button(
-                label=package_name,
-                style=discord.ButtonStyle.secondary,
-                custom_id=f"loadout_{package_name}",
+                label=cls.value,
+                style=discord.ButtonStyle.primary,
+                custom_id=f"job_{cls.name}",
             )
-            btn.callback = self._make_callback(package_name)
+            btn.callback = self._make_callback(cls)
             self.add_item(btn)
-        self._pack_list = "\n".join(
-            f"**{name}:** {desc}"
-            for name, desc in EQUIPMENT_PACKAGE_DESCRIPTIONS.items()
-        )
 
-    def _pack_summary(self) -> str:
-        return self._pack_list
-
-    def _make_callback(self, package_name: str):
+    def _make_callback(self, character_class: CharacterClass):
         async def callback(interaction: discord.Interaction):
             for item in self.children:
                 item.disabled = True
             await interaction.response.edit_message(
-                content=f"Loadout chosen: **{package_name}**. Creating character...",
+                content=f"Job chosen: **{character_class.value}**. Creating character…",
                 view=self,
             )
 
@@ -94,8 +89,8 @@ class LoadoutView(discord.ui.View):
                 result = create_character(
                     state=state,
                     name=self.character_name,
-                    character_class=self.character_class,
-                    equipment_package=package_name,
+                    character_class=character_class,
+                    equipment_package="",
                     owner_id=self.owner_id,
                     prerolled_stats=self.stats,
                 )
@@ -110,19 +105,16 @@ class LoadoutView(discord.ui.View):
                 if state.party.leader_id is None:
                     state.party.leader_id = state.party.member_ids[-1]
 
-                # Save unconditionally — don't rely on get_channel succeeding.
                 save_session(state)
 
                 await interaction.followup.send(
-                    f"✓ **{self.character_name}** has arrived! "
+                    f"✓ **{self.character_name}** the {character_class.value} has arrived! "
                     f"Head back to the game channel.",
                     ephemeral=False,
                 )
 
-                # Best-effort channel status update (get_channel may miss uncached guilds).
                 channel = interaction.client.get_channel(int(self.channel_id))
                 if channel is None:
-                    # Fall back to a fetch if not in cache
                     try:
                         channel = await interaction.client.fetch_channel(int(self.channel_id))
                     except discord.HTTPException:
@@ -131,57 +123,11 @@ class LoadoutView(discord.ui.View):
                     await update_status(channel, state)
 
             except Exception as exc:
-                # Surface any unexpected error to the player rather than silently failing.
                 with contextlib.suppress(discord.HTTPException):
                     await interaction.followup.send(
                         f"⚠ Something went wrong: {exc}", ephemeral=True
                     )
-                raise  # re-raise so the traceback still hits bot stderr
-
-        return callback
-
-
-# ---------------------------------------------------------------------------
-# Step 2: Class selection view
-# ---------------------------------------------------------------------------
-
-class ClassView(discord.ui.View):
-    def __init__(self, channel_id: str, character_name: str, stats: dict, owner_id: str):
-        super().__init__(timeout=300)
-        self.channel_id = channel_id
-        self.character_name = character_name
-        self.stats = stats
-        self.owner_id = owner_id
-
-        for cls in CharacterClass:
-            btn = discord.ui.Button(
-                label=cls.value,
-                style=discord.ButtonStyle.primary,
-                custom_id=f"class_{cls.name}",
-            )
-            btn.callback = self._make_callback(cls)
-            self.add_item(btn)
-
-    def _make_callback(self, character_class: CharacterClass):
-        async def callback(interaction: discord.Interaction):
-            for item in self.children:
-                item.disabled = True
-            await interaction.response.edit_message(
-                content=f"Class chosen: **{character_class.value}**. Now pick your starting loadout:",
-                view=self,
-            )
-            loadout_view = LoadoutView(
-                channel_id=self.channel_id,
-                character_name=self.character_name,
-                character_class=character_class,
-                stats=self.stats,
-                owner_id=self.owner_id,
-            )
-            pack_info = loadout_view._pack_summary()
-            await interaction.followup.send(
-                "Choose your starting equipment pack:\n\n" + pack_info,
-                view=loadout_view,
-            )
+                raise
 
         return callback
 
@@ -193,10 +139,10 @@ class ClassView(discord.ui.View):
 class StatRollView(discord.ui.View):
     def __init__(self, channel_id: str, character_name: str, owner_id: str):
         super().__init__(timeout=300)
-        self.channel_id = channel_id
+        self.channel_id     = channel_id
         self.character_name = character_name
-        self.owner_id = owner_id
-        self.stats = roll_stats()
+        self.owner_id       = owner_id
+        self.stats          = roll_stats()
 
     def _stats_message(self) -> str:
         return (
@@ -210,16 +156,20 @@ class StatRollView(discord.ui.View):
         for item in self.children:
             item.disabled = True
         await interaction.response.edit_message(
-            content=f"Stats accepted!\n\n{_fmt_stats(self.stats)}\n\nNow choose your class:",
+            content=(
+                f"Stats accepted!\n\n"
+                f"{_fmt_stats(self.stats)}\n\n"
+                "Now choose your job:"
+            ),
             view=self,
         )
-        class_view = ClassView(
+        job_view = JobView(
             channel_id=self.channel_id,
             character_name=self.character_name,
             stats=self.stats,
             owner_id=self.owner_id,
         )
-        await interaction.followup.send("Choose your class:", view=class_view)
+        await interaction.followup.send("Choose your job:", view=job_view)
 
     @discord.ui.button(label="Reroll", style=discord.ButtonStyle.danger)
     async def reroll(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -259,7 +209,6 @@ class ArriveCog(commands.Cog):
             )
             return
 
-        # Check player doesn't already have a character
         owner_id = str(interaction.user.id)
         for char in state.characters.values():
             if char.owner_id == owner_id:
@@ -269,7 +218,6 @@ class ArriveCog(commands.Cog):
                 )
                 return
 
-        # Try to DM the player
         try:
             dm_channel = await interaction.user.create_dm()
             view = StatRollView(
@@ -279,7 +227,7 @@ class ArriveCog(commands.Cog):
             )
             await dm_channel.send(view._stats_message(), view=view)
             await interaction.followup.send(
-                "Check your DMs to roll stats and choose your class!",
+                "Check your DMs to roll stats and choose your job!",
                 ephemeral=True,
             )
         except discord.Forbidden:

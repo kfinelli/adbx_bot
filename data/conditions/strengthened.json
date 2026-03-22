@@ -4,7 +4,7 @@
   "duration_type": "rounds",
   "hooks": {},
   "stat_modifiers": {
-    "strength": 2
+    "physique": 2
   },
   "grants_actions": []
 }

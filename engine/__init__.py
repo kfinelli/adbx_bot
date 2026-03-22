@@ -36,7 +36,7 @@ from .dice import (
     d,
     print_dice_results,
     roll,
-    roll_3d6,
+    roll_azure_stat,
     roll_dice_expr,
     roll_expr,
     roll_stat_block,
@@ -586,7 +586,7 @@ __all__ = [
     # Dice functions
     "d",
     "roll",
-    "roll_3d6",
+    "roll_azure_stat",
     "roll_dice_expr",
     "roll_expr",
     "roll_stat_block",

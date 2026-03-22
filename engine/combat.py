@@ -160,7 +160,7 @@ def initialize_battlefield(state: GameState) -> CombatBattlefield:
     for char_id, char in state.characters.items():
         if char.status.value != "active":
             continue
-        dex_mod = get_stat_modifier(char.ability_scores.dexterity)
+        dex_mod = get_stat_modifier(char.ability_scores.finesse)
         bf.combatants[char_id] = CombatantState(
             combatant_id=char_id,
             is_player=True,
@@ -372,14 +372,14 @@ def _npc_decide(
 def _effective_stat_mod(state: GameState, actor_id: UUID, stat: str) -> int:
     """
     Return the effective modifier for `stat` including active condition bonuses.
-    `stat` is an AbilityScores field name, e.g. "strength", "dexterity".
+    `stat` is an AzureStats field name: "physique", "finesse", "reason", or "savvy".
     Returns 0 for NPCs (no ability scores).
     """
     actor_char = state.characters.get(actor_id)
     if actor_char is None:
         return 0
 
-    base_val = getattr(actor_char.ability_scores, stat, 10)
+    base_val = getattr(actor_char.ability_scores, stat, 0)
     base_mod = get_stat_modifier(base_val)
 
     cs = state.battlefield.combatants.get(actor_id) if state.battlefield else None
@@ -480,7 +480,7 @@ def _hook_melee_attack(
     actor_char = state.characters.get(actor_id)
     actor_npc  = _find_npc(state, actor_id)
     if actor_char:
-        str_mod      = _effective_stat_mod(state, actor_id, "strength")
+        str_mod      = _effective_stat_mod(state, actor_id, "physique")
         attack_bonus = 0  # Phase 5: add THAC0 / weapon attack bonus
     elif actor_npc:
         str_mod      = 0

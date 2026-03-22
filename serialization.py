@@ -19,8 +19,7 @@ from datetime import datetime
 from uuid import UUID
 
 from models import (
-    NPC,
-    AbilityScores,
+    AzureStats,
     ActiveCondition,
     Character,
     CharacterClass,
@@ -34,6 +33,7 @@ from models import (
     GameState,
     InventoryItem,
     LightSource,
+    NPC,
     NPCGroup,
     NPCMovementLogic,
     NPCRoster,
@@ -89,14 +89,12 @@ def serialize_inventory_item(item: InventoryItem) -> dict:
     }
 
 
-def serialize_ability_scores(a: AbilityScores) -> dict:
+def serialize_ability_scores(a: AzureStats) -> dict:
     return {
-        "strength":     a.strength,
-        "intelligence": a.intelligence,
-        "wisdom":       a.wisdom,
-        "dexterity":    a.dexterity,
-        "constitution": a.constitution,
-        "charisma":     a.charisma,
+        "physique": a.physique,
+        "finesse":  a.finesse,
+        "reason":   a.reason,
+        "savvy":    a.savvy,
     }
 
 
@@ -370,14 +368,12 @@ def deserialize_inventory_item(d: dict) -> InventoryItem:
     )
 
 
-def deserialize_ability_scores(d: dict) -> AbilityScores:
-    return AbilityScores(
-        strength=d["strength"],
-        intelligence=d["intelligence"],
-        wisdom=d["wisdom"],
-        dexterity=d["dexterity"],
-        constitution=d["constitution"],
-        charisma=d["charisma"],
+def deserialize_ability_scores(d: dict) -> AzureStats:
+    return AzureStats(
+        physique=d.get("physique", d.get("strength", 0)),
+        finesse=d.get("finesse",  d.get("dexterity", 0)),
+        reason=d.get("reason",   d.get("intelligence", 0)),
+        savvy=d.get("savvy",     d.get("wisdom", 0)),
     )
 
 
