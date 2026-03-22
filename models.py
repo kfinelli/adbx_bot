@@ -26,9 +26,8 @@ from engine.azure_engine import CharacterClass
 class CharacterStatus(Enum):
     ACTIVE    = "active"
     DEAD      = "dead"
-    FLED      = "fled"       # left the dungeon mid-session
+    FLED      = "fled"       # unused
     PETRIFIED = "petrified"
-    PARALYZED = "paralyzed"
 
 
 class SessionMode(Enum):
