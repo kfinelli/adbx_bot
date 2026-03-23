@@ -2,9 +2,24 @@ import engine.azure_engine as az
 import engine.item
 import engine.azure_constants
 from engine.azure_constants import Slot
-from engine.item import Gear, ChargeWeapon, createItemFromData
+from engine.item import Gear, ChargeWeapon, Weapon, createItemFromData
 
-testWeapon = ChargeWeapon(
+testWeapon = Weapon(
+    "Longsword", #name,
+    "C", #rank,
+    "Sword",#type,
+    "PHY",#stat,
+    8,#damage,
+    0, #range,
+    "[Fine]", #tags,
+    "Warm to the touch", #otherAbilities,
+    None,
+    None,
+    "A small magic tome containing the power of fire within its pages", #description,
+    True #isLight
+)
+
+testMagic = ChargeWeapon(
     "Fire Tome", #name,
     "V", #rank,
     "Tome",#type,
@@ -15,10 +30,12 @@ testWeapon = ChargeWeapon(
     False,#destroyOnEmpty,
     "[Black][Fire]", #tags,
     "Warm to the touch", #otherAbilities,
+    None,
+    None,
     "A small magic tome containing the power of fire within its pages", #description,
     True #isLight
 )
-testClone = createItemFromData(testWeapon)
+testClone = createItemFromData(testMagic.toJSON())
 
 testGear = Gear(
     "Casting Robes",
@@ -29,11 +46,15 @@ testGear = Gear(
     0.5,
     None,
     "Looks Magical",
+    None,
+    None,
     "A simple robe for novice casters",
     False
 )
 gearJson = testGear.toJSON()
 gearClone = createItemFromData(gearJson)
+print(testWeapon.toJSON())
+print(testClone.toJSON())
 print(gearClone.toJSON())
 
 #Creating a character

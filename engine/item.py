@@ -4,7 +4,7 @@ Items and Equipment
 """
 import json
 import warnings
-from engine.azure_constants import BUNDLE_SIZE, BundleData, ItemData, Slot, SortMode, Stat, ItemType
+from engine.azure_constants import BUNDLE_SIZE, BundleData, ItemData, Slot, SortMode, Stat, ItemType, POWER_LEVEL
 
 # ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
 # Items have a field called "prototype", which contains the UNMODIFIED item data as a dictionary.
@@ -137,15 +137,22 @@ class LightContainer(Item):
 # No items should ever be of type EquipItem, only subclasses thereof.
 # ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
 class EquipItem(Item):
-    def __init__(self, name, rank, tags=None, otherAbilities=None, description="", isLight=False):
+    def __init__(self, name, rank, tags=None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight=False):
         super().__init__(name, description, isLight)
+        if attackStatus is None:
+            attackStatus = list()
+        if heldStatus is None:
+            heldStatus = list()
         if tags is None:
-            tags = list ()
+            tags = list()
         self.rank = rank
         self.tags = tags
         self.otherAbilities = otherAbilities
-        if type(self) is type(EquipItem):
-            self.updatePrototype()
+        self.heldStatus = heldStatus
+        self.attackStatus = attackStatus
+        # We do not need to check for a prototype update here, because no item stops here.
+        # if type(self) is type(EquipItem):
+        #     self.updatePrototype()
 
     def setRank (self, rank):
         self.rank = rank
@@ -169,6 +176,8 @@ class EquipItem(Item):
         exportData.update({
             ItemData.TAGS.value: self.tags,
             ItemData.OTHER_ABILITIES.value: self.otherAbilities,
+            ItemData.HELD_STATUS.value: self.heldStatus,
+            ItemData.ATTACK_STATUS.value: self.attackStatus,
             ItemData.RANK.value: self.rank,
             ItemData.PROTOTYPE.value: self.prototype,
         })
@@ -178,8 +187,8 @@ class EquipItem(Item):
 
 class Weapon(EquipItem):
     ITEM_TYPE = ItemType.WEAPON.value
-    def __init__(self, name, rank, weaponType, stat, damage, range=0, tags = None, otherAbilities=None, description="", isLight = False):
-        super().__init__(name, rank, tags, otherAbilities, description, isLight)
+    def __init__(self, name, rank, weaponType, stat, damage, range=0, tags = None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight = False):
+        super().__init__(name, rank, tags, otherAbilities, heldStatus, attackStatus, description, isLight)
         self.type = weaponType
         self.stat = stat
         self.damage = max(0, damage)
@@ -215,8 +224,8 @@ class Weapon(EquipItem):
 
 class ChargeWeapon(Weapon):
     ITEM_TYPE = ItemType.CHARGE_WEAPON.value
-    def __init__(self, name, rank, weaponType, stat, damage, range=0, maxCharges = 1, destroyOnEmpty=False, tags = None, otherAbilities=None, description="", isLight = False):
-        super().__init__(name, rank, weaponType, stat, damage, range, tags, otherAbilities, description, isLight)
+    def __init__(self, name, rank, weaponType, stat, damage, range=0, maxCharges = 1, destroyOnEmpty=False, tags = None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight = False):
+        super().__init__(name, rank, weaponType, stat, damage, range, tags, otherAbilities, heldStatus, attackStatus, description, isLight)
         self.charges = maxCharges
         self.maxCharges = maxCharges
         self.destroyOnEmpty = destroyOnEmpty
@@ -248,8 +257,8 @@ class ChargeWeapon(Weapon):
 
 class Gear(EquipItem):
     ITEM_TYPE = ItemType.GEAR.value
-    def __init__(self, name, rank, slot, health, defense, resistance, tags=None, otherAbilities=None, description="", isLight = False):
-        super().__init__(name, rank, tags, otherAbilities, description, isLight)
+    def __init__(self, name, rank, slot, health, defense, resistance, tags=None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight = False,):
+        super().__init__(name, rank, tags, otherAbilities, heldStatus, attackStatus, description, isLight)
         self.slot = slot
         self.health = health
         self.defense = defense
@@ -273,10 +282,25 @@ class Gear(EquipItem):
 def resetItemToPrototype(item):
     item = createItemFromData(item.prototype)
 
+# Leaving this in, just in case that we have a future use for it.
+# Maybe if we make a DM item interface or something, so that we can still use in small numbers
+def upscaleItemData(itemData):
+    match itemData[ItemData.ITEM_TYPE]:
+        case ItemType.GEAR:
+            itemData[ItemData.HEALTH] *= POWER_LEVEL
+            itemData[ItemData.DEFENSE] *= POWER_LEVEL
+            itemData[ItemData.RESISTANCE] *= POWER_LEVEL
+        case ItemType.CHARGE_WEAPON:
+            itemData[ItemData.DAMAGE] *= POWER_LEVEL
+        case ItemType.WEAPON:
+            itemData[ItemData.DAMAGE] *= POWER_LEVEL
+        case _:
+            pass
 
 def createItemFromData(itemData):
     if isinstance(itemData, str):
         itemData = json.loads(itemData)
+        #upscaleItemData(itemData)
     elif isinstance(itemData, Item):
         itemData = itemData.toDictionary()
     newItem = None
@@ -293,6 +317,8 @@ def createItemFromData(itemData):
                 itemData[ItemData.RANGE],
                 itemData[ItemData.TAGS],
                 itemData[ItemData.OTHER_ABILITIES],
+                itemData[ItemData.HELD_STATUS],
+                itemData[ItemData.ATTACK_STATUS],
                 itemData[ItemData.DESCRIPTION],
                 itemData[ItemData.IS_LIGHT]
             )
@@ -308,10 +334,12 @@ def createItemFromData(itemData):
                 itemData[ItemData.DESTROY_ON_EMPTY],
                 itemData[ItemData.TAGS],
                 itemData[ItemData.OTHER_ABILITIES],
+                itemData[ItemData.HELD_STATUS],
+                itemData[ItemData.ATTACK_STATUS],
                 itemData[ItemData.DESCRIPTION],
                 itemData[ItemData.IS_LIGHT]
             )
-            newItem.setMaxCharges(itemData[ItemData.CHARGES])
+            newItem.setCharges(itemData[ItemData.CHARGES])
         case ItemType.GEAR:
             newItem = Gear(
                 itemData[ItemData.NAME],
@@ -322,6 +350,8 @@ def createItemFromData(itemData):
                 itemData[ItemData.RESISTANCE],
                 itemData[ItemData.TAGS],
                 itemData[ItemData.OTHER_ABILITIES],
+                itemData[ItemData.HELD_STATUS],
+                itemData[ItemData.ATTACK_STATUS],
                 itemData[ItemData.DESCRIPTION],
                 itemData[ItemData.IS_LIGHT]
             )

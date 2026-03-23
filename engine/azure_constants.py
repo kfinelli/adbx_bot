@@ -42,6 +42,8 @@ class ItemData(StrEnum):
     IS_LIGHT = "isLight"
     TAGS = "tags"
     OTHER_ABILITIES = "otherAbilities"
+    ATTACK_STATUS = "attackStatus"
+    HELD_STATUS = "heldStatus"
     RANK = "rank"
     ITEM_TYPE = "itemType"
     TYPE = "type"
