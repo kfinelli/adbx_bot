@@ -390,6 +390,45 @@ class Database:
         ).fetchall()
         return [row["character_id"] for row in rows]
 
+    def _get_characters_by_owner_sync(self, owner_id: str) -> list:
+        """Return a list of Character objects owned by the given Discord user
+        ID."""
+        from serialization import deserialize_character
+        rows = self._conn.execute(
+            """
+            SELECT * FROM characters
+            WHERE owner_id = ?
+            ORDER BY updated_at DESC
+            """,
+            (owner_id,),
+        ).fetchall()
+        characters = []
+        for row in rows:
+            char_dict = {
+                "character_id": row["character_id"],
+                "owner_id": row["owner_id"],
+                "name": row["name"],
+                "character_class": row["character_class"],
+                "level": row["level"],
+                "experience": row["experience"],
+                "ability_scores": json.loads(row["ability_scores_json"]),
+                "hp_max": row["hp_max"],
+                "hp_current": row["hp_current"],
+                "armor_class": row["armor_class"],
+                "movement_speed": row["movement_speed"],
+                "saving_throws": json.loads(row["saving_throws_json"]),
+                "status": row["status"],
+                "status_notes": row["status_notes"],
+                "inventory": json.loads(row["inventory_json"]),
+                "gold": row["gold"],
+                "spellbook": json.loads(row["spellbook_json"]) if row["spellbook_json"] else None,
+                "created_at": row["created_at"],
+                "is_pregenerated": bool(row["is_pregenerated"]),
+            }
+            char = deserialize_character(char_dict)
+            characters.append(char)
+        return characters
+
     def _list_sync(self) -> list[str]:
         rows = self._conn.execute(
             "SELECT channel_id FROM sessions ORDER BY updated_at DESC"
@@ -592,6 +631,12 @@ class Database:
         async with self._lock:
             return self._list_all_characters_sync()
 
+    async def get_characters_by_owner_async(self, owner_id: str) -> list:
+        """Return a list of Character objects owned by the given Discord user
+        ID."""
+        async with self._lock:
+            return self._get_characters_by_owner_sync(owner_id)
+
     # ------------------------------------------------------------------
     # Public API — sync convenience wrappers (safe for startup / tests)
     # ------------------------------------------------------------------
@@ -655,6 +700,11 @@ class Database:
     def list_all_characters(self) -> list:
         """Sync list all character IDs."""
         return self._list_all_characters_sync()
+
+    def get_characters_by_owner(self, owner_id: str) -> list:
+        """Sync list all Character objects owned by the given Discord user
+        ID."""
+        return self._get_characters_by_owner_sync(owner_id)
 
     def close(self) -> None:
         self._conn.close()

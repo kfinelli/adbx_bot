@@ -22,7 +22,7 @@ from discord.ext import commands
 from engine import create_character, roll_stats
 from engine.azure_constants import POWER_LEVEL
 from models import CharacterClass, SessionMode
-from store import ack, get_session, save_session, update_status
+from store import ack, get_characters_by_owner, get_session, save_session, update_status
 
 # ---------------------------------------------------------------------------
 # Stat display helper
@@ -133,7 +133,117 @@ class JobView(discord.ui.View):
 
 
 # ---------------------------------------------------------------------------
-# Step 1: Stat roll view (Accept / Reroll)
+# Step 1: Character selection view (for users with existing characters)
+# ---------------------------------------------------------------------------
+
+class CharacterSelectionView(discord.ui.View):
+    """
+    First step for users with existing characters:
+    Choose an existing character or create a new one.
+    """
+
+    def __init__(self, channel_id: str, character_name: str, owner_id: str, existing_chars: list):
+        super().__init__(timeout=300)
+        self.channel_id = channel_id
+        self.character_name = character_name
+        self.owner_id = owner_id
+        self.existing_chars = existing_chars
+
+        # Add buttons for each existing character
+        for char in existing_chars[:24]:  # Discord limit of 25 buttons per row, leave room for "New" button
+            btn = discord.ui.Button(
+                label=f"{char.name} ({char.character_class.value})",
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"char_{char.character_id}",
+            )
+            btn.callback = self._make_character_callback(char)
+            self.add_item(btn)
+
+        #Add "Create new character" button
+        new_btn = discord.ui.Button(
+                label="Create New Character",
+                style=discord.ButtonStyle.success,
+                custom_id="new_character",
+                )
+        new_btn.callback = self._new_character_callback
+        self.add_item(new_btn)
+
+    def _make_character_callback(self, character):
+        async def callback(interaction: discord.Interaction):
+            for item in self.children:
+                item.disabled = True
+            await interaction.response.edit_message(
+                    content=f"Selected character: **{character.name}**. Importing into session...",
+                    view=self,
+                    )
+
+            try:
+                state = get_session(self.channel_id)
+                if state is None:
+                    await interaction.followup.send(
+                            "Session no longer exists.",
+                            ephemeral=True
+                            )
+                    return
+
+                #Check if character is already in this session
+                if character.character_id in state.characters:
+                    await interaction.followup.send(
+                            f"**{character.name}** is already in this session.",
+                            ephemeral=True
+                            )
+                    return
+
+                # Import the existing character into the session
+                state.characters[character.character_id] = character
+                if state.party is not None:
+                    state.party.member_ids.append(character.character_id)
+
+                save_session(state)
+
+                await interaction.followup.send(
+                    f"**{character.name}** the {character.character_class.value} has arrived! "
+                    f"Head back to the game channel.",
+                    ephemeral=False,
+                )
+
+                channel = interaction.client.get_channel(int(self.channel_id))
+                if channel is None:
+                    try:
+                        channel = await interaction.client.fetch_channel(int(self.channel_id))
+                    except discord.HTTPException:
+                        channel = None
+                if channel is not None:
+                    await update_status(channel, state)
+
+            except Exception as exc:
+                with contextlib.suppress(discord.HTTPException):
+                    await interaction.followup.send(
+                        f"Something went wrong: {exc}", ephemeral=True
+                    )
+                raise
+
+        return callback
+
+    async def _new_character_callback(self, interaction: discord.Interaction):
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.edit_message(
+            content="Creating a new character...",
+            view=self,
+        )
+
+        # Start the stat rolling process for new character creation
+        stat_view = StatRollView(
+            channel_id=self.channel_id,
+            character_name=self.character_name,
+            owner_id=self.owner_id,
+        )
+        await interaction.followup.send(stat_view._stats_message(), view=stat_view)
+
+
+# ---------------------------------------------------------------------------
+# Step 2: Stat roll view (Accept / Reroll)
 # ---------------------------------------------------------------------------
 
 class StatRollView(discord.ui.View):
@@ -210,31 +320,53 @@ class ArriveCog(commands.Cog):
             return
 
         owner_id = str(interaction.user.id)
-        for char in state.characters.values():
-            if char.owner_id == owner_id:
+
+        # Check for existing characters owned by this user
+        existing_chars = get_characters_by_owner(owner_id)
+
+        if existing_chars:
+            # Present character selection view
+            try:
+                dm_channel = await interaction.user.create_dm()
+                view = CharacterSelectionView(
+                    channel_id=channel_id,
+                    character_name=name,
+                    owner_id=owner_id,
+                    existing_chars=existing_chars,
+                )
+                await dm_channel.send(
+                    f"**{name}** — You have existing characters. Would you like to select one or create a new character?",
+                    view=view,
+                )
                 await interaction.followup.send(
-                    f"You already have a character in this session: **{char.name}**.",
+                    "Check your DMs to select an existing character or create a new one!",
+                    ephemeral=True,
+                )
+            except discord.Forbidden:
+                await interaction.followup.send(
+                    "I couldn't DM you. Please enable DMs from server members and try again.",
                     ephemeral=True,
                 )
                 return
-
-        try:
-            dm_channel = await interaction.user.create_dm()
-            view = StatRollView(
-                channel_id=channel_id,
-                character_name=name,
-                owner_id=owner_id,
-            )
-            await dm_channel.send(view._stats_message(), view=view)
-            await interaction.followup.send(
-                "Check your DMs to roll stats and choose your job!",
-                ephemeral=True,
-            )
-        except discord.Forbidden:
-            await interaction.followup.send(
-                "I couldn't DM you. Please enable DMs from server members and try again.",
-                ephemeral=True,
-            )
+        else:
+            # No existing characters - proceed directly to stat rolling
+            try:
+                dm_channel = await interaction.user.create_dm()
+                view = StatRollView(
+                    channel_id=channel_id,
+                    character_name=name,
+                    owner_id=owner_id,
+                )
+                await dm_channel.send(view._stats_message(), view=view)
+                await interaction.followup.send(
+                        "Check your DMs to roll stats and choose your job!",
+                    ephemeral=True,
+                    )
+            except discord.Forbidden:
+                await interaction.followup.send(
+                    "I couldn't DM you. Please enable DMs from server members and try again.",
+                    ephemeral=True,
+                    )
 
 
 async def setup(bot: commands.Bot):

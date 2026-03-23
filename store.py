@@ -28,6 +28,15 @@ from persistence import Database
 db = Database("dungeon.db")
 
 # ---------------------------------------------------------------------------
+# Character lookup helper
+# ---------------------------------------------------------------------------
+
+def get_characters_by_owner(owner_id: str) -> list:
+    """Return a list of Character objects owned by the given Discord user
+    ID."""
+    return db.get_characters_by_owner(owner_id)
+
+# ---------------------------------------------------------------------------
 # In-memory session cache
 # ---------------------------------------------------------------------------
 
