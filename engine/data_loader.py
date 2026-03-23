@@ -54,6 +54,8 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from engine.item import Item
+
 # ---------------------------------------------------------------------------
 # Locate the data directory
 # ---------------------------------------------------------------------------
@@ -593,6 +595,7 @@ def load_all(data_dir: Path = _DATA_DIR) -> tuple[
     dict[str, ConditionDef],
     dict[str, JobDef],
     dict[str, SkillDef],
+    dict[str, Item],
 ]:
     """
     Load and validate all data files under data_dir.
@@ -606,9 +609,11 @@ def load_all(data_dir: Path = _DATA_DIR) -> tuple[
     condition_registry = _build_condition_registry(data_dir / "conditions")
     class_definitions, skill_registry = _build_job_definitions(data_dir / "classes")
     _cross_validate(action_registry, condition_registry, class_definitions)
-    return action_registry, condition_registry, class_definitions, skill_registry
+    #STUB - put item loader here @Ro
+    item_registry = {}
+    return action_registry, condition_registry, class_definitions, skill_registry, item_registry
 
 
 # Load at import time — any data error raises immediately so the bot
 # won't start with inconsistent game data.
-ACTION_REGISTRY, CONDITION_REGISTRY, CLASS_DEFINITIONS, SKILL_REGISTRY = load_all()
+ACTION_REGISTRY, CONDITION_REGISTRY, CLASS_DEFINITIONS, SKILL_REGISTRY, ITEM_REGISTRY = load_all()

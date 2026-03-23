@@ -39,12 +39,10 @@ from models import (
     NPCRoster,
     Party,
     PlayerTurnSubmission,
-    PreparedSpell,
     RangeBand,
     Room,
     RoomFeature,
     SessionMode,
-    SpellBook,
     TurnRecord,
     TurnStatus,
 )
@@ -61,21 +59,6 @@ def _dt(v) -> str | None:
 
 def _enum(v) -> str | None:
     return v.value if v is not None else None
-
-
-def serialize_prepared_spell(s: PreparedSpell) -> dict:
-    return {"spell_name": s.spell_name, "expended": s.expended}
-
-
-def serialize_spellbook(sb: SpellBook) -> dict:
-    return {
-        "max_slots": sb.max_slots,
-        "prepared": [
-            [serialize_prepared_spell(s) for s in level]
-            for level in sb.prepared
-        ],
-        "known_spells": sb.known_spells,
-    }
 
 
 def serialize_inventory_item(item: InventoryItem) -> dict:
@@ -109,14 +92,12 @@ def serialize_character(c: Character) -> dict:
         "ability_scores":  serialize_ability_scores(c.ability_scores),
         "hp_max":          c.hp_max,
         "hp_current":      c.hp_current,
-        "armor_class":     c.armor_class,
         "movement_speed":  c.movement_speed,
         "saving_throws":   c.saving_throws,
         "status":          _enum(c.status),
         "status_notes":    c.status_notes,
         "inventory":       [serialize_inventory_item(i) for i in c.inventory],
         "gold":            c.gold,
-        "spellbook":       serialize_spellbook(c.spellbook) if c.spellbook else None,
         "created_at":      _dt(c.created_at),
         "is_pregenerated": c.is_pregenerated,
     }
@@ -199,7 +180,9 @@ def serialize_npc(n: NPC) -> dict:
         "description":    n.description,
         "hp_max":         n.hp_max,
         "hp_current":     n.hp_current,
-        "armor_class":    n.armor_class,
+        "defense":        n.defense,
+        "resistance":     n.resistance,
+        "ability_scores": serialize_ability_scores(n.ability_scores),
         "movement_speed": n.movement_speed,
         "attack_bonus":   n.attack_bonus,
         "damage_dice":    n.damage_dice,
@@ -353,21 +336,6 @@ def _load_dt(v) -> datetime | None:
     return datetime.fromisoformat(v) if v is not None else None
 
 
-def deserialize_prepared_spell(d: dict) -> PreparedSpell:
-    return PreparedSpell(spell_name=d["spell_name"], expended=d["expended"])
-
-
-def deserialize_spellbook(d: dict) -> SpellBook:
-    return SpellBook(
-        max_slots=d["max_slots"],
-        prepared=[
-            [deserialize_prepared_spell(s) for s in level]
-            for level in d["prepared"]
-        ],
-        known_spells=d["known_spells"],
-    )
-
-
 def deserialize_inventory_item(d: dict) -> InventoryItem:
     return InventoryItem(
         item_id=_load_uuid(d["item_id"]),
@@ -399,14 +367,12 @@ def deserialize_character(d: dict) -> Character:
         ability_scores=deserialize_ability_scores(d["ability_scores"]),
         hp_max=d["hp_max"],
         hp_current=d["hp_current"],
-        armor_class=d["armor_class"],
         movement_speed=d["movement_speed"],
         saving_throws=d["saving_throws"],
         status=CharacterStatus(d["status"]),
         status_notes=d["status_notes"],
         inventory=[deserialize_inventory_item(i) for i in d["inventory"]],
         gold=d["gold"],
-        spellbook=deserialize_spellbook(d["spellbook"]) if d["spellbook"] else None,
         created_at=_load_dt(d["created_at"]),
         is_pregenerated=d["is_pregenerated"],
     )
@@ -465,7 +431,9 @@ def deserialize_npc(d: dict) -> NPC:
         description=d["description"],
         hp_max=d["hp_max"],
         hp_current=d["hp_current"],
-        armor_class=d["armor_class"],
+        defense=d["defense"],
+        resistance=d["resistance"],
+        ability_scores=deserialize_ability_scores(d["ability_scores"]),
         movement_speed=d["movement_speed"],
         attack_bonus=d["attack_bonus"],
         damage_dice=d["damage_dice"],

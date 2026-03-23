@@ -5,6 +5,8 @@ No I/O, no platform dependencies — pure game state.
 Ruleset-agnostic: CharacterClass is defined in tables.py and generated
 from _CLASS_DEFINITIONS, so adding/removing classes only requires editing
 tables.py. Nothing here changes when the ruleset changes.
+
+Any update here requires a parallel update in serialization.py!
 """
 
 from __future__ import annotations
@@ -97,66 +99,18 @@ AbilityScores = AzureStats
 
 
 @dataclass
-class PreparedSpell:
-    """One prepared spell occupying a slot."""
-    spell_name: str  = ""
-    expended:   bool = False   # True once the spell has been cast
-
-
-@dataclass
-class SpellBook:
-    """
-    B/X Vancian spell preparation.
-
-    `max_slots` defines how many spells the character may prepare at each
-    spell level (index 0 = level 1, ..., index 5 = level 6).
-    `prepared` is a parallel list of lists: each inner list holds the
-    specific PreparedSpell entries for that level. The DM or engine
-    enforces that len(prepared[i]) <= max_slots[i].
-
-    Example — a 3rd-level Magic-User with Sleep and Charm Person prepared
-    at level 1, and Web at level 2:
-        max_slots = [2, 1, 0, 0, 0, 0]
-        prepared  = [
-            [PreparedSpell("Sleep"), PreparedSpell("Charm Person")],
-            [PreparedSpell("Web")],
-            [], [], [], []
-        ]
-    """
-    max_slots: list[int]              = field(default_factory=lambda: [0, 0, 0, 0, 0, 0])
-    prepared:  list[list[PreparedSpell]] = field(
-        default_factory=lambda: [[], [], [], [], [], []]
-    )
-    # Spells the character knows and can prepare from (their spellbook)
-    known_spells: list[str]           = field(default_factory=list)
-
-    def available(self, spell_level: int) -> list[PreparedSpell]:
-        """Return prepared, unexpended spells at the given level."""
-        return [s for s in self.prepared[spell_level - 1] if not s.expended]
-
-    def expend(self, spell_level: int, spell_name: str) -> None:
-        """Mark a specific prepared spell as expended."""
-        for spell in self.prepared[spell_level - 1]:
-            if spell.spell_name == spell_name and not spell.expended:
-                spell.expended = True
-                return
-        raise ValueError(f"{spell_name} is not available at level {spell_level}")
-
-    def restore_all(self) -> None:
-        """Re-set all expended spells (after rest/re-memorization)."""
-        for level_list in self.prepared:
-            for spell in level_list:
-                spell.expended = False
-
-
-@dataclass
 class InventoryItem:
-    item_id:     UUID   = field(default_factory=uuid4)
-    name:        str    = ""
-    description: str    = ""
+    item_id:     str
     quantity:    int    = 1
-    encumbrance: float  = 1.0   # slots or stone, DM's choice of unit
-    is_equipped: bool   = False
+    equipped:    bool   = False
+    broken:      bool   = False
+    charges:     int | None = None
+    notes:       str    = ""
+
+    @property
+    def definition(self) -> Item:
+        from engine.item import Item
+        return ITEM_REGISTRY[self.item_id]
 
 
 @dataclass
@@ -172,7 +126,6 @@ class Character:
 
     hp_max:          int               = 1
     hp_current:      int               = 1
-    armor_class:     int               = 9     # set by create_character from CharacterCreationRules
     movement_speed:  int               = 120   # set by create_character from CharacterCreationRules
 
     saving_throws: dict = field(default_factory=dict)
@@ -185,12 +138,19 @@ class Character:
     inventory:       list[InventoryItem] = field(default_factory=list)
     gold:            int               = 0
 
-    # Spellcasters only; None for non-casters
-    spellbook:       SpellBook | None = None
-
     # Metadata
     created_at:      datetime          = field(default_factory=datetime.utcnow)
     is_pregenerated: bool              = False
+
+    @property
+    def defense(self) -> int:
+        #STUB: search through equipped items and add up DEF to get character DEF
+        return 0
+
+    @property
+    def resistance(self) -> int:
+        #STUB: search through equipped items and add up RST to get character RST
+        return 0
 
 
 # ---------------------------------------------------------------------------
@@ -370,7 +330,9 @@ class NPC:
     description:    str               = ""
     hp_max:         int               = 1
     hp_current:     int               = 1
-    armor_class:    int               = 9
+    defense:        int               = 0
+    resistance:     int               = 0
+    ability_scores: AzureStats        = field(default_factory=AzureStats)
     movement_speed: int               = 90
     attack_bonus:   int               = 0
     damage_dice:    str               = "1d6"       # e.g. "1d6", "2d4+1"

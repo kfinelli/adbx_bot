@@ -69,7 +69,6 @@ class TestStateRoundTrip:
         assert rest.character_class == orig.character_class
         assert rest.hp_max == orig.hp_max
         assert rest.hp_current == orig.hp_current
-        assert rest.armor_class == orig.armor_class
 
     def test_party_membership_preserved(self, state_with_fighter):
         restored = _roundtrip(state_with_fighter)
@@ -90,14 +89,6 @@ class TestStateRoundTrip:
         rest = list(restored.characters.values())[0]
         assert rest.saving_throws == orig.saving_throws
 
-    def test_spellbook_roundtrips(self, bare_state):
-        # Spellbooks are no longer assigned at creation in the Azure ruleset
-        # (they are granted via skill progression). Verify None serializes cleanly.
-        create_character(bare_state, "Mira", CharacterClass.MAGE, "")
-        restored = _roundtrip(bare_state)
-        char = list(restored.characters.values())[0]
-        assert char.spellbook is None
-
     def test_active_state_roundtrips(self, active_state):
         restored = _roundtrip(active_state)
         assert restored.mode == SessionMode.EXPLORATION
@@ -114,7 +105,7 @@ class TestStateRoundTrip:
 
     def test_npc_roundtrips(self, bare_state):
         from models import NPCGroup
-        npc = NPC(name="Goblin", hp_max=4, hp_current=2, armor_class=7)
+        npc = NPC(name="Goblin", hp_max=4, hp_current=2, defense=1)
         group = NPCGroup(npcs=[npc], current_room_id=bare_state.current_room_id)
         bare_state.npc_roster.add_group(group)
         restored = _roundtrip(bare_state)
@@ -122,7 +113,7 @@ class TestStateRoundTrip:
         r = list(restored.npc_roster.groups.values())[0].npcs[0]
         assert r.name == "Goblin"
         assert r.hp_current == 2
-        assert r.armor_class == 7
+        assert r.defense == 1
 
     def test_light_source_roundtrips(self, bare_state):
         set_light_source(bare_state, "Torch", 6)

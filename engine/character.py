@@ -71,10 +71,8 @@ class CharacterManager:
             ability_scores=scores,
             hp_max=hp_max,
             hp_current=hp_max,
-            armor_class=9,
             movement_speed=120,
             saving_throws={"save": base_save},
-            spellbook=None,
             inventory=[],
         )
 

@@ -65,12 +65,6 @@ class TestCreateCharacter:
         char = list(bare_state.characters.values())[0]
         assert char.status == CharacterStatus.ACTIVE
 
-    def test_no_spellbook_on_creation(self, bare_state):
-        """Spells are granted via skill progression, not at creation."""
-        create_character(bare_state, "Mira", CharacterClass.MAGE, "")
-        char = list(bare_state.characters.values())[0]
-        assert char.spellbook is None
-
     def test_inventory_empty_on_creation(self, bare_state):
         """Items are assigned separately; no starting pack."""
         create_character(bare_state, "Aldric", CharacterClass.KNIGHT, "")

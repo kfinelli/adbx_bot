@@ -22,14 +22,12 @@ Database schema:
     ability_scores_json TEXT        -- JSON blob for AzureStats
     hp_max        INTEGER           -- Max HP
     hp_current    INTEGER           -- Current HP
-    armor_class   INTEGER           -- AC
     movement_speed INTEGER          -- Movement speed
     saving_throws_json TEXT         -- JSON blob for saving throws dict
     status        TEXT              -- CharacterStatus enum value
     status_notes  TEXT              -- Status notes
     inventory_json TEXT             -- JSON array of InventoryItem dicts
     gold          INTEGER           -- Gold pieces
-    spellbook_json TEXT             -- JSON blob for SpellBook or NULL
     created_at    TEXT              -- ISO 8601 timestamp
     is_pregenerated INTEGER         -- 0 or 1
     updated_at    TEXT              -- ISO 8601 timestamp of last update
@@ -116,14 +114,12 @@ class Database:
                 ability_scores_json TEXT NOT NULL,
                 hp_max            INTEGER NOT NULL,
                 hp_current        INTEGER NOT NULL,
-                armor_class       INTEGER NOT NULL,
                 movement_speed    INTEGER NOT NULL,
                 saving_throws_json TEXT NOT NULL,
                 status            TEXT NOT NULL,
                 status_notes      TEXT NOT NULL DEFAULT '',
                 inventory_json    TEXT NOT NULL,
                 gold              INTEGER NOT NULL DEFAULT 0,
-                spellbook_json    TEXT,
                 created_at        TEXT NOT NULL,
                 is_pregenerated   INTEGER NOT NULL DEFAULT 0,
                 updated_at        TEXT NOT NULL
@@ -234,10 +230,10 @@ class Database:
             INSERT INTO characters (
                 character_id, owner_id, name, character_class, level,
                 experience, ability_scores_json, hp_max, hp_current,
-                armor_class, movement_speed, saving_throws_json, status,
-                status_notes, inventory_json, gold, spellbook_json,
+                movement_speed, saving_throws_json, status,
+                status_notes, inventory_json, gold,
                 created_at, is_pregenerated, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )
             ON CONFLICT(character_id) DO UPDATE SET
                 owner_id = excluded.owner_id,
                 name = excluded.name,
@@ -247,14 +243,12 @@ class Database:
                 ability_scores_json = excluded.ability_scores_json,
                 hp_max = excluded.hp_max,
                 hp_current = excluded.hp_current,
-                armor_class = excluded.armor_class,
                 movement_speed = excluded.movement_speed,
                 saving_throws_json = excluded.saving_throws_json,
                 status = excluded.status,
                 status_notes = excluded.status_notes,
                 inventory_json = excluded.inventory_json,
                 gold = excluded.gold,
-                spellbook_json = excluded.spellbook_json,
                 is_pregenerated = excluded.is_pregenerated,
                 updated_at = excluded.updated_at
             """,
@@ -268,14 +262,12 @@ class Database:
                 json.dumps(char_data["ability_scores"]),
                 char_data["hp_max"],
                 char_data["hp_current"],
-                char_data["armor_class"],
                 char_data["movement_speed"],
                 json.dumps(char_data["saving_throws"]),
                 char_data["status"],
                 char_data["status_notes"],
                 json.dumps(char_data["inventory"]),
                 char_data["gold"],
-                json.dumps(char_data["spellbook"]) if char_data["spellbook"] else None,
                 char_data["created_at"],
                 1 if char_data["is_pregenerated"] else 0,
                 _now_iso(),
@@ -305,14 +297,12 @@ class Database:
             "ability_scores": json.loads(row["ability_scores_json"]),
             "hp_max": row["hp_max"],
             "hp_current": row["hp_current"],
-            "armor_class": row["armor_class"],
             "movement_speed": row["movement_speed"],
             "saving_throws": json.loads(row["saving_throws_json"]),
             "status": row["status"],
             "status_notes": row["status_notes"],
             "inventory": json.loads(row["inventory_json"]),
             "gold": row["gold"],
-            "spellbook": json.loads(row["spellbook_json"]) if row["spellbook_json"] else None,
             "created_at": row["created_at"],
             "is_pregenerated": bool(row["is_pregenerated"]),
         }
@@ -368,14 +358,12 @@ class Database:
                 "ability_scores": json.loads(row["ability_scores_json"]),
                 "hp_max": row["hp_max"],
                 "hp_current": row["hp_current"],
-                "armor_class": row["armor_class"],
                 "movement_speed": row["movement_speed"],
                 "saving_throws": json.loads(row["saving_throws_json"]),
                 "status": row["status"],
                 "status_notes": row["status_notes"],
                 "inventory": json.loads(row["inventory_json"]),
                 "gold": row["gold"],
-                "spellbook": json.loads(row["spellbook_json"]) if row["spellbook_json"] else None,
                 "created_at": row["created_at"],
                 "is_pregenerated": bool(row["is_pregenerated"]),
             }
@@ -414,14 +402,12 @@ class Database:
                 "ability_scores": json.loads(row["ability_scores_json"]),
                 "hp_max": row["hp_max"],
                 "hp_current": row["hp_current"],
-                "armor_class": row["armor_class"],
                 "movement_speed": row["movement_speed"],
                 "saving_throws": json.loads(row["saving_throws_json"]),
                 "status": row["status"],
                 "status_notes": row["status_notes"],
                 "inventory": json.loads(row["inventory_json"]),
                 "gold": row["gold"],
-                "spellbook": json.loads(row["spellbook_json"]) if row["spellbook_json"] else None,
                 "created_at": row["created_at"],
                 "is_pregenerated": bool(row["is_pregenerated"]),
             }

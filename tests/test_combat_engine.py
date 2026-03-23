@@ -64,7 +64,7 @@ def _make_state_with_npc() -> GameState:
     state.current_room_id = room.room_id
 
     add_npc(state, NPC(name="Goblin", hp_current=5, hp_max=5,
-                       armor_class=7, damage_dice="1d6"))
+                       defense=0, damage_dice="1d6"))
     return state
 
 
@@ -84,7 +84,7 @@ def _make_party_state() -> GameState:
     state.current_room_id = room.room_id
 
     add_npc(state, NPC(name="Goblin", hp_current=8, hp_max=8,
-                       armor_class=7, damage_dice="1d6"))
+                       defense=0, damage_dice="1d6"))
     return state
 
 
@@ -200,7 +200,7 @@ class TestInitializeBattlefield:
 
 class TestAutoResolveRound:
 
-    def _setup_combat(self, npc_hp=5, npc_ac=1):
+    def _setup_combat(self, npc_hp=5, npc_def=1):
         """Enter rounds, open a turn, return (state, char_id, npc_id).
 
         Character HP is set to 20 so an NPC counter-attack before the player
@@ -210,7 +210,7 @@ class TestAutoResolveRound:
         npc = state.npcs_in_current_room[0]
         npc.hp_current = npc_hp
         npc.hp_max = npc_hp
-        npc.armor_class = npc_ac
+        npc.defense = npc_def
         char = list(state.characters.values())[0]
         char.hp_current = 20
         char.hp_max = 20
@@ -220,7 +220,7 @@ class TestAutoResolveRound:
 
     def test_attack_hit_reduces_npc_hp(self):
         """AC=1 guarantees a hit (any roll >= 1)."""
-        state, char_id, npc_id = self._setup_combat(npc_hp=20, npc_ac=1)
+        state, char_id, npc_id = self._setup_combat(npc_hp=20, npc_def=0)
         # Place combatants in melee range
         state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
         state.battlefield.combatants[npc_id].range_band  = RangeBand.ENGAGE
@@ -243,8 +243,8 @@ class TestAutoResolveRound:
         assert npc.hp_current < 20, "NPC should have taken damage"
 
     def test_attack_miss_leaves_npc_hp_unchanged(self):
-        """AC=21 guarantees a miss (max d20 roll is 20, needs roll >= AC to hit)."""
-        state, char_id, npc_id = self._setup_combat(npc_hp=5, npc_ac=21)
+        """DEF=99 guarantees no damage ."""
+        state, char_id, npc_id = self._setup_combat(npc_hp=5, npc_def=999)
         state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
         state.battlefield.combatants[npc_id].range_band  = RangeBand.ENGAGE
 
@@ -261,8 +261,8 @@ class TestAutoResolveRound:
         assert npc.hp_current == 5
 
     def test_npc_death_sets_status(self):
-        """1 HP NPC with AC=1 must die from any hit."""
-        state, char_id, npc_id = self._setup_combat(npc_hp=1, npc_ac=1)
+        """1 HP NPC with DEF=1 must die from any hit."""
+        state, char_id, npc_id = self._setup_combat(npc_hp=1, npc_def=0)
         # Guarantee the character can absorb the NPC's first strike (max 1d6 = 6 damage).
         state.characters[char_id].hp_current = 20
         state.characters[char_id].hp_max = 20
@@ -297,7 +297,7 @@ class TestAutoResolveRound:
         assert state.battlefield.combatants[char_id].range_band == RangeBand.CLOSE_MINUS
 
     def test_auto_resolve_returns_narrative(self):
-        state, char_id, npc_id = self._setup_combat(npc_ac=1)
+        state, char_id, npc_id = self._setup_combat(npc_def=0)
         state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
         state.battlefield.combatants[npc_id].range_band  = RangeBand.ENGAGE
 
@@ -313,7 +313,7 @@ class TestAutoResolveRound:
         assert len(result.message) > 0
 
     def test_round_log_stored_on_battlefield(self):
-        state, char_id, npc_id = self._setup_combat(npc_ac=1)
+        state, char_id, npc_id = self._setup_combat(npc_def=0)
         state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
         state.battlefield.combatants[npc_id].range_band  = RangeBand.ENGAGE
 
@@ -968,7 +968,7 @@ class TestPoisonAction:
         room = Room(name="Hall", description="Hall.")
         register_room(state, room)
         state.current_room_id = room.room_id
-        npc = NPC(name="Guard", hp_current=20, hp_max=20, armor_class=5)
+        npc = NPC(name="Guard", hp_current=20, hp_max=20, defense=0)
         add_npc(state, npc)
         enter_rounds(state)
         open_turn(state)
@@ -1165,7 +1165,7 @@ class TestParameterizedHooks:
         damages = set()
         for _ in range(80):
             state, char_id, npc = self._state_with_char_and_npc()
-            npc.armor_class = 1  # guarantee hit
+            npc.defense = 0  # guarantee damage
             npc.hp_current = 100
             action = CombatAction(action_id="attack", target_id=npc.npc_id)
             log: list[str] = []
@@ -1239,7 +1239,7 @@ class TestHookObjectValidation:
                 "condition_id": "test", "label": "Test", "duration_type": "rounds",
                 "hooks": {"on_turn_end": "skip_action"},
             }))
-            _, cr, _, _ = load_all(p)
+            _, cr, _, _, _ = load_all(p)
             assert cr["test"].hooks["on_turn_end"] == "skip_action"
 
     def test_hook_object_loads(self):
@@ -1257,7 +1257,7 @@ class TestHookObjectValidation:
                 "condition_id": "burning", "label": "Burning", "duration_type": "rounds",
                 "hooks": {"on_turn_end": {"tag": "deal_damage", "dice": "1d6", "type": "fire"}},
             }))
-            _, cr, _, _ = load_all(p)
+            _, cr, _, _, _ = load_all(p)
             entry = cr["burning"].hooks["on_turn_end"]
             assert isinstance(entry, dict)
             assert entry["tag"] == "deal_damage"
@@ -1301,7 +1301,7 @@ class TestHookObjectValidation:
                 "requires_destination": False, "range_requirement": [],
                 "effect_tags": [{"tag": "melee_attack", "dice": "1d4"}, "check_death"],
             }))
-            ar, _, _, _ = load_all(p)
+            ar, _, _, _, _ = load_all(p)
             tags = ar["stab"].effect_tags
             assert tags[0] == {"tag": "melee_attack", "dice": "1d4"}
             assert tags[1] == "check_death"

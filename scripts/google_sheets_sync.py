@@ -4,6 +4,11 @@ import json
 import os
 
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv not installed — fall back to environment variables only
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 GOOGLE_SHEET_KEY = os.getenv("GOOGLE_SHEET_KEY")
 

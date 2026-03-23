@@ -50,6 +50,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
+from engine.azure_constants import POWER_LEVEL
 from engine.azure_helpers import get_stat_modifier
 from models import (
     NPC,
@@ -460,13 +461,13 @@ def _hook_melee_attack(
     params:   dict,
 ) -> None:
     """
-    Roll a melee attack against the target's AC; on hit, deal damage.
+    Roll a melee attack against the target's FNS, on a hit deal damage
 
     params:
       dice  (str, default "1d6") — damage dice expression, e.g. "1d8", "2d6"
 
-    Attack roll: 1d20 vs target AC (roll >= AC to hit, descending AC).
-    Damage:      roll `dice` + effective STR modifier.
+    Attack roll: 1d(10 x POWER_LEVEL) vs target FNS (roll >= FNS to hit)
+    Damage:      roll `dice` + PHY, subtract target DEF
     """
     if action is None or action.target_id is None:
         log.append("[melee_attack: no target specified]")
@@ -481,38 +482,40 @@ def _hook_melee_attack(
     actor_npc  = _find_npc(state, actor_id)
     if actor_char:
         str_mod      = _effective_stat_mod(state, actor_id, "physique")
-        attack_bonus = 0  # Phase 5: add THAC0 / weapon attack bonus
+        attack_bonus = 0
     elif actor_npc:
         str_mod      = 0
-        attack_bonus = actor_npc.attack_bonus
+        attack_bonus = actor_npc.ability_scores.physique
     else:
         return
 
     target_char = state.characters.get(target_id)
     target_npc  = _find_npc(state, target_id)
     if target_char:
-        target_ac = target_char.armor_class
+        target_ac = target_char.ability_scores.finesse
     elif target_npc:
-        target_ac = target_npc.armor_class
+        target_ac = target_npc.ability_scores.finesse
     else:
         log.append(f"{actor_name} swings at nothing.")
         return
 
-    roll = random.randint(1, 20) + attack_bonus
+    roll = random.randint(1, 10*POWER_LEVEL) + attack_bonus
     if roll < target_ac:
         log.append(f"{actor_name} attacks {target_name} — misses! (rolled {roll} vs AC {target_ac})")
         return
 
     damage = max(1, roll_dice_expr(dice)["total"] + str_mod)
     if target_char:
+        damage = max(damage - target_char.defense, 0)
         target_char.hp_current = max(0, target_char.hp_current - damage)
         hp_str = f"{target_char.hp_current}/{target_char.hp_max}"
     else:
+        damage = max(damage - target_npc.defense, 0)
         target_npc.hp_current = max(0, target_npc.hp_current - damage)
         hp_str = f"{target_npc.hp_current}/{target_npc.hp_max}"
 
     log.append(
-        f"{actor_name} attacks {target_name} — hits! (rolled {roll} vs AC {target_ac}) "
+        f"{actor_name} attacks {target_name} — hits! (rolled {roll} vs Dodge {target_ac}) "
         f"Deals {damage} damage. [{target_name}: {hp_str}]"
     )
 

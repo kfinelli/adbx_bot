@@ -16,7 +16,6 @@ from models import (
     InventoryItem,
     RangeBand,
     SessionMode,
-    SpellBook,
     TurnStatus,
 )
 
@@ -1430,12 +1429,6 @@ def _display_inventory_item(item: InventoryItem) -> str:
     quantity   = f"{item.quantity}x " if item.quantity > 1 else ""
     equipstatus = "(EQUIP) " if item.is_equipped else ""
     return f"{quantity}{equipstatus}{item.name}"
-
-
-def _display_spellbook_spell(spells: SpellBook) -> str:
-    """STUB: return nicely formatted string of a spellbook spell."""
-    return ""
-
 
 def character_sheet_panel(
     character: Character,

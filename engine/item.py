@@ -14,7 +14,8 @@ from engine.azure_constants import BUNDLE_SIZE, BundleData, ItemData, Slot, Sort
 
 class Item:
     ITEM_TYPE = ItemType.ITEM.value
-    def __init__(self, name, description = "", isLight = False):
+    def __init__(self, item_id, name, description = "", isLight = False):
+        self.item_id = id
         self.name = name
         self.description = description
         self.isLight = isLight
@@ -74,6 +75,7 @@ class Item:
         # added here will appear in the prototypes of ALL items, including bundles.
         # ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
         return {
+            ItemData.ITEM_ID.value: self.item_id,
             ItemData.NAME.value: self.name,
             ItemData.ITEM_TYPE.value: Item.ITEM_TYPE,
             ItemData.DESCRIPTION.value: self.description,
@@ -332,9 +334,13 @@ def createItemFromData(itemData):
     newItem = None
     match itemData[ItemData.ITEM_TYPE]:
         case ItemType.ITEM:
-            newItem = Item(itemData[ItemData.NAME], itemData[ItemData.DESCRIPTION], itemData[ItemData.IS_LIGHT])
+            newItem = Item(itemData[ItemData.ITEM_ID],
+                           itemData[ItemData.NAME],
+                           itemData[ItemData.DESCRIPTION],
+                           itemData[ItemData.IS_LIGHT])
         case ItemType.WEAPON:
             newItem = Weapon(
+                itemData[ItemData.ITEM_ID],
                 itemData[ItemData.NAME],
                 itemData[ItemData.RANK],
                 itemData[ItemData.TYPE],
@@ -350,6 +356,7 @@ def createItemFromData(itemData):
             )
         case ItemType.CHARGE_WEAPON:
             newItem = ChargeWeapon(
+                itemData[ItemData.ITEM_ID],
                 itemData[ItemData.NAME],
                 itemData[ItemData.RANK],
                 itemData[ItemData.TYPE],
@@ -368,6 +375,7 @@ def createItemFromData(itemData):
             newItem.setCharges(itemData[ItemData.CHARGES])
         case ItemType.GEAR:
             newItem = Gear(
+                itemData[ItemData.ITEM_ID],
                 itemData[ItemData.NAME],
                 itemData[ItemData.RANK],
                 itemData[ItemData.SLOT],
@@ -384,6 +392,7 @@ def createItemFromData(itemData):
 
         case ItemType.LIGHT_CONTAINER:
             newItem = LightContainer(
+                itemData[ItemData.ITEM_ID],
                 itemData[ItemData.NAME],
                 itemData[ItemData.DESCRIPTION],
                 itemData[BundleData.MAX_SIZE],

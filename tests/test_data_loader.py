@@ -35,14 +35,16 @@ from engine.data_loader import (
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_data_dir(tmp: Path) -> tuple[Path, Path, Path]:
+def _make_data_dir(tmp: Path) -> tuple[Path, Path, Path, Path]:
     actions    = tmp / "actions"
     conditions = tmp / "conditions"
     classes    = tmp / "classes"
+    items      = tmp / "items"
     actions.mkdir()
     conditions.mkdir()
     classes.mkdir()
-    return actions, conditions, classes
+    items.mkdir()
+    return actions, conditions, classes, items
 
 
 def _write(path: Path, data: dict) -> None:
@@ -188,25 +190,26 @@ class TestLoadAllIsolated:
     def test_empty_dirs_return_empty_registries(self):
         with tempfile.TemporaryDirectory() as tmp:
             _make_data_dir(Path(tmp))
-            ar, cr, cd, sr = load_all(Path(tmp))
+            ar, cr, cd, sr, it = load_all(Path(tmp))
             assert ar == {}
             assert cr == {}
             assert cd == {}
             assert sr == {}
+            assert it == {}
 
     def test_valid_action_loads(self):
         with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes = _make_data_dir(Path(tmp))
+            actions, conditions, classes, items = _make_data_dir(Path(tmp))
             _write(actions / "attack.json", _VALID_ACTION)
-            ar, _, _, _ = load_all(Path(tmp))
+            ar, _, _, _, _ = load_all(Path(tmp))
             assert "attack" in ar
             assert ar["attack"].label == "Attack"
 
     def test_valid_condition_loads(self):
         with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes = _make_data_dir(Path(tmp))
+            actions, conditions, classes, items = _make_data_dir(Path(tmp))
             _write(conditions / "poisoned.json", _VALID_CONDITION)
-            _, cr, _, _ = load_all(Path(tmp))
+            _, cr, _, _, _ = load_all(Path(tmp))
             assert "poisoned" in cr
             assert cr["poisoned"].duration_type == "rounds"
             entry = cr["poisoned"].hooks["on_turn_end"]
@@ -215,10 +218,10 @@ class TestLoadAllIsolated:
 
     def test_valid_job_loads(self):
         with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes = _make_data_dir(Path(tmp))
+            actions, conditions, classes, items = _make_data_dir(Path(tmp))
             _write(actions / "attack.json", _VALID_ACTION)
             _write(classes / "knight.json", _VALID_JOB)
-            _, _, cd, _ = load_all(Path(tmp))
+            _, _, cd, _, _ = load_all(Path(tmp))
             assert "KNIGHT" in cd
             assert cd["KNIGHT"].hit_die == 12
             assert cd["KNIGHT"].primary_stat == "PHY"
@@ -227,7 +230,7 @@ class TestLoadAllIsolated:
     def test_job_skills_loaded_from_companion_file(self):
         """Skills in <key>_skills.json are loaded into the JobDef.skills dict."""
         with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes = _make_data_dir(Path(tmp))
+            actions, conditions, classes, items = _make_data_dir(Path(tmp))
             _write(actions / "attack.json", _VALID_ACTION)
             _write(classes / "knight.json", _VALID_JOB)
             _write(classes / "knight_skills.json", {
@@ -239,7 +242,7 @@ class TestLoadAllIsolated:
                     "desc": "Give +1 DEF to one other party member.",
                 }
             })
-            _, _, cd, sr = load_all(Path(tmp))
+            _, _, cd, sr, _ = load_all(Path(tmp))
             assert "knight_protector" in cd["KNIGHT"].skills
             assert "knight_protector" in sr
             skill = cd["KNIGHT"].skills["knight_protector"]
@@ -250,7 +253,7 @@ class TestLoadAllIsolated:
 
     def test_skill_passive_bonus_fields(self):
         with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes = _make_data_dir(Path(tmp))
+            actions, conditions, classes, items = _make_data_dir(Path(tmp))
             _write(actions / "attack.json", _VALID_ACTION)
             _write(classes / "knight.json", _VALID_JOB)
             _write(classes / "knight_skills.json", {
@@ -264,14 +267,14 @@ class TestLoadAllIsolated:
                     "desc": "Increase Physique by 1!",
                 }
             })
-            _, _, cd, _ = load_all(Path(tmp))
+            _, _, cd, _, _ = load_all(Path(tmp))
             skill = cd["KNIGHT"].skills["knight_phyBonus"]
             assert skill.stat == "PHY"
             assert skill.bonus == 1
 
     def test_skill_weapon_rank_fields(self):
         with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes = _make_data_dir(Path(tmp))
+            actions, conditions, classes, items = _make_data_dir(Path(tmp))
             _write(actions / "attack.json", _VALID_ACTION)
             _write(classes / "knight.json", _VALID_JOB)
             _write(classes / "knight_skills.json", {
@@ -284,7 +287,7 @@ class TestLoadAllIsolated:
                     "desc": "You can equip gear and weapons with Rank: B",
                 }
             })
-            _, _, cd, _ = load_all(Path(tmp))
+            _, _, cd, _, _ = load_all(Path(tmp))
             skill = cd["KNIGHT"].skills["martial_iii"]
             assert skill.rank == "B"
             assert skill.skill_type == 6
@@ -292,7 +295,7 @@ class TestLoadAllIsolated:
     def test_shared_skills_merged_into_skill_registry(self):
         """A skill id shared by two jobs appears once in SKILL_REGISTRY."""
         with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes = _make_data_dir(Path(tmp))
+            actions, conditions, classes, items = _make_data_dir(Path(tmp))
             _write(actions / "attack.json", _VALID_ACTION)
             job2 = dict(_VALID_JOB)
             job2["key"] = "THIEF"
@@ -311,11 +314,28 @@ class TestLoadAllIsolated:
             }
             _write(classes / "knight_skills.json", shared_skill)
             _write(classes / "thief_skills.json", shared_skill)
-            _, _, cd, sr = load_all(Path(tmp))
+            _, _, cd, sr, _ = load_all(Path(tmp))
             assert "trapwise" in sr
             assert "trapwise" in cd["KNIGHT"].skills
             assert "trapwise" in cd["THIEF"].skills
 
+    def test_load_item_registry(self):
+        """STUB: test loading items from the item registry"""
+        with tempfile.TemporaryDirectory() as tmp:
+            actions, conditions, classes, items = _make_data_dir(Path(tmp))
+            _write(items / "attack.json", _VALID_ACTION)
+            _write(classes / "knight.json", _VALID_JOB)
+            _write(classes / "knight_skills.json", {
+                "Martial Expertise": {
+                    "id": "martial_iii",
+                    "source": "knight",
+                    "level": 5,
+                    "type": 6,
+                    "rank": "B",
+                    "desc": "You can equip gear and weapons with Rank: B",
+                }
+            })
+            #_, _, _, _, it = load_all(Path(tmp))
 
 # ---------------------------------------------------------------------------
 # Tests: validation rejects bad data
@@ -325,7 +345,7 @@ class TestValidationErrors:
 
     def test_action_missing_required_key(self):
         with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes = _make_data_dir(Path(tmp))
+            actions, conditions, classes, items = _make_data_dir(Path(tmp))
             bad = dict(_VALID_ACTION)
             del bad["action_id"]
             _write(actions / "attack.json", bad)
@@ -337,7 +357,7 @@ class TestValidationErrors:
 
     def test_action_id_mismatch_with_filename(self):
         with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes = _make_data_dir(Path(tmp))
+            actions, conditions, classes, items = _make_data_dir(Path(tmp))
             bad = dict(_VALID_ACTION)
             bad["action_id"] = "move"
             _write(actions / "attack.json", bad)
@@ -349,7 +369,7 @@ class TestValidationErrors:
 
     def test_invalid_button_style(self):
         with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes = _make_data_dir(Path(tmp))
+            actions, conditions, classes, items = _make_data_dir(Path(tmp))
             bad = dict(_VALID_ACTION)
             bad["button_style"] = "purple"
             _write(actions / "attack.json", bad)
@@ -361,7 +381,7 @@ class TestValidationErrors:
 
     def test_invalid_action_type(self):
         with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes = _make_data_dir(Path(tmp))
+            actions, conditions, classes, items = _make_data_dir(Path(tmp))
             bad = dict(_VALID_ACTION)
             bad["action_type"] = "jump"
             _write(actions / "attack.json", bad)
@@ -373,7 +393,7 @@ class TestValidationErrors:
 
     def test_invalid_duration_type(self):
         with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes = _make_data_dir(Path(tmp))
+            actions, conditions, classes, items = _make_data_dir(Path(tmp))
             bad = dict(_VALID_CONDITION)
             bad["duration_type"] = "forever"
             _write(conditions / "poisoned.json", bad)
@@ -385,7 +405,7 @@ class TestValidationErrors:
 
     def test_unknown_hook_name(self):
         with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes = _make_data_dir(Path(tmp))
+            actions, conditions, classes, items = _make_data_dir(Path(tmp))
             bad = dict(_VALID_CONDITION)
             bad["hooks"] = {"on_sneeze": "do_something"}
             _write(conditions / "poisoned.json", bad)
@@ -397,7 +417,7 @@ class TestValidationErrors:
 
     def test_job_missing_required_key(self):
         with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes = _make_data_dir(Path(tmp))
+            actions, conditions, classes, items = _make_data_dir(Path(tmp))
             bad = dict(_VALID_JOB)
             del bad["hit_die"]
             _write(classes / "knight.json", bad)
@@ -409,7 +429,7 @@ class TestValidationErrors:
 
     def test_invalid_primary_stat(self):
         with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes = _make_data_dir(Path(tmp))
+            actions, conditions, classes, items = _make_data_dir(Path(tmp))
             bad = dict(_VALID_JOB)
             bad["primary_stat"] = "STRENGTH"
             _write(classes / "knight.json", bad)
@@ -421,7 +441,7 @@ class TestValidationErrors:
 
     def test_invalid_weapon_rank(self):
         with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes = _make_data_dir(Path(tmp))
+            actions, conditions, classes, items = _make_data_dir(Path(tmp))
             bad = dict(_VALID_JOB)
             bad["weapon_rank"] = "S"
             _write(classes / "knight.json", bad)
@@ -433,7 +453,7 @@ class TestValidationErrors:
 
     def test_malformed_json_raises(self):
         with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes = _make_data_dir(Path(tmp))
+            actions, conditions, classes, items = _make_data_dir(Path(tmp))
             (actions / "attack.json").write_text("{not valid json", encoding="utf-8")
             try:
                 load_all(Path(tmp))
@@ -443,7 +463,7 @@ class TestValidationErrors:
 
     def test_job_references_unknown_action(self):
         with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes = _make_data_dir(Path(tmp))
+            actions, conditions, classes, items = _make_data_dir(Path(tmp))
             job = dict(_VALID_JOB)
             job["combat_actions"] = ["attack", "nonexistent_action"]
             _write(actions / "attack.json", _VALID_ACTION)
@@ -456,7 +476,7 @@ class TestValidationErrors:
 
     def test_job_with_no_actions_references_unknown(self):
         with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes = _make_data_dir(Path(tmp))
+            actions, conditions, classes, items = _make_data_dir(Path(tmp))
             _write(classes / "knight.json", _VALID_JOB)  # references "attack"
             try:
                 load_all(Path(tmp))
@@ -466,7 +486,7 @@ class TestValidationErrors:
 
     def test_condition_references_unknown_action_in_grants(self):
         with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes = _make_data_dir(Path(tmp))
+            actions, conditions, classes, items = _make_data_dir(Path(tmp))
             cond = dict(_VALID_CONDITION)
             cond["grants_actions"] = ["ghost_touch"]
             _write(conditions / "poisoned.json", cond)
@@ -478,7 +498,7 @@ class TestValidationErrors:
 
     def test_hook_object_missing_tag_raises(self):
         with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes = _make_data_dir(Path(tmp))
+            actions, conditions, classes, items = _make_data_dir(Path(tmp))
             bad = dict(_VALID_CONDITION)
             bad["hooks"] = {"on_turn_end": {"dice": "1d6"}}  # missing "tag"
             _write(conditions / "poisoned.json", bad)
@@ -490,7 +510,7 @@ class TestValidationErrors:
 
     def test_effect_tag_object_missing_tag_raises(self):
         with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes = _make_data_dir(Path(tmp))
+            actions, conditions, classes, items = _make_data_dir(Path(tmp))
             bad = dict(_VALID_ACTION)
             bad["effect_tags"] = [{"dice": "1d6"}]  # missing "tag"
             _write(actions / "attack.json", bad)
