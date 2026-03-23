@@ -4,7 +4,9 @@ Items and Equipment
 """
 import json
 import warnings
-from engine.azure_constants import BUNDLE_SIZE, BundleData, ItemData, Slot, SortMode, Stat, ItemType, POWER_LEVEL
+from engine.azure_constants import BUNDLE_SIZE, BundleData, ItemData, Slot, SortMode, Stat, ItemType, POWER_LEVEL, \
+    RechargePeriod
+
 
 # ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
 # Items have a field called "prototype", which contains the UNMODIFIED item data as a dictionary.
@@ -226,8 +228,10 @@ class ChargeWeapon(Weapon):
     ITEM_TYPE = ItemType.CHARGE_WEAPON.value
     def __init__(self, name, rank, weaponType, stat, damage, range=0, maxCharges = 1, destroyOnEmpty=False, tags = None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight = False):
         super().__init__(name, rank, weaponType, stat, damage, range, tags, otherAbilities, heldStatus, attackStatus, description, isLight)
-        self.charges = maxCharges
-        self.maxCharges = maxCharges
+        chargeData=parseChargeString(maxCharges)
+        self.rechargePeriod = chargeData['period']
+        self.charges = chargeData['maxCharges']
+        self.maxCharges = chargeData['maxCharges']
         self.destroyOnEmpty = destroyOnEmpty
         if self.ITEM_TYPE is ChargeWeapon.ITEM_TYPE:
             self.updatePrototype()
@@ -250,6 +254,7 @@ class ChargeWeapon(Weapon):
             ItemData.ITEM_TYPE.value: ChargeWeapon.ITEM_TYPE,
             ItemData.CHARGES.value: self.charges,
             ItemData.MAX_CHARGES.value: self.maxCharges,
+            ItemData.RECHARGE_PERIOD.value : self.rechargePeriod,
             ItemData.DESTROY_ON_EMPTY.value: self.destroyOnEmpty,
             ItemData.PROTOTYPE.value: self.prototype,
         })
@@ -278,6 +283,27 @@ class Gear(EquipItem):
         })
         return exportData
 
+
+def parseChargeString(str):
+    recharge = RechargePeriod.NEVER
+
+    if str.contains('-') or str.empty():
+        recharge = RechargePeriod.INFINITE
+        maxCharges = -1
+    elif str.contains('/'):
+        maxCharges = int(str.split('/')[0])
+    else:
+        maxCharges = int(str)
+
+    if str.contains('d'):
+        recharge = RechargePeriod.DAY
+    elif str.contains('e'):
+        recharge = RechargePeriod.ENCOUNTER
+
+    chargeData = dict()
+    chargeData['rechargePeriod'] = recharge
+    chargeData['maxCharges'] = maxCharges
+    return chargeData
 
 def resetItemToPrototype(item):
     item = createItemFromData(item.prototype)

@@ -52,6 +52,7 @@ class ItemData(StrEnum):
     RANGE = "range"
     CHARGES = "charges"
     MAX_CHARGES = "maxCharges"
+    RECHARGE_PERIOD = "rechargePeriod"
     DESTROY_ON_EMPTY = "destroyOnEmpty"
     SLOT = "slot"
     HEALTH = "health"
@@ -110,3 +111,9 @@ class StatusType(Enum):
     TURN_END = 3
     SHORT = 4
     LONG = 5
+
+class RechargePeriod(StrEnum):
+    DAY = 'day'
+    ENCOUNTER = 'encounter'
+    INFINITE = 'infinite'
+    NEVER = 'never'
