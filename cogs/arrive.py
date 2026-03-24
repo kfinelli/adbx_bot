@@ -168,20 +168,62 @@ class ItemSelectView(discord.ui.View):
         return callback
     
     async def _buy_callback(self, interaction: discord.Interaction):
-        # This will be implemented in the next step - for now just acknowledge
         if self.selected_item_id is None:
+            await interaction.response.send_message(
+                "⚠ No item selected.", ephemeral=True
+            )
             return
         
         item = ITEM_REGISTRY.get(self.selected_item_id)
         if item is None:
+            await interaction.response.send_message(
+                "⚠ Item not found in registry.", ephemeral=True
+            )
             return
         
-        # Placeholder - actual purchase logic will be added
+        # Get the session and character
+        state = get_session(self.channel_id)
+        if state is None:
+            await interaction.response.send_message(
+                "⚠ Session no longer exists.", ephemeral=True
+            )
+            return
+        
+        character = state.characters.get(self.character_id)
+        if character is None:
+            await interaction.response.send_message(
+                "⚠ Character not found.", ephemeral=True
+            )
+            return
+        
+        # Check if character has enough gold
+        price = getattr(item, 'price', 0)
+        if character.gold < price:
+            await interaction.response.send_message(
+                f"⚠ Not enough gold! You have {character.gold} gp, but need {price} gp.",
+                ephemeral=True
+            )
+            return
+        
+        # Deduct gold
+        character.gold -= price
+        
+        # Create inventory item and add to character
+        inv_item = InventoryItem(item_id=self.selected_item_id, quantity=1)
+        character.inventory.append(inv_item)
+        
+        # Save the session
+        save_session(state)
+        
+        # Disable all buttons and show success message
         for child in self.children:
             child.disabled = True
         
+        remaining_gold = character.gold
         await interaction.response.edit_message(
-            content=f"✓ Purchased **{item.name}** for {item.price} gp!\n\n(Item will be added to inventory - purchase logic to be implemented)",
+            content=f"✓ Purchased **{item.name}** for {price} gp!\n\n"
+                    f"You have {remaining_gold} gp remaining.\n"
+                    f"The item has been added to your inventory.",
             view=self,
         )
     
