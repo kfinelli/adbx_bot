@@ -361,6 +361,15 @@ class ArriveCog(commands.Cog):
 
         owner_id = str(interaction.user.id)
 
+        # Check if this user already has a character in the session
+        for char in state.characters.values():
+            if char.owner_id == owner_id:
+                await interaction.response.send_message(
+                    f"You already have a character (**{char.name}**) in this session.",
+                    ephemeral=True,
+                )
+                return
+
         # Check for existing characters owned by this user
         existing_chars = get_characters_by_owner(owner_id)
 
