@@ -63,12 +63,12 @@ def _enum(v) -> str | None:
 
 def serialize_inventory_item(item: InventoryItem) -> dict:
     return {
-        "item_id":     _uuid(item.item_id),
-        "name":        item.name,
-        "description": item.description,
-        "quantity":    item.quantity,
-        "encumbrance": item.encumbrance,
-        "is_equipped": item.is_equipped,
+        "item_id":  item.item_id,   # str — no UUID wrapping needed
+        "quantity": item.quantity,
+        "equipped": item.equipped,
+        "broken":   item.broken,
+        "charges":  item.charges,
+        "notes":    item.notes,
     }
 
 
@@ -338,12 +338,12 @@ def _load_dt(v) -> datetime | None:
 
 def deserialize_inventory_item(d: dict) -> InventoryItem:
     return InventoryItem(
-        item_id=_load_uuid(d["item_id"]),
-        name=d["name"],
-        description=d["description"],
-        quantity=d["quantity"],
-        encumbrance=d["encumbrance"],
-        is_equipped=d["is_equipped"],
+        item_id=d["item_id"],
+        quantity=d.get("quantity", 1),
+        equipped=d.get("equipped", False),
+        broken=d.get("broken", False),
+        charges=d.get("charges", None),
+        notes=d.get("notes", ""),
     )
 
 

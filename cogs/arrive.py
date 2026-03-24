@@ -14,6 +14,7 @@ stored as large integers scaled by POWER_LEVEL.
 from __future__ import annotations
 
 import contextlib
+import logging
 
 import discord
 from discord import app_commands
@@ -26,6 +27,8 @@ from engine.item import ChargeWeapon, Gear, Item, Weapon
 from models import CharacterClass, InventoryItem, SessionMode
 from store import get_characters_by_owner, get_session, save_session, update_status
 from validation import validate_character_name
+
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Stat display helper
@@ -168,63 +171,90 @@ class ItemSelectView(discord.ui.View):
         return callback
 
     async def _buy_callback(self, interaction: discord.Interaction):
+        log.debug(
+            "_buy_callback: channel=%s character_id=%s selected_item=%s user=%s",
+            self.channel_id, self.character_id, self.selected_item_id, interaction.user.id,
+        )
+
         if self.selected_item_id is None:
-            await interaction.response.send_message(
-                "⚠ No item selected.", ephemeral=True
-            )
+            log.warning("_buy_callback: no item selected")
+            await interaction.response.edit_message(content="⚠ No item selected.", view=self)
             return
 
         item = ITEM_REGISTRY.get(self.selected_item_id)
         if item is None:
-            await interaction.response.send_message(
-                "⚠ Item not found in registry.", ephemeral=True
+            log.error("_buy_callback: item_id %r not found in ITEM_REGISTRY", self.selected_item_id)
+            await interaction.response.edit_message(
+                content="⚠ Item not found in registry.", view=self
             )
             return
 
         # Get the session and character
         state = get_session(self.channel_id)
         if state is None:
-            await interaction.response.send_message(
-                "⚠ Session no longer exists.", ephemeral=True
-            )
+            log.error("_buy_callback: session not found for channel %s", self.channel_id)
+            await interaction.response.edit_message(content="⚠ Session no longer exists.", view=self)
             return
 
-        character = state.characters.get(self.character_id)
+        # state.characters is keyed by UUID objects; self.character_id is a str.
+        # Convert to UUID before lookup.
+        from uuid import UUID
+        try:
+            char_uuid = UUID(self.character_id)
+        except (ValueError, AttributeError):
+            log.error("_buy_callback: invalid character_id %r", self.character_id)
+            await interaction.response.edit_message(content="⚠ Invalid character ID.", view=self)
+            return
+
+        log.debug(
+            "_buy_callback: state has %d characters, keys=%s",
+            len(state.characters),
+            list(state.characters.keys()),
+        )
+
+        character = state.characters.get(char_uuid)
         if character is None:
-            await interaction.response.send_message(
-                "⚠ Character not found.", ephemeral=True
+            log.error(
+                "_buy_callback: character UUID %s not found in state.characters (keys=%s)",
+                char_uuid, list(state.characters.keys()),
             )
+            await interaction.response.edit_message(content="⚠ Character not found.", view=self)
             return
 
         # Check if character has enough gold
         price = getattr(item, 'price', 0)
         if character.gold < price:
-            await interaction.response.send_message(
-                f"⚠ Not enough gold! You have {character.gold} gp, but need {price} gp.",
-                ephemeral=True
+            log.info(
+                "_buy_callback: insufficient gold — have %d, need %d", character.gold, price
+            )
+            await interaction.response.edit_message(
+                content=f"⚠ Not enough gold! You have {character.gold} gp, but need {price} gp.",
+                view=self,
             )
             return
 
-        # Deduct gold
+        # Deduct gold and add item to inventory
         character.gold -= price
-
-        # Create inventory item and add to character
         inv_item = InventoryItem(item_id=self.selected_item_id, quantity=1)
         character.inventory.append(inv_item)
+        log.info(
+            "_buy_callback: purchased %r (%d gp) for character %s; gold remaining=%d",
+            self.selected_item_id, price, char_uuid, character.gold,
+        )
 
         # Save the session
         save_session(state)
 
-        # Disable all buttons and show success message
-        for child in self.children:
-            child.disabled = True
-
+        # Return to the slot selection view so the player can keep shopping
         remaining_gold = character.gold
+        shop_view = ShopView(self.channel_id, self.character_id, self.owner_id)
         await interaction.response.edit_message(
-            content=f"✓ Purchased **{item.name}** for {price} gp!\n\n"
-                    f"You have {remaining_gold} gp remaining.\n"
-                    f"The item has been added to your inventory.",
-            view=self,
+            content=(
+                f"✓ Purchased **{item.name}** for {price} gp!\n"
+                f"You have {remaining_gold} gp remaining.\n\n"
+                f"**Item Shop** — Select a category to continue shopping:"
+            ),
+            view=shop_view,
         )
 
     async def _back_callback(self, interaction: discord.Interaction):
@@ -267,9 +297,9 @@ class ShopView(discord.ui.View):
             items = items_by_slot.get(slot, [])
 
             if not items:
-                await interaction.response.send_message(
-                    f"No purchasable items found for **{slot}**.",
-                    ephemeral=True,
+                await interaction.response.edit_message(
+                    content=f"No purchasable items found for **{slot}**.",
+                    view=self,
                 )
                 return
 
