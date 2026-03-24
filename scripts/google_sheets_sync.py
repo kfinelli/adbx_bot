@@ -35,6 +35,6 @@ itemData = dict()
 for sheet in ItemSheet:
     itemData[sheet.value] = getItemsFromSheet(sheets.worksheet(sheet))
 
-print(json.dumps(itemData))
+print(json.dumps(itemData, indent=2, sort_keys=True))
 #print(sheet.sheet1.get('A1'))
 
