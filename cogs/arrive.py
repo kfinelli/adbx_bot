@@ -259,12 +259,23 @@ class CharacterNameModal(discord.ui.Modal, title="Enter Character Name"):
             return
 
         # Start the stat rolling process for new character creation
-        stat_view = StatRollView(
-                channel_id=self.channel_id,
-                character_name=character_name,
-                owner_id=self.owner_id,
-                )
-        await interaction.response.send_message(stat_view._stats_message(), view=stat_view)
+        try:
+            dm_channel = await interaction.user.create_dm()
+            stat_view = StatRollView(
+                    channel_id=self.channel_id,
+                    character_name=character_name,
+                    owner_id=self.owner_id,
+                    )
+            await dm_channel.send(stat_view._stats_message(), view=stat_view)
+            await interaction.response.send_message(
+                    "Check your DMs to roll stats and choose your class!",
+                    ephemeral=True,
+                    )
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                    "I couldn't DM you. Please enable DMs from server members and try again.",
+                    ephemeral=True,
+                    )
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
         await interaction.response.send_message(
