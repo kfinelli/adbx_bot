@@ -54,7 +54,6 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from engine.azure_constants import ItemType
 from engine.item import Item, createItemFromData
 
 # ---------------------------------------------------------------------------

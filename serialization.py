@@ -342,7 +342,7 @@ def deserialize_inventory_item(d: dict) -> InventoryItem:
         quantity=d.get("quantity", 1),
         equipped=d.get("equipped", False),
         broken=d.get("broken", False),
-        charges=d.get("charges", None),
+        charges=d.get("charges"),
         notes=d.get("notes", ""),
     )
 

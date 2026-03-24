@@ -380,31 +380,31 @@ def createItemFromData(itemData):
         return None
 
     # Shared base kwargs present on every item type
-    base = dict(
-        item_id      = itemData[ItemData.ITEM_ID],
-        name         = itemData[ItemData.NAME],
-        description  = itemData.get(ItemData.DESCRIPTION, ""),
-        isLight      = itemData.get(ItemData.IS_LIGHT, False),
-        purchaseable = itemData.get(ItemData.PURCHASEABLE, False),
-        price        = itemData.get(ItemData.PRICE, 0),
-    )
+    base = {
+        "item_id": itemData[ItemData.ITEM_ID],
+        "name": itemData[ItemData.NAME],
+        "description": itemData.get(ItemData.DESCRIPTION, ""),
+        "isLight": itemData.get(ItemData.IS_LIGHT, False),
+        "purchaseable": itemData.get(ItemData.PURCHASEABLE, False),
+        "price": itemData.get(ItemData.PRICE, 0),
+    }
 
     # kwargs shared by all EquipItem subclasses
-    equip = dict(
-        rank          = itemData.get(ItemData.RANK, "E"),
-        tags          = itemData.get(ItemData.TAGS, []),
-        otherAbilities = itemData.get(ItemData.OTHER_ABILITIES, ""),
-        heldStatus    = itemData.get(ItemData.HELD_STATUS, ""),
-        attackStatus  = itemData.get(ItemData.ATTACK_STATUS, ""),
-    )
+    equip = {
+        "rank": itemData.get(ItemData.RANK, "E"),
+        "tags": itemData.get(ItemData.TAGS, []),
+        "otherAbilities": itemData.get(ItemData.OTHER_ABILITIES, ""),
+        "heldStatus": itemData.get(ItemData.HELD_STATUS, ""),
+        "attackStatus": itemData.get(ItemData.ATTACK_STATUS, ""),
+    }
 
     # kwargs shared by Weapon and ChargeWeapon
-    weapon = dict(
-        weaponType = itemData.get(ItemData.TYPE, ""),
-        stat       = itemData.get(ItemData.STAT, ""),
-        damage     = itemData.get(ItemData.DAMAGE, 0),
-        range      = itemData.get(ItemData.RANGE, 0),
-    )
+    weapon = {
+        "weaponType": itemData.get(ItemData.TYPE, ""),
+        "stat": itemData.get(ItemData.STAT, ""),
+        "damage": itemData.get(ItemData.DAMAGE, 0),
+        "range": itemData.get(ItemData.RANGE, 0),
+    }
 
     match item_type:
         case ItemType.ITEM:
