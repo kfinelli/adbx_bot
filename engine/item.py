@@ -23,11 +23,13 @@ from engine.azure_constants import (
 
 class Item:
     ITEM_TYPE = ItemType.ITEM.value
-    def __init__(self, item_id, name, description = "", isLight = False):
+    def __init__(self, item_id, name, description = "", isLight = False, purchaseable=False, price=0):
         self.item_id = item_id
         self.name = name
         self.description = description
         self.isLight = isLight
+        self.purchaseable = purchaseable
+        self.price = price
         self.prototype = None
         if type(self) is Item:
             self.updatePrototype()
@@ -38,6 +40,10 @@ class Item:
         self.description = description
     def setLightness(self, isLight):
         self.isLight = isLight
+    def setPurchaseable(self, purchaseable):
+        self.purchaseable = purchaseable
+    def setPrice(self, price):
+        self.price = price
 
     #Prototype Functions
     def resetToPrototype(self):
@@ -90,6 +96,8 @@ class Item:
             ItemData.ITEM_TYPE.value: Item.ITEM_TYPE,
             ItemData.DESCRIPTION.value: self.description,
             ItemData.IS_LIGHT.value: self.isLight,
+            ItemData.PURCHASEABLE.value: self.purchaseable,
+            ItemData.PRICE.value: self.price,
             ItemData.PROTOTYPE.value: self.prototype,
         }
 
@@ -107,7 +115,7 @@ class LightContainer(Item):
     defaultDescription = "A collection of light items"
     ITEM_TYPE = ItemType.LIGHT_CONTAINER.value
     def __init__(self, item_id, name=defaultName, description=defaultDescription, maxSize = BUNDLE_SIZE):
-        super().__init__(item_id, name, description)
+        super().__init__(item_id, name, description, isLight=False, purchaseable=False, price=0)
         self.maxSize = maxSize
         self.contents = []
         if type(self) is LightContainer:
@@ -152,7 +160,7 @@ class LightContainer(Item):
 
 class EquipItem(Item):
     def __init__(self, item_id, name, rank, tags=None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight=False):
-        super().__init__(item_id, name, description, isLight)
+        super().__init__(item_id, name, description, isLight, purchaseable=False, price=0)
         if attackStatus is None:
             attackStatus = []
         if heldStatus is None:
@@ -370,7 +378,9 @@ def createItemFromData(itemData):
             newItem = Item(itemData[ItemData.ITEM_ID],
                            itemData[ItemData.NAME],
                            itemData[ItemData.DESCRIPTION],
-                           itemData[ItemData.IS_LIGHT])
+                           itemData[ItemData.IS_LIGHT],
+                           itemData.get(ItemData.PURCHASEABLE.value, False),
+                           itemData.get(ItemData.PRICE.value, 0))
         case ItemType.WEAPON:
             newItem = Weapon(
                 itemData[ItemData.ITEM_ID],
