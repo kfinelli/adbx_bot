@@ -73,6 +73,7 @@ class CharacterManager:
             hp_current=hp_max,
             movement_speed=120,
             saving_throws={"save": base_save},
+            gold=100, #Placeholder value to test arrive shopping
             inventory=[],
         )
 
