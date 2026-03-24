@@ -14,6 +14,7 @@ stored as large integers scaled by POWER_LEVEL.
 from __future__ import annotations
 
 import contextlib
+import logging
 
 import discord
 from discord import app_commands
@@ -21,9 +22,13 @@ from discord.ext import commands
 
 from engine import create_character, roll_stats
 from engine.azure_constants import POWER_LEVEL
-from models import CharacterClass, SessionMode
+from engine.data_loader import ITEM_REGISTRY
+from engine.item import ChargeWeapon, Gear, Item, Weapon
+from models import CharacterClass, InventoryItem, SessionMode
 from store import get_characters_by_owner, get_session, save_session, update_status
 from validation import validate_character_name
+
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Stat display helper
@@ -42,6 +47,281 @@ def _fmt_stats(stats: dict) -> str:
         f"**RSN** {_fmt(stats['reason'])}   "
         f"**SVY** {_fmt(stats['savvy'])}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Shop helpers - list purchasable items by type/slot
+# ---------------------------------------------------------------------------
+
+def get_purchasable_items_by_slot() -> dict[str, list[tuple[str, str, int]]]:
+    """
+    Returns a dict mapping slot/type names to lists of (item_id, name, price) tuples.
+    Only includes items marked as purchaseable=True in ITEM_REGISTRY.
+    """
+    from collections import defaultdict
+    by_slot: dict[str, list[tuple[str, str, int]]] = defaultdict(list)
+
+    for item_id, item in ITEM_REGISTRY.items():
+        if not getattr(item, 'purchaseable', False):
+            continue
+
+        if isinstance(item, Gear):
+            slot = getattr(item, 'slot', 'unknown')
+            by_slot[slot].append((item_id, item.name, item.price))
+        elif isinstance(item, (Weapon, ChargeWeapon)):
+            by_slot['weapon'].append((item_id, item.name, item.price))
+        elif isinstance(item, Item):
+            by_slot['other'].append((item_id, item.name, item.price))
+
+    # Sort each list by price, then by name
+    for slot in by_slot:
+        by_slot[slot].sort(key=lambda x: (x[2], x[1]))
+
+    return dict(by_slot)
+
+
+def format_items_list(slot: str) -> str:
+    """
+    Format a plaintext Discord list of all purchasable items for a given slot/type.
+    Returns a formatted string suitable for embedding in a message.
+    """
+    items_by_slot = get_purchasable_items_by_slot()
+
+    if slot not in items_by_slot:
+        return f"No purchasable items found for **{slot}**."
+
+    items = items_by_slot[slot]
+    lines = [f"**Purchasable {slot.title()} Items:**\n"]
+
+    for _item_id, name, price in items:
+        lines.append(f"• **{name}** — {price} gp")
+
+    return "\n".join(lines)
+
+
+def get_available_slots() -> list[str]:
+    """Returns a sorted list of available item slots/types with purchasable items."""
+    items_by_slot = get_purchasable_items_by_slot()
+    return sorted(items_by_slot.keys())
+
+
+# ---------------------------------------------------------------------------
+# Shop View - allows players to browse and buy items
+# ---------------------------------------------------------------------------
+
+class ItemSelectView(discord.ui.View):
+    """
+    View for selecting a specific item from a list after choosing a slot.
+    Allows players to select an item and then click Buy to purchase it.
+    """
+
+    def __init__(self, channel_id: str, character_id: str, owner_id: str, slot: str, items: list[tuple[str, str, int]]):
+        super().__init__(timeout=300)
+        self.channel_id = channel_id
+        self.character_id = character_id
+        self.owner_id = owner_id
+        self.slot = slot
+        self.items = items  # List of (item_id, name, price)
+        self.selected_item_id: str | None = None
+
+        # Add buttons for each item (up to Discord limit)
+        for item_id, name, price in items[:24]:
+            btn = discord.ui.Button(
+                label=f"{name} ({price} gp)",
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"item_{item_id}",
+            )
+            btn.callback = self._make_item_callback(item_id, name, price)
+            self.add_item(btn)
+
+        # Add Back button
+        back_btn = discord.ui.Button(
+            label="← Back to Slots",
+            style=discord.ButtonStyle.primary,
+            custom_id="back_to_slots",
+        )
+        back_btn.callback = self._back_callback
+        self.add_item(back_btn)
+
+    def _make_item_callback(self, item_id: str, name: str, price: int):
+        async def callback(interaction: discord.Interaction):
+            self.selected_item_id = item_id
+
+            # Highlight selected item by disabling others
+            for item in self.children:
+                if hasattr(item, 'custom_id') and item.custom_id.startswith('item_'):
+                    item.disabled = (item.custom_id != f"item_{item_id}")
+
+            # Add Buy button if not already present
+            has_buy = any(hasattr(i, 'custom_id') and i.custom_id == 'buy_item' for i in self.children)
+            if not has_buy:
+                buy_btn = discord.ui.Button(
+                    label=f"✓ Buy {name} ({price} gp)",
+                    style=discord.ButtonStyle.success,
+                    custom_id="buy_item",
+                )
+                buy_btn.callback = self._buy_callback
+                self.add_item(buy_btn)
+
+            await interaction.response.edit_message(
+                content=f"**Selected:** {name} ({price} gp)\n\nClick 'Buy' to purchase this item.",
+                view=self,
+            )
+
+        return callback
+
+    async def _buy_callback(self, interaction: discord.Interaction):
+        log.debug(
+            "_buy_callback: channel=%s character_id=%s selected_item=%s user=%s",
+            self.channel_id, self.character_id, self.selected_item_id, interaction.user.id,
+        )
+
+        if self.selected_item_id is None:
+            log.warning("_buy_callback: no item selected")
+            await interaction.response.edit_message(content="⚠ No item selected.", view=self)
+            return
+
+        item = ITEM_REGISTRY.get(self.selected_item_id)
+        if item is None:
+            log.error("_buy_callback: item_id %r not found in ITEM_REGISTRY", self.selected_item_id)
+            await interaction.response.edit_message(
+                content="⚠ Item not found in registry.", view=self
+            )
+            return
+
+        # Get the session and character
+        state = get_session(self.channel_id)
+        if state is None:
+            log.error("_buy_callback: session not found for channel %s", self.channel_id)
+            await interaction.response.edit_message(content="⚠ Session no longer exists.", view=self)
+            return
+
+        # state.characters is keyed by UUID objects; self.character_id is a str.
+        # Convert to UUID before lookup.
+        from uuid import UUID
+        try:
+            char_uuid = UUID(self.character_id)
+        except (ValueError, AttributeError):
+            log.error("_buy_callback: invalid character_id %r", self.character_id)
+            await interaction.response.edit_message(content="⚠ Invalid character ID.", view=self)
+            return
+
+        log.debug(
+            "_buy_callback: state has %d characters, keys=%s",
+            len(state.characters),
+            list(state.characters.keys()),
+        )
+
+        character = state.characters.get(char_uuid)
+        if character is None:
+            log.error(
+                "_buy_callback: character UUID %s not found in state.characters (keys=%s)",
+                char_uuid, list(state.characters.keys()),
+            )
+            await interaction.response.edit_message(content="⚠ Character not found.", view=self)
+            return
+
+        # Check if character has enough gold
+        price = getattr(item, 'price', 0)
+        if character.gold < price:
+            log.info(
+                "_buy_callback: insufficient gold — have %d, need %d", character.gold, price
+            )
+            await interaction.response.edit_message(
+                content=f"⚠ Not enough gold! You have {character.gold} gp, but need {price} gp.",
+                view=self,
+            )
+            return
+
+        # Deduct gold and add item to inventory
+        character.gold -= price
+        inv_item = InventoryItem(item_id=self.selected_item_id, quantity=1)
+        character.inventory.append(inv_item)
+        log.info(
+            "_buy_callback: purchased %r (%d gp) for character %s; gold remaining=%d",
+            self.selected_item_id, price, char_uuid, character.gold,
+        )
+
+        # Save the session
+        save_session(state)
+
+        # Return to the slot selection view so the player can keep shopping
+        remaining_gold = character.gold
+        shop_view = ShopView(self.channel_id, self.character_id, self.owner_id)
+        await interaction.response.edit_message(
+            content=(
+                f"✓ Purchased **{item.name}** for {price} gp!\n"
+                f"You have {remaining_gold} gp remaining.\n\n"
+                f"**Item Shop** — Select a category to continue shopping:"
+            ),
+            view=shop_view,
+        )
+
+    async def _back_callback(self, interaction: discord.Interaction):
+        # Return to slot selection
+        shop_view = ShopView(self.channel_id, self.character_id, self.owner_id)
+        await interaction.response.edit_message(
+            content="**Item Shop** — Select a category to browse items:",
+            view=shop_view,
+        )
+
+
+class ShopView(discord.ui.View):
+    """
+    View for browsing purchasable items by slot/type.
+    Players can select a slot to see available items and their prices.
+    """
+
+    def __init__(self, channel_id: str, character_id: str, owner_id: str):
+        super().__init__(timeout=300)
+        self.channel_id = channel_id
+        self.character_id = character_id
+        self.owner_id = owner_id
+        self.selected_slot: str | None = None
+
+        # Add buttons for each available slot
+        slots = get_available_slots()
+        for slot in slots[:24]:  # Discord limit of 25 buttons per view
+            btn = discord.ui.Button(
+                label=slot.title(),
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"slot_{slot}",
+            )
+            btn.callback = self._make_slot_callback(slot)
+            self.add_item(btn)
+
+    def _make_slot_callback(self, slot: str):
+        async def callback(interaction: discord.Interaction):
+            self.selected_slot = slot
+            items_by_slot = get_purchasable_items_by_slot()
+            items = items_by_slot.get(slot, [])
+
+            if not items:
+                await interaction.response.edit_message(
+                    content=f"No purchasable items found for **{slot}**.",
+                    view=self,
+                )
+                return
+
+            # Show item selection view
+            item_view = ItemSelectView(
+                self.channel_id,
+                self.character_id,
+                self.owner_id,
+                slot,
+                items,
+            )
+
+            items_preview = "\n".join([f"• **{name}** — {price} gp" for _, name, price in items[:10]])
+            if len(items) > 10:
+                items_preview += f"\n... and {len(items) - 10} more"
+
+            await interaction.response.edit_message(
+                content=f"**{slot.title()} Items**\n\n{items_preview}\n\nSelect an item to purchase:",
+                view=item_view,
+            )
+
+        return callback
 
 
 # ---------------------------------------------------------------------------
@@ -106,11 +386,19 @@ class JobView(discord.ui.View):
                 if state.party.leader_id is None:
                     state.party.leader_id = state.party.member_ids[-1]
 
+                # Get the newly created character (last added to party member_ids)
+                new_char_id = state.party.member_ids[-1]
+                new_char = state.characters.get(new_char_id)
+                if new_char is None:
+                    await interaction.followup.send(
+                        "⚠ Character created but could not be retrieved.", ephemeral=True
+                    )
+                    return
+
                 save_session(state)
 
                 await interaction.followup.send(
-                    f"✓ **{self.character_name}** the {character_class.value} has arrived! "
-                    f"Head back to the game channel.",
+                    f"✓ **{self.character_name}** the {character_class.value} has arrived!",
                     ephemeral=False,
                 )
 
@@ -122,6 +410,16 @@ class JobView(discord.ui.View):
                         channel = None
                 if channel is not None:
                     await update_status(channel, state)
+
+                # Now present the item shop view in DMs
+                dm_channel = await interaction.user.create_dm()
+                shop_view = ShopView(self.channel_id, str(new_char_id), self.owner_id)
+                await dm_channel.send(
+                    f"**Welcome to the Item Shop!**\n\n"
+                    f"You can browse and purchase starting equipment for **{self.character_name}**.\n"
+                    f"Select a category to see available items:",
+                    view=shop_view,
+                )
 
             except Exception as exc:
                 with contextlib.suppress(discord.HTTPException):

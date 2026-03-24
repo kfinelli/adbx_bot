@@ -60,6 +60,8 @@ class ItemData(StrEnum):
     HEALTH = "health"
     DEFENSE = "defense"
     RESISTANCE = "resistance"
+    PURCHASEABLE = "purchaseable"
+    PRICE = "price"
 
 class ItemType(StrEnum):
     LIGHT_CONTAINER = "lightContainer"

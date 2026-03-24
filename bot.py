@@ -5,6 +5,7 @@ Entry point. Run with: python bot.py
 
 import asyncio
 import contextlib
+import logging
 import os
 from datetime import UTC
 
@@ -21,6 +22,24 @@ except ImportError:
     pass  # python-dotenv not installed — fall back to environment variables only
 
 TOKEN = os.environ.get("DISCORD_TOKEN")
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+# LOG_LEVEL env var controls verbosity (default INFO).
+# Set LOG_LEVEL=DEBUG in .env to see detailed arrive.py diagnostics.
+_log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, _log_level, logging.INFO),
+    format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+# Quieten noisy third-party loggers
+logging.getLogger("discord").setLevel(logging.WARNING)
+logging.getLogger("uvicorn").setLevel(logging.WARNING)
+
+log = logging.getLogger(__name__)
+
 if not TOKEN:
     raise RuntimeError("DISCORD_TOKEN environment variable not set.")
 
@@ -59,17 +78,17 @@ async def on_message(message: discord.Message):
 
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user} ({bot.user.id})")
-    print(f"Target guild ID: {GUILD_ID}")
+    log.info("Logged in as %s (%s)", bot.user, bot.user.id)
+    log.info("Target guild ID: %s", GUILD_ID)
 
     bot.tree.copy_global_to(guild=GUILD)
     try:
         synced = await bot.tree.sync(guild=GUILD)
-        print(f"Synced {len(synced)} slash command(s) to guild {GUILD_ID}.")
+        log.info("Synced %d slash command(s) to guild %s.", len(synced), GUILD_ID)
     except discord.Forbidden as e:
-        print(f"Forbidden — check bot has 'applications.commands' scope: {e}")
+        log.error("Forbidden — check bot has 'applications.commands' scope: %s", e)
     except Exception as e:
-        print(f"Failed to sync commands: {e}")
+        log.error("Failed to sync commands: %s", e)
 
     # Inject bot reference into web UI
     from webui.app import set_bot
@@ -82,7 +101,7 @@ async def on_ready():
     from store import db, get_session, restore_status_message, save_session
 
     channel_ids = db.list_channels()
-    print(f"Restoring {len(channel_ids)} saved session(s)...")
+    log.info("Restoring %d saved session(s)...", len(channel_ids))
     for channel_id in channel_ids:
         await restore_status_message(bot, channel_id)
 
@@ -99,7 +118,7 @@ async def on_ready():
         if due.tzinfo is None:
             due = due.replace(tzinfo=UTC)
         if datetime.now(UTC) >= due:
-            print(f"Channel {channel_id}: closing expired turn {turn.turn_number}")
+            log.info("Channel %s: closing expired turn %s", channel_id, turn.turn_number)
             close_turn(state)
             save_session(state)
             channel = bot.get_channel(int(channel_id))
@@ -112,8 +131,8 @@ async def on_ready():
                 from store import update_status
                 await update_status(channel, state)
 
-    print("Sessions restored.")
-    print(f"DM panel available at http://localhost:{WEB_PORT}/")
+    log.info("Sessions restored.")
+    log.info("DM panel available at http://localhost:%s/", WEB_PORT)
 
 
 async def start_webui():

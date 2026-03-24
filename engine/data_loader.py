@@ -623,6 +623,8 @@ def _convert_item_json_to_internal(json_data: dict) -> dict:
         ItemData.OTHER_ABILITIES.value: json_data.get('Other Abilities', ''),
         ItemData.HELD_STATUS.value: json_data.get('Held Status', ''),
         ItemData.ATTACK_STATUS.value: json_data.get('Attack Status', ''),
+        ItemData.PURCHASEABLE.value: json_data.get('Purchaseable', 'FALSE').upper() == 'TRUE',
+        ItemData.PRICE.value: json_data.get('Price', 0),
     }
 
     # Weapon-specific fields
