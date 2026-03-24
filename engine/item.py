@@ -159,8 +159,8 @@ class LightContainer(Item):
 # ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
 
 class EquipItem(Item):
-    def __init__(self, item_id, name, rank, tags=None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight=False):
-        super().__init__(item_id, name, description, isLight, purchaseable=False, price=0)
+    def __init__(self, item_id, name, rank, tags=None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight=False, purchaseable=False, price=0):
+        super().__init__(item_id, name, description, isLight, purchaseable, price)
         if attackStatus is None:
             attackStatus = []
         if heldStatus is None:
@@ -209,8 +209,8 @@ class EquipItem(Item):
 
 class Weapon(EquipItem):
     ITEM_TYPE = ItemType.WEAPON.value
-    def __init__(self, item_id, name, rank, weaponType, stat, damage, range=0, tags = None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight = False):
-        super().__init__(item_id, name, rank, tags, otherAbilities, heldStatus, attackStatus, description, isLight)
+    def __init__(self, item_id, name, rank, weaponType, stat, damage, range=0, tags = None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight = False, purchaseable=False, price=0):
+        super().__init__(item_id, name, rank, tags, otherAbilities, heldStatus, attackStatus, description, isLight, purchaseable, price)
         self.type = weaponType
         self.stat = stat
         # Handle damage and range that may come as strings from JSON
@@ -253,8 +253,8 @@ class Weapon(EquipItem):
 
 class ChargeWeapon(Weapon):
     ITEM_TYPE = ItemType.CHARGE_WEAPON.value
-    def __init__(self, item_id, name, rank, weaponType, stat, damage, range=0, maxCharges = 1, destroyOnEmpty=False, tags = None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight = False):
-        super().__init__(item_id, name, rank, weaponType, stat, damage, range, tags, otherAbilities, heldStatus, attackStatus, description, isLight)
+    def __init__(self, item_id, name, rank, weaponType, stat, damage, range=0, maxCharges = 1, destroyOnEmpty=False, tags = None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight = False, purchaseable=False, price=0):
+        super().__init__(item_id, name, rank, weaponType, stat, damage, range, tags, otherAbilities, heldStatus, attackStatus, description, isLight, purchaseable, price)
         chargeData=parseChargeString(maxCharges)
         self.rechargePeriod = chargeData['rechargePeriod']
         self.charges = chargeData['maxCharges']
@@ -289,8 +289,8 @@ class ChargeWeapon(Weapon):
 
 class Gear(EquipItem):
     ITEM_TYPE = ItemType.GEAR.value
-    def __init__(self, item_id, name, rank, slot, health, defense, resistance, tags=None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight = False,):
-        super().__init__(item_id, name, rank, tags, otherAbilities, heldStatus, attackStatus, description, isLight)
+    def __init__(self, item_id, name, rank, slot, health, defense, resistance, tags=None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight = False, purchaseable=False, price=0):
+        super().__init__(item_id, name, rank, tags, otherAbilities, heldStatus, attackStatus, description, isLight, purchaseable, price)
         self.slot = slot
         self.health = health
         self.defense = defense
@@ -395,7 +395,9 @@ def createItemFromData(itemData):
                 itemData[ItemData.HELD_STATUS],
                 itemData[ItemData.ATTACK_STATUS],
                 itemData[ItemData.DESCRIPTION],
-                itemData[ItemData.IS_LIGHT]
+                itemData[ItemData.IS_LIGHT],
+                itemData.get(ItemData.PURCHASEABLE.value, False),
+                itemData.get(ItemData.PRICE.value, 0)
             )
         case ItemType.CHARGE_WEAPON:
             newItem = ChargeWeapon(
@@ -413,7 +415,9 @@ def createItemFromData(itemData):
                 itemData[ItemData.HELD_STATUS],
                 itemData[ItemData.ATTACK_STATUS],
                 itemData[ItemData.DESCRIPTION],
-                itemData[ItemData.IS_LIGHT]
+                itemData[ItemData.IS_LIGHT],
+                itemData.get(ItemData.PURCHASEABLE.value, False),
+                itemData.get(ItemData.PRICE.value, 0)
             )
             newItem.setCharges(itemData[ItemData.CHARGES])
         case ItemType.GEAR:
@@ -430,7 +434,9 @@ def createItemFromData(itemData):
                 itemData[ItemData.HELD_STATUS],
                 itemData[ItemData.ATTACK_STATUS],
                 itemData[ItemData.DESCRIPTION],
-                itemData[ItemData.IS_LIGHT]
+                itemData[ItemData.IS_LIGHT],
+                itemData.get(ItemData.PURCHASEABLE.value, False),
+                itemData.get(ItemData.PRICE.value, 0)
             )
 
         case ItemType.LIGHT_CONTAINER:
