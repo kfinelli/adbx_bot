@@ -253,12 +253,18 @@ class Weapon(EquipItem):
 
 class ChargeWeapon(Weapon):
     ITEM_TYPE = ItemType.CHARGE_WEAPON.value
-    def __init__(self, item_id, name, rank, weaponType, stat, damage, range=0, maxCharges = 1, destroyOnEmpty=False, tags = None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight = False, purchaseable=False, price=0):
+    def __init__(self, item_id, name, rank, weaponType, stat, damage, range=0, maxCharges=1, destroyOnEmpty=False, tags=None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight=False, purchaseable=False, price=0, rechargePeriod=None):
         super().__init__(item_id, name, rank, weaponType, stat, damage, range, tags, otherAbilities, heldStatus, attackStatus, description, isLight, purchaseable, price)
-        chargeData=parseChargeString(maxCharges)
-        self.rechargePeriod = chargeData['rechargePeriod']
-        self.charges = chargeData['maxCharges']
-        self.maxCharges = chargeData['maxCharges']
+        if rechargePeriod is not None:
+            # recharge period supplied directly (e.g. loaded from normalised JSON)
+            self.rechargePeriod = rechargePeriod
+            self.maxCharges = maxCharges
+        else:
+            # derive from maxCharges string/int for backwards-compat (e.g. toDictionary round-trip)
+            chargeData = parseChargeString(maxCharges)
+            self.rechargePeriod = chargeData['rechargePeriod']
+            self.maxCharges = chargeData['maxCharges']
+        self.charges = self.maxCharges
         self.destroyOnEmpty = destroyOnEmpty
         if type(self) is ChargeWeapon:
             self.updatePrototype()
@@ -366,92 +372,80 @@ def upscaleItemData(itemData):
 def createItemFromData(itemData):
     if isinstance(itemData, str):
         itemData = json.loads(itemData)
-        #upscaleItemData(itemData)
     elif isinstance(itemData, Item):
         itemData = itemData.toDictionary()
-    newItem = None
-    if ItemData.ITEM_TYPE not in itemData:
-        #warnings.warn(f"No item type found in: {itemData}", stacklevel=2)
+
+    item_type = itemData.get(ItemData.ITEM_TYPE)
+    if item_type is None:
         return None
-    match itemData[ItemData.ITEM_TYPE]:
+
+    # Shared base kwargs present on every item type
+    base = dict(
+        item_id      = itemData[ItemData.ITEM_ID],
+        name         = itemData[ItemData.NAME],
+        description  = itemData.get(ItemData.DESCRIPTION, ""),
+        isLight      = itemData.get(ItemData.IS_LIGHT, False),
+        purchaseable = itemData.get(ItemData.PURCHASEABLE, False),
+        price        = itemData.get(ItemData.PRICE, 0),
+    )
+
+    # kwargs shared by all EquipItem subclasses
+    equip = dict(
+        rank          = itemData.get(ItemData.RANK, "E"),
+        tags          = itemData.get(ItemData.TAGS, []),
+        otherAbilities = itemData.get(ItemData.OTHER_ABILITIES, ""),
+        heldStatus    = itemData.get(ItemData.HELD_STATUS, ""),
+        attackStatus  = itemData.get(ItemData.ATTACK_STATUS, ""),
+    )
+
+    # kwargs shared by Weapon and ChargeWeapon
+    weapon = dict(
+        weaponType = itemData.get(ItemData.TYPE, ""),
+        stat       = itemData.get(ItemData.STAT, ""),
+        damage     = itemData.get(ItemData.DAMAGE, 0),
+        range      = itemData.get(ItemData.RANGE, 0),
+    )
+
+    match item_type:
         case ItemType.ITEM:
-            newItem = Item(itemData[ItemData.ITEM_ID],
-                           itemData[ItemData.NAME],
-                           itemData[ItemData.DESCRIPTION],
-                           itemData[ItemData.IS_LIGHT],
-                           itemData.get(ItemData.PURCHASEABLE.value, False),
-                           itemData.get(ItemData.PRICE.value, 0))
+            return Item(**base)
+
         case ItemType.WEAPON:
-            newItem = Weapon(
-                itemData[ItemData.ITEM_ID],
-                itemData[ItemData.NAME],
-                itemData[ItemData.RANK],
-                itemData[ItemData.TYPE],
-                itemData[ItemData.STAT],
-                itemData[ItemData.DAMAGE],
-                itemData[ItemData.RANGE],
-                itemData[ItemData.TAGS],
-                itemData[ItemData.OTHER_ABILITIES],
-                itemData[ItemData.HELD_STATUS],
-                itemData[ItemData.ATTACK_STATUS],
-                itemData[ItemData.DESCRIPTION],
-                itemData[ItemData.IS_LIGHT],
-                itemData.get(ItemData.PURCHASEABLE.value, False),
-                itemData.get(ItemData.PRICE.value, 0)
-            )
+            return Weapon(**base, **equip, **weapon)
+
         case ItemType.CHARGE_WEAPON:
             newItem = ChargeWeapon(
-                itemData[ItemData.ITEM_ID],
-                itemData[ItemData.NAME],
-                itemData[ItemData.RANK],
-                itemData[ItemData.TYPE],
-                itemData[ItemData.STAT],
-                itemData[ItemData.DAMAGE],
-                itemData[ItemData.RANGE],
-                itemData[ItemData.MAX_CHARGES],
-                itemData[ItemData.DESTROY_ON_EMPTY],
-                itemData[ItemData.TAGS],
-                itemData[ItemData.OTHER_ABILITIES],
-                itemData[ItemData.HELD_STATUS],
-                itemData[ItemData.ATTACK_STATUS],
-                itemData[ItemData.DESCRIPTION],
-                itemData[ItemData.IS_LIGHT],
-                itemData.get(ItemData.PURCHASEABLE.value, False),
-                itemData.get(ItemData.PRICE.value, 0)
+                **base, **equip, **weapon,
+                maxCharges     = itemData.get(ItemData.MAX_CHARGES, -1),
+                destroyOnEmpty = itemData.get(ItemData.DESTROY_ON_EMPTY, False),
+                rechargePeriod = itemData.get(ItemData.RECHARGE_PERIOD),
             )
-            newItem.setCharges(itemData[ItemData.CHARGES])
+            # Restore current charges if serialised state differs from max
+            if ItemData.CHARGES in itemData:
+                newItem.setCharges(itemData[ItemData.CHARGES])
+            return newItem
+
         case ItemType.GEAR:
-            newItem = Gear(
-                itemData[ItemData.ITEM_ID],
-                itemData[ItemData.NAME],
-                itemData[ItemData.RANK],
-                itemData[ItemData.SLOT],
-                itemData[ItemData.HEALTH],
-                itemData[ItemData.DEFENSE],
-                itemData[ItemData.RESISTANCE],
-                itemData[ItemData.TAGS],
-                itemData[ItemData.OTHER_ABILITIES],
-                itemData[ItemData.HELD_STATUS],
-                itemData[ItemData.ATTACK_STATUS],
-                itemData[ItemData.DESCRIPTION],
-                itemData[ItemData.IS_LIGHT],
-                itemData.get(ItemData.PURCHASEABLE.value, False),
-                itemData.get(ItemData.PRICE.value, 0)
+            return Gear(
+                **base, **equip,
+                slot       = itemData.get(ItemData.SLOT, ""),
+                health     = itemData.get(ItemData.HEALTH, 0),
+                defense    = itemData.get(ItemData.DEFENSE, 0),
+                resistance = itemData.get(ItemData.RESISTANCE, 0),
             )
 
         case ItemType.LIGHT_CONTAINER:
             newItem = LightContainer(
-                itemData[ItemData.ITEM_ID],
-                itemData[ItemData.NAME],
-                itemData[ItemData.DESCRIPTION],
-                itemData[BundleData.MAX_SIZE],
+                item_id     = itemData[ItemData.ITEM_ID],
+                name        = itemData[ItemData.NAME],
+                description = itemData.get(ItemData.DESCRIPTION, ""),
+                maxSize     = itemData.get(BundleData.MAX_SIZE, BUNDLE_SIZE),
             )
-            contentList = itemData[BundleData.CONTENTS]
-            contents = []
-            for i in contentList:
-                contents.append(createItemFromData(i))
-            newItem.contents = contents
+            newItem.contents = [
+                createItemFromData(i) for i in itemData.get(BundleData.CONTENTS, [])
+            ]
+            return newItem
+
         case _:
-            warnings.warn(f"Unknown item type: {itemData[ItemData.ITEM_TYPE]}", stacklevel=2)
+            warnings.warn(f"Unknown item type: {item_type}", stacklevel=2)
             return None
-    return newItem

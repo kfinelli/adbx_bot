@@ -323,53 +323,65 @@ class TestLoadAllIsolated:
         """Test loading items from the item registry"""
         with tempfile.TemporaryDirectory() as tmp:
             actions, conditions, classes, items_dir = _make_data_dir(Path(tmp))
-            # Create a minimal items.json file for testing
+            # Create a minimal items.json file for testing (normalised format)
             test_items = {
                 "Weapon": [{
-                    "ID": "test_sword",
-                    "Name": "Test Sword",
-                    "Description": "A test weapon",
-                    "Is Light?": "FALSE",
-                    "Rank": "C",
-                    "Type": "Sword",
-                    "Stat": "Physique",
-                    "Damage": "1d8",
-                    "Range": 0,
-                    "[Tags]": "",
-                    "Other Abilities": "",
-                    "Held Status": "",
-                    "Attack Status": ""
+                    "item_id": "test_sword",
+                    "item_type": "weapon",
+                    "name": "Test Sword",
+                    "description": "A test weapon",
+                    "is_light": False,
+                    "rank": "C",
+                    "type": "Sword",
+                    "stat": "physique",
+                    "damage": "1d8",
+                    "range": 0,
+                    "tags": [],
+                    "other_abilities": "",
+                    "held_status": "",
+                    "attack_status": "",
+                    "purchaseable": False,
+                    "price": 0
                 }],
                 "Body": [{
-                    "ID": "test_armor",
-                    "Name": "Test Armor",
-                    "Description": "A test armor",
-                    "Is Light?": "FALSE",
-                    "Rank": "D",
-                    "Slot": "Body",
-                    "HP": 1,
-                    "DEF": 0.5,
-                    "RES": "",
-                    "[Tags]": "",
-                    "Other Abilities": "",
-                    "Held Status": "",
-                    "Attack Status": ""
+                    "item_id": "test_armor",
+                    "item_type": "gear",
+                    "name": "Test Armor",
+                    "description": "A test armor",
+                    "is_light": False,
+                    "rank": "D",
+                    "slot": "body",
+                    "health": 1,
+                    "defense": 0,
+                    "resistance": 0,
+                    "tags": [],
+                    "other_abilities": "",
+                    "held_status": "",
+                    "attack_status": "",
+                    "purchaseable": False,
+                    "price": 0
                 }],
                 "Magic": [{
-                    "ID": "test_wand",
-                    "Name": "Test Wand",
-                    "Description": "A test charge weapon",
-                    "Is Light?": "FALSE",
-                    "Rank": "V",
-                    "Type": "Fire",
-                    "Stat": "Reason",
-                    "Damage": "1d6",
-                    "Range": 2,
-                    "Uses": "-",
-                    "[Tags]": "[Black]",
-                    "Other Abilities": "",
-                    "Held Status": "",
-                    "Attack Status": ""
+                    "item_id": "test_wand",
+                    "item_type": "charge_weapon",
+                    "name": "Test Wand",
+                    "description": "A test charge weapon",
+                    "is_light": False,
+                    "rank": "V",
+                    "type": "Fire",
+                    "stat": "reason",
+                    "damage": "1d6",
+                    "range": 2,
+                    "max_charges": -1,
+                    "charges": -1,
+                    "recharge_period": "infinite",
+                    "destroy_on_empty": False,
+                    "tags": ["Black"],
+                    "other_abilities": "",
+                    "held_status": "",
+                    "attack_status": "",
+                    "purchaseable": False,
+                    "price": 0
                 }]
             }
             _write(items_dir / "items.json", test_items)
@@ -411,14 +423,18 @@ class TestLoadAllIsolated:
             actions, conditions, classes, items_dir = _make_data_dir(Path(tmp))
             test_items = {
                     "Weapon": [
-                        {"ID": "dup_item", "Name": "First", "Description": "", "Is Light?": "FALSE",
-                         "Rank": "E", "Type": "Sword", "Stat": "Physique", "Damage": "1d4",
-                         "Range": 0, "[Tags]": "", "Other Abilities": "", "Held Status": "", "Attack Status": ""},
+                        {"item_id": "dup_item", "item_type": "weapon", "name": "First",
+                         "description": "", "is_light": False, "rank": "E", "type": "Sword",
+                         "stat": "physique", "damage": "1d4", "range": 0, "tags": [],
+                         "other_abilities": "", "held_status": "", "attack_status": "",
+                         "purchaseable": False, "price": 0},
                         ],
                     "Body": [
-                        {"ID": "dup_item", "Name": "Second", "Description": "", "Is Light?": "FALSE",
-                         "Rank": "E", "Slot": "Body", "HP": 1, "DEF": "", "RES": "",
-                         "[Tags]": "", "Other Abilities": "", "Held Status": "", "Attack Status": ""},
+                        {"item_id": "dup_item", "item_type": "gear", "name": "Second",
+                         "description": "", "is_light": False, "rank": "E", "slot": "body",
+                         "health": 1, "defense": 0, "resistance": 0, "tags": [],
+                         "other_abilities": "", "held_status": "", "attack_status": "",
+                         "purchaseable": False, "price": 0},
                         ]
                     }
             _write(items_dir / "items.json", test_items)

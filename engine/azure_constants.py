@@ -38,24 +38,24 @@ class BundleData(StrEnum):
 #TODO: keep or change? These are different than the Json names
 class ItemData(StrEnum):
     PROTOTYPE = "prototype"
-    ITEM_ID = "itemId"
+    ITEM_ID = "item_id"
     NAME = "name"
     DESCRIPTION = "description"
-    IS_LIGHT = "isLight"
+    IS_LIGHT = "is_light"
     TAGS = "tags"
-    OTHER_ABILITIES = "otherAbilities"
-    ATTACK_STATUS = "attackStatus"
-    HELD_STATUS = "heldStatus"
+    OTHER_ABILITIES = "other_abilities"
+    ATTACK_STATUS = "attack_status"
+    HELD_STATUS = "held_status"
     RANK = "rank"
-    ITEM_TYPE = "itemType"
+    ITEM_TYPE = "item_type"
     TYPE = "type"
     STAT = "stat"
     DAMAGE = "damage"
     RANGE = "range"
     CHARGES = "charges"
-    MAX_CHARGES = "maxCharges"
-    RECHARGE_PERIOD = "rechargePeriod"
-    DESTROY_ON_EMPTY = "destroyOnEmpty"
+    MAX_CHARGES = "max_charges"
+    RECHARGE_PERIOD = "recharge_period"
+    DESTROY_ON_EMPTY = "destroy_on_empty"
     SLOT = "slot"
     HEALTH = "health"
     DEFENSE = "defense"
@@ -64,11 +64,11 @@ class ItemData(StrEnum):
     PRICE = "price"
 
 class ItemType(StrEnum):
-    LIGHT_CONTAINER = "lightContainer"
+    LIGHT_CONTAINER = "light_container"
     ITEM = "item"
     GEAR = "gear"
     WEAPON = "weapon"
-    CHARGE_WEAPON = "chargeWeapon"
+    CHARGE_WEAPON = "charge_weapon"
 
 class SkillType(Enum):
     SIMPLE = 0
