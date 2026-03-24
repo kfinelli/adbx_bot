@@ -362,6 +362,9 @@ def createItemFromData(itemData):
     elif isinstance(itemData, Item):
         itemData = itemData.toDictionary()
     newItem = None
+    if ItemData.ITEM_TYPE not in itemData:
+        #warnings.warn(f"No item type found in: {itemData}", stacklevel=2)
+        return None
     match itemData[ItemData.ITEM_TYPE]:
         case ItemType.ITEM:
             newItem = Item(itemData[ItemData.ITEM_ID],
