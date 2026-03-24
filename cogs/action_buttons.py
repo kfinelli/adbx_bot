@@ -825,7 +825,7 @@ class TargetSelectView(discord.ui.View):
             discord.SelectOption(
                 label=npc.name,
                 value=str(npc.npc_id),
-                description=f"HP: {npc.hp_current}/{npc.hp_max}  AC: {npc.armor_class}",
+                description=f"HP: {npc.hp_current}/{npc.hp_max}",
             )
             for npc in npc_targets[:25]   # Discord SelectMenu max 25 options
         ]

@@ -327,7 +327,7 @@ class TestNPCs:
         result = update_npc(
             bare_state, npc.npc_id,
             name="Hobgoblin", description="Bigger.", hp_max=8, hp_current=8,
-            armor_class=6
+            defense=1
         )
         assert result.ok
         assert bare_state.npcs_in_current_room[0].name == "Hobgoblin"
@@ -341,7 +341,7 @@ class TestNPCs:
         npc = _make_npc()
         add_npc(bare_state, npc)
         result = update_npc(bare_state, npc.npc_id, name="", description="",
-                            hp_max=4, hp_current=4, armor_class=9)
+                            hp_max=4, hp_current=4, defense=1)
         assert not result.ok
 
     def test_remove_npc(self, bare_state):

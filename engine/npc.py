@@ -165,7 +165,7 @@ class NPCManager:
 
         # Validate DEF
         from validation import validate_bounded_int
-        def_result = validate_bounded_int(armor_class, "Defense", min_value=0)
+        def_result = validate_bounded_int(defense, "Defense", min_value=0)
         if not def_result:
             return _err(state, def_result.error)
 
@@ -183,7 +183,7 @@ class NPCManager:
         npc.description = desc_result.value
         npc.hp_max      = hp_max_result.value
         npc.hp_current  = hp_current_result.value
-        npc.armor_class = ac_result.value
+        npc.defense     = def_result.value
         npc.notes       = notes_result.value
         state.updated_at = _now()
         return _ok(state, f"NPC updated: {npc.name}.")

@@ -16,11 +16,10 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID, uuid4
 
-from engine.data_loader import ITEM_REGISTRY
-
 # CharacterClass is generated in azure_engine.py from job JSON files.
 # Import it here so the rest of the codebase can import from models as before.
 from engine.azure_engine import CharacterClass
+from engine.data_loader import ITEM_REGISTRY
 from engine.item import Item
 
 # ---------------------------------------------------------------------------

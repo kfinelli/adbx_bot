@@ -246,7 +246,7 @@ def validate_uuid_string(value: Any, field_name: str = "ID") -> ValidationResult
 def validate_npc_creation(
     name: Any,
     hp: Any,
-    ac: Any = 9,
+    defense: Any = 0,
     description: Any = "",
     damage_dice: Any = "1d6",
     notes: Any = "",
@@ -256,7 +256,7 @@ def validate_npc_creation(
 
     results['name'] = validate_npc_name(name)
     results['hp'] = validate_hp_value(hp)
-    results['ac'] = validate_ac_value(ac)
+    results['def'] = validate_bounded_int(defense, "Defense", min_value=0)
     results['description'] = validate_description(description, "NPC description", allow_empty=True)
     results['damage_dice'] = validate_non_empty_string(damage_dice, "Damage dice", max_length=20)
     results['notes'] = validate_description(notes, "NPC notes", max_length=500, allow_empty=True)

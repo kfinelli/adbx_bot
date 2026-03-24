@@ -29,7 +29,7 @@ class Item:
         self.description = description
         self.isLight = isLight
         self.prototype = None
-        if self.ITEM_TYPE is Item.ITEM_TYPE:
+        if type(self) is Item:
             self.updatePrototype()
 
     def setName(self, name):
@@ -106,11 +106,11 @@ class LightContainer(Item):
     defaultName = "Bundle"
     defaultDescription = "A collection of light items"
     ITEM_TYPE = ItemType.LIGHT_CONTAINER.value
-    def __init__(self, name=defaultName, description=defaultDescription, maxSize = BUNDLE_SIZE):
-        super().__init__(name, description)
+    def __init__(self, item_id, name=defaultName, description=defaultDescription, maxSize = BUNDLE_SIZE):
+        super().__init__(item_id, name, description)
         self.maxSize = maxSize
         self.contents = []
-        if self.ITEM_TYPE is LightContainer.ITEM_TYPE:
+        if type(self) is LightContainer:
             self.updatePrototype()
 
     def addItem(self, item):
@@ -214,7 +214,7 @@ class Weapon(EquipItem):
             self.range = max(0, int(range) if range not in (None, '', []) else 0)
         except (ValueError, TypeError):
             self.range = 0
-        if self.ITEM_TYPE is Weapon.ITEM_TYPE:
+        if type(self) is Weapon:
             self.updatePrototype()
 
     def setType(self, type):
@@ -252,10 +252,10 @@ class ChargeWeapon(Weapon):
         self.charges = chargeData['maxCharges']
         self.maxCharges = chargeData['maxCharges']
         self.destroyOnEmpty = destroyOnEmpty
-        if self.ITEM_TYPE is ChargeWeapon.ITEM_TYPE:
+        if type(self) is ChargeWeapon:
             self.updatePrototype()
 
-    def chageCharges(self,delta):
+    def chargeCharges(self,delta):
         charges = max(0, self.charges + delta)
         self.charges = min(self.maxCharges, charges)
     def consumeCharge(self):
@@ -287,7 +287,7 @@ class Gear(EquipItem):
         self.health = health
         self.defense = defense
         self.resistance = resistance
-        if self.ITEM_TYPE is Gear.ITEM_TYPE:
+        if type(self) is Gear:
             self.updatePrototype()
 
     def toDictionary(self):
@@ -319,17 +319,17 @@ def parseChargeString(charge_str):
         chargeData['maxCharges'] = maxCharges
         return chargeData
 
-    if charge_str.contains('-') or charge_str.empty():
+    if '-' in charge_str or len(charge_str)==0:
         recharge = RechargePeriod.INFINITE
         maxCharges = -1
-    elif charge_str.contains('/'):
+    elif '/' in charge_str:
         maxCharges = int(charge_str.split('/')[0])
     else:
         maxCharges = int(charge_str)
 
-    if charge_str.contains('d'):
+    if 'd' in charge_str:
         recharge = RechargePeriod.DAY
-    elif charge_str.contains('e'):
+    elif 'e' in charge_str:
         recharge = RechargePeriod.ENCOUNTER
 
     chargeData = {}

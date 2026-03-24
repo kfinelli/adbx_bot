@@ -194,7 +194,7 @@ class TestDungeonFileFormat:
         json_str = serialize_dungeon_file(d, roster)
         doc = json.loads(json_str)
         assert doc["format"] == "adbx-dungeon"
-        assert doc["version"] == 2
+        assert doc["version"] == 3
         assert "dungeon" in doc
         assert "npc_roster" in doc
 
@@ -214,7 +214,7 @@ class TestDungeonFileFormat:
         assert restored_dungeon.entrance_id == d.entrance_id
 
     def test_wrong_format_sentinel_rejected(self):
-        doc = {"format": "wrong", "version": 2, "dungeon": {}, "npc_roster": {"groups": {}}}
+        doc = {"format": "wrong", "version": 3, "dungeon": {}, "npc_roster": {"groups": {}}}
         with pytest.raises(ValueError, match="format"):
             deserialize_dungeon_file(json.dumps(doc))
 
@@ -227,7 +227,7 @@ class TestDungeonFileFormat:
             deserialize_dungeon_file(json.dumps(doc))
 
     def test_missing_dungeon_key_rejected(self):
-        doc = {"format": "adbx-dungeon", "version": 2}
+        doc = {"format": "adbx-dungeon", "version": 3}
         with pytest.raises(ValueError, match="Missing"):
             deserialize_dungeon_file(json.dumps(doc))
 

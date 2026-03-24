@@ -84,7 +84,7 @@ class SessionCog(commands.Cog):
         sheet_lines = [
             sep,
             f"{char.name}  \u2014  {char.character_class.value} Level {char.level}{leader_note}",
-            f"HP: {char.hp_current}/{char.hp_max}   AC: {char.armor_class}   Move: {char.movement_speed}'",
+            f"HP: {char.hp_current}/{char.hp_max}   DEF: {char.defense} RES: {char.resistance}  Move: {char.movement_speed}'",
             f"XP: {char.experience}   Gold: {char.gold} gp",
             sep,
             f"PHY {a.physique / 100:+.2f}   FNS {a.finesse / 100:+.2f}",
