@@ -320,22 +320,113 @@ class TestLoadAllIsolated:
             assert "trapwise" in cd["THIEF"].skills
 
     def test_load_item_registry(self):
-        """STUB: test loading items from the item registry"""
+        """Test loading items from the item registry"""
         with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes, items = _make_data_dir(Path(tmp))
-            _write(items / "attack.json", _VALID_ACTION)
-            _write(classes / "knight.json", _VALID_JOB)
-            _write(classes / "knight_skills.json", {
-                "Martial Expertise": {
-                    "id": "martial_iii",
-                    "source": "knight",
-                    "level": 5,
-                    "type": 6,
-                    "rank": "B",
-                    "desc": "You can equip gear and weapons with Rank: B",
-                }
-            })
-            #_, _, _, _, it = load_all(Path(tmp))
+            actions, conditions, classes, items_dir = _make_data_dir(Path(tmp))
+            # Create a minimal items.json file for testing
+            test_items = {
+                "Weapon": [{
+                    "ID": "test_sword",
+                    "Name": "Test Sword",
+                    "Description": "A test weapon",
+                    "Is Light?": "FALSE",
+                    "Rank": "C",
+                    "Type": "Sword",
+                    "Stat": "Physique",
+                    "Damage": "1d8",
+                    "Range": 0,
+                    "[Tags]": "",
+                    "Other Abilities": "",
+                    "Held Status": "",
+                    "Attack Status": ""
+                }],
+                "Body": [{
+                    "ID": "test_armor",
+                    "Name": "Test Armor",
+                    "Description": "A test armor",
+                    "Is Light?": "FALSE",
+                    "Rank": "D",
+                    "Slot": "Body",
+                    "HP": 1,
+                    "DEF": 0.5,
+                    "RES": "",
+                    "[Tags]": "",
+                    "Other Abilities": "",
+                    "Held Status": "",
+                    "Attack Status": ""
+                }],
+                "Magic": [{
+                    "ID": "test_wand",
+                    "Name": "Test Wand",
+                    "Description": "A test charge weapon",
+                    "Is Light?": "FALSE",
+                    "Rank": "V",
+                    "Type": "Fire",
+                    "Stat": "Reason",
+                    "Damage": "1d6",
+                    "Range": 2,
+                    "Uses": "-",
+                    "[Tags]": "[Black]",
+                    "Other Abilities": "",
+                    "Held Status": "",
+                    "Attack Status": ""
+                }]
+            }
+            _write(items_dir / "items.json", test_items)
+            _, _, _, _, it = load_all(Path(tmp))
+
+            # Verify items were loaded
+            assert len(it) == 3
+            assert "test_sword" in it
+            assert "test_armor" in it
+            assert "test_wand" in it
+
+            # Verify weapon properties
+            sword = it["test_sword"]
+            assert sword.name == "Test Sword"
+            assert sword.rank == "C"
+            assert sword.type == "Sword"
+
+            # Verify gear properties
+            armor = it["test_armor"]
+            assert armor.name == "Test Armor"
+            assert armor.slot == "body"
+
+            # Verify charge weapon properties
+            wand = it["test_wand"]
+            assert wand.name == "Test Wand"
+            assert wand.rank == "V"
+
+    def test_load_item_registry_empty(self):
+        """Test loading items from an empty items.json"""
+        with tempfile.TemporaryDirectory() as tmp:
+            actions, conditions, classes, items_dir = _make_data_dir(Path(tmp))
+            _write(items_dir / "items.json", {})
+            _, _, _, _, it = load_all(Path(tmp))
+            assert it == {}
+
+    def test_load_item_registry_duplicate_id_raises_error(self):
+        """Test that duplicate item IDs raise a ValueError"""
+        with tempfile.TemporaryDirectory() as tmp:
+            actions, conditions, classes, items_dir = _make_data_dir(Path(tmp))
+            test_items = {
+                    "Weapon": [
+                        {"ID": "dup_item", "Name": "First", "Description": "", "Is Light?": "FALSE",
+                         "Rank": "E", "Type": "Sword", "Stat": "Physique", "Damage": "1d4",
+                         "Range": 0, "[Tags]": "", "Other Abilities": "", "Held Status": "", "Attack Status": ""},
+                        ],
+                    "Body": [
+                        {"ID": "dup_item", "Name": "Second", "Description": "", "Is Light?": "FALSE",
+                         "Rank": "E", "Slot": "Body", "HP": 1, "DEF": "", "RES": "",
+                         "[Tags]": "", "Other Abilities": "", "Held Status": "", "Attack Status": ""},
+                        ]
+                    }
+            _write(items_dir / "items.json", test_items)
+            try:
+                load_all(Path(tmp))
+                raise AssertionError("Should have raised ValueError for duplicate item_id")
+            except ValueError as e:
+                assert "Duplicate item_id" in str(e)
 
 # ---------------------------------------------------------------------------
 # Tests: validation rejects bad data

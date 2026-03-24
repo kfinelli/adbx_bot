@@ -54,7 +54,8 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from engine.item import Item
+from engine.item import Item, createItemFromData
+from engine.azure_constants import ItemType, ItemData, Stat, Slot, RechargePeriod
 
 # ---------------------------------------------------------------------------
 # Locate the data directory
@@ -557,6 +558,166 @@ def _build_job_definitions(
         skill_registry.update(defn.skills)
     return job_defs, skill_registry
 
+def _build_item_registry(items_dir: Path) -> dict[str, Item]:
+    """
+    Load all items from data/items/items.json.
+    Returns a flat dict of all items keyed by item_id.
+    """
+    registry: dict[str, Item] = {}
+    items_file = items_dir / "items.json"
+    if not items_file.exists():
+        return registry
+
+    try:
+        with open(items_file, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON in {items_file}: {exc}") from exc
+    except OSError as exc:
+        raise ValueError(f"Cannot read {items_file}: {exc}") from exc
+
+    # Items are organized by category (Weapon, Body, Head, etc.)
+    for category, items_list in data.items():
+        for item_data in items_list:
+            item = createItemFromData(_convert_item_json_to_internal(item_data))
+            if item is not None:
+                if item.item_id in registry:
+                    raise ValueError(f"Duplicate item_id '{item.item_id}' in {items_file}")
+                registry[item.item_id] = item
+    return registry
+
+
+def _convert_item_json_to_internal(json_data: dict) -> dict:
+    """
+    Convert the raw JSON item data to the internal format expected by createItemFromData.
+
+    The JSON uses different key names than the internal ItemData enum, so we map them here.
+    """
+    # Determine item type based on category/structure
+    # Weapons have 'Damage' and 'Stat', Gear has 'Slot' and 'HP/DEF/RES'
+    has_damage = json_data.get("Damage") not in (None, '', [])
+    has_slot = json_data.get("Slot") not in (None, '', [])
+
+    # Magic items with arcane ranks (V-Z) are charge weapons
+    rank = json_data.get("Rank", '')
+    is_arcane = rank in ('V', 'W', 'X', 'Y', 'Z')
+
+    if has_damage and is_arcane:
+        item_type = ItemType.CHARGE_WEAPON.value
+    elif has_damage:
+        item_type = ItemType.WEAPON.value
+    elif has_slot:
+        item_type = ItemType.GEAR.value
+    else:
+        item_type = ItemType.ITEM.value
+
+    # Map JSON keys to internal keys
+    internal_data = {
+        ItemData.ITEM_ID.value: json_data.get('ID', ''),
+        ItemData.NAME.value: json_data.get('Name', ''),
+        ItemData.DESCRIPTION.value: json_data.get('Description', ''),
+        ItemData.IS_LIGHT.value: json_data.get('Is Light?', 'FALSE').upper() == 'TRUE',
+        ItemData.ITEM_TYPE.value: item_type,
+        ItemData.RANK.value: rank,
+        ItemData.TAGS.value: _parse_tags(json_data.get('[Tags]', '')),
+        ItemData.OTHER_ABILITIES.value: json_data.get('Other Abilities', ''),
+        ItemData.HELD_STATUS.value: json_data.get('Held Status', ''),
+        ItemData.ATTACK_STATUS.value: json_data.get('Attack Status', ''),
+    }
+
+    # Weapon-specific fields
+    if item_type in (ItemType.WEAPON.value, ItemType.CHARGE_WEAPON.value):
+        internal_data[ItemData.TYPE.value] = json_data.get('Type', '')
+        internal_data[ItemData.STAT.value] = _map_stat(json_data.get('Stat', ''))
+        internal_data[ItemData.DAMAGE.value] = json_data.get('Damage', 0)
+        internal_data[ItemData.RANGE.value] = json_data.get('Range', 0)
+        if item_type == ItemType.CHARGE_WEAPON.value:
+            uses = json_data.get('Uses', '-')
+            max_charges, recharge_period = _parse_uses(uses)
+            internal_data[ItemData.MAX_CHARGES.value] = max_charges
+            internal_data[ItemData.CHARGES.value] = max_charges
+            internal_data[ItemData.RECHARGE_PERIOD.value] = recharge_period
+            internal_data[ItemData.DESTROY_ON_EMPTY.value] = False
+
+    # Gear-specific fields
+    if item_type == ItemType.GEAR.value:
+        internal_data[ItemData.SLOT.value] = _map_slot(json_data.get('Slot', ''))
+        hp = json_data.get('HP', 0)
+        defense = json_data.get('DEF', 0)
+        resistance = json_data.get('RES', 0)
+        # Handle empty strings or missing values
+        internal_data[ItemData.HEALTH.value] = hp if hp not in ('', None) else 0
+        internal_data[ItemData.DEFENSE.value] = defense if defense not in ('', None) else 0
+        internal_data[ItemData.RESISTANCE.value] = resistance if resistance not in ('', None) else 0
+
+    return internal_data
+
+
+def _parse_tags(tags_str: str) -> list:
+    """Parse tags from string format like '[Shabby]' or '[Black][Magic]' into a list."""
+    if not tags_str or tags_str.strip() == '':
+        return []
+    # Remove brackets and split
+    tags_str = tags_str.strip('[]')
+    if not tags_str:
+        return []
+    return [tag.strip() for tag in tags_str.split('][')]
+
+
+def _map_stat(stat_str: str) -> str:
+    """Map JSON stat names to internal Stat enum values."""
+    stat_map = {
+        'Physique': Stat.PHYSIQUE.value,
+        'Finesse': Stat.FINESSE.value,
+        'Reason': Stat.REASON.value,
+        'Savvy': Stat.SAVVY.value,
+    }
+    return stat_map.get(stat_str, Stat.PHYSIQUE.value)
+
+
+def _map_slot(slot_str: str) -> str:
+    """Map JSON slot names to internal Slot enum values."""
+    slot_map = {
+        'Head': Slot.HEAD.value,
+        'Body': Slot.BODY.value,
+        'Arms': Slot.ARMS.value,
+        'Legs': Slot.LEGS.value,
+        'Main': Slot.MAIN.value,
+        'Offhand': Slot.OFF.value,
+        'Accessory': Slot.ACCESSORY.value,
+    }
+    return slot_map.get(slot_str, slot_str.lower())
+
+
+def _parse_uses(uses_str: str) -> tuple:
+    """
+    Parse uses string like '-', '3/d', '2/e' into (maxCharges, rechargePeriod).
+    '-' means infinite charges.
+    '3/d' means 3 charges per day.
+    '2/e' means 2 charges per encounter.
+    """
+    from engine.azure_constants import RechargePeriod
+
+    if not uses_str or uses_str == '-':
+        return -1, RechargePeriod.INFINITE.value
+
+    if '/' in uses_str:
+        parts = uses_str.split('/')
+        max_charges = int(parts[0])
+        period_char = parts[1].lower() if len(parts) > 1 else ''
+        if period_char == 'd':
+            recharge_period = RechargePeriod.DAY.value
+        elif period_char == 'e':
+            recharge_period = RechargePeriod.ENCOUNTER.value
+        else:
+            recharge_period = RechargePeriod.NEVER.value
+        return max_charges, recharge_period
+
+    # Just a number
+    try:
+        return int(uses_str), RechargePeriod.NEVER.value
+    except ValueError:
+        return -1, RechargePeriod.INFINITE.value
 
 # ---------------------------------------------------------------------------
 # Cross-registry validation
@@ -609,8 +770,7 @@ def load_all(data_dir: Path = _DATA_DIR) -> tuple[
     condition_registry = _build_condition_registry(data_dir / "conditions")
     class_definitions, skill_registry = _build_job_definitions(data_dir / "classes")
     _cross_validate(action_registry, condition_registry, class_definitions)
-    #STUB - put item loader here @Ro
-    item_registry = {}
+    item_registry = _build_item_registry(data_dir / "items")
     return action_registry, condition_registry, class_definitions, skill_registry, item_registry
 
 

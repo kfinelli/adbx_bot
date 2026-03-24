@@ -35,8 +35,10 @@ class BundleData(StrEnum):
     MAX_SIZE = "maxSize"
     CONTENTS = "contents"
 
+#TODO: keep or change? These are different than the Json names
 class ItemData(StrEnum):
     PROTOTYPE = "prototype"
+    ITEM_ID = "itemId"
     NAME = "name"
     DESCRIPTION = "description"
     IS_LIGHT = "isLight"

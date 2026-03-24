@@ -15,7 +15,7 @@ from engine.azure_constants import BUNDLE_SIZE, BundleData, ItemData, Slot, Sort
 class Item:
     ITEM_TYPE = ItemType.ITEM.value
     def __init__(self, item_id, name, description = "", isLight = False):
-        self.item_id = id
+        self.item_id = item_id
         self.name = name
         self.description = description
         self.isLight = isLight
@@ -141,8 +141,8 @@ class LightContainer(Item):
 # ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
 
 class EquipItem(Item):
-    def __init__(self, name, rank, tags=None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight=False):
-        super().__init__(name, description, isLight)
+    def __init__(self, item_id, name, rank, tags=None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight=False):
+        super().__init__(item_id, name, description, isLight)
         if attackStatus is None:
             attackStatus = list()
         if heldStatus is None:
@@ -191,12 +191,19 @@ class EquipItem(Item):
 
 class Weapon(EquipItem):
     ITEM_TYPE = ItemType.WEAPON.value
-    def __init__(self, name, rank, weaponType, stat, damage, range=0, tags = None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight = False):
-        super().__init__(name, rank, tags, otherAbilities, heldStatus, attackStatus, description, isLight)
+    def __init__(self, item_id, name, rank, weaponType, stat, damage, range=0, tags = None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight = False):
+        super().__init__(item_id, name, rank, tags, otherAbilities, heldStatus, attackStatus, description, isLight)
         self.type = weaponType
         self.stat = stat
-        self.damage = max(0, damage)
-        self.range = max(0, range)
+        # Handle damage and range that may come as strings from JSON
+        try:
+            self.damage = max(0, int(damage) if damage not in (None, '', []) else 0)
+        except (ValueError, TypeError):
+            self.damage = 0
+        try:
+            self.range = max(0, int(range) if range not in (None, '', []) else 0)
+        except (ValueError, TypeError):
+            self.range = 0
         if self.ITEM_TYPE is Weapon.ITEM_TYPE:
             self.updatePrototype()
 
@@ -228,10 +235,10 @@ class Weapon(EquipItem):
 
 class ChargeWeapon(Weapon):
     ITEM_TYPE = ItemType.CHARGE_WEAPON.value
-    def __init__(self, name, rank, weaponType, stat, damage, range=0, maxCharges = 1, destroyOnEmpty=False, tags = None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight = False):
-        super().__init__(name, rank, weaponType, stat, damage, range, tags, otherAbilities, heldStatus, attackStatus, description, isLight)
+    def __init__(self, item_id, name, rank, weaponType, stat, damage, range=0, maxCharges = 1, destroyOnEmpty=False, tags = None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight = False):
+        super().__init__(item_id, name, rank, weaponType, stat, damage, range, tags, otherAbilities, heldStatus, attackStatus, description, isLight)
         chargeData=parseChargeString(maxCharges)
-        self.rechargePeriod = chargeData['period']
+        self.rechargePeriod = chargeData['rechargePeriod']
         self.charges = chargeData['maxCharges']
         self.maxCharges = chargeData['maxCharges']
         self.destroyOnEmpty = destroyOnEmpty
@@ -264,8 +271,8 @@ class ChargeWeapon(Weapon):
 
 class Gear(EquipItem):
     ITEM_TYPE = ItemType.GEAR.value
-    def __init__(self, name, rank, slot, health, defense, resistance, tags=None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight = False,):
-        super().__init__(name, rank, tags, otherAbilities, heldStatus, attackStatus, description, isLight)
+    def __init__(self, item_id, name, rank, slot, health, defense, resistance, tags=None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight = False,):
+        super().__init__(item_id, name, rank, tags, otherAbilities, heldStatus, attackStatus, description, isLight)
         self.slot = slot
         self.health = health
         self.defense = defense
@@ -286,20 +293,33 @@ class Gear(EquipItem):
         return exportData
 
 
-def parseChargeString(str):
+def parseChargeString(charge_str):
     recharge = RechargePeriod.NEVER
 
-    if str.contains('-') or str.empty():
+    # Handle non-string inputs (e.g., integers from JSON)
+    if not isinstance(charge_str, str):
+        try:
+            maxCharges = int(charge_str)
+            recharge = RechargePeriod.NEVER
+        except (ValueError, TypeError):
+            recharge = RechargePeriod.INFINITE
+            maxCharges = -1
+        chargeData = dict()
+        chargeData['rechargePeriod'] = recharge
+        chargeData['maxCharges'] = maxCharges
+        return chargeData
+
+    if charge_str.contains('-') or charge_str.empty():
         recharge = RechargePeriod.INFINITE
         maxCharges = -1
-    elif str.contains('/'):
-        maxCharges = int(str.split('/')[0])
+    elif charge_str.contains('/'):
+        maxCharges = int(charge_str.split('/')[0])
     else:
-        maxCharges = int(str)
+        maxCharges = int(charge_str)
 
-    if str.contains('d'):
+    if charge_str.contains('d'):
         recharge = RechargePeriod.DAY
-    elif str.contains('e'):
+    elif charge_str.contains('e'):
         recharge = RechargePeriod.ENCOUNTER
 
     chargeData = dict()
