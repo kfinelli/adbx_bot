@@ -1,8 +1,5 @@
-import engine.azure_engine as az
-import engine.item
-import engine.azure_constants
 from engine.azure_constants import Slot
-from engine.item import Gear, ChargeWeapon, Weapon, createItemFromData
+from engine.item import ChargeWeapon, Gear, Weapon, createItemFromData
 
 testWeapon = Weapon(
     "Longsword", #name,

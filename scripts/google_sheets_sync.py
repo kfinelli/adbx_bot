@@ -1,8 +1,8 @@
-from enum import Enum,StrEnum
-import gspread
 import json
 import os
+from enum import StrEnum
 
+import gspread
 
 try:
     from dotenv import load_dotenv
@@ -14,7 +14,7 @@ GOOGLE_SHEET_KEY = os.getenv("GOOGLE_SHEET_KEY")
 
 def getItemsFromSheet(sheet):
     sheetData = sheet.get_all_records()
-    itemData = list()
+    itemData = []
     for row in sheetData:
         if 'Name' in row and row["Name"] != "":
             itemData.append(row)
@@ -31,7 +31,7 @@ class ItemSheet(StrEnum):
 gc = gspread.api_key(GOOGLE_API_KEY)
 sheets = gc.open_by_key(GOOGLE_SHEET_KEY)
 
-itemData = dict()
+itemData = {}
 for sheet in ItemSheet:
     itemData[sheet.value] = getItemsFromSheet(sheets.worksheet(sheet))
 

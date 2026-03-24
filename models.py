@@ -16,9 +16,12 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID, uuid4
 
+from engine.data_loader import ITEM_REGISTRY
+
 # CharacterClass is generated in azure_engine.py from job JSON files.
 # Import it here so the rest of the codebase can import from models as before.
 from engine.azure_engine import CharacterClass
+from engine.item import Item
 
 # ---------------------------------------------------------------------------
 # Enumerations (non-ruleset — these don't change between game systems)
@@ -109,7 +112,6 @@ class InventoryItem:
 
     @property
     def definition(self) -> Item:
-        from engine.item import Item
         return ITEM_REGISTRY[self.item_id]
 
 

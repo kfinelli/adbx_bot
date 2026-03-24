@@ -54,8 +54,8 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from engine.azure_constants import ItemData, ItemType, RechargePeriod, Slot, Stat
 from engine.item import Item, createItemFromData
-from engine.azure_constants import ItemType, ItemData, Stat, Slot, RechargePeriod
 
 # ---------------------------------------------------------------------------
 # Locate the data directory
@@ -577,7 +577,7 @@ def _build_item_registry(items_dir: Path) -> dict[str, Item]:
         raise ValueError(f"Cannot read {items_file}: {exc}") from exc
 
     # Items are organized by category (Weapon, Body, Head, etc.)
-    for category, items_list in data.items():
+    for _category, items_list in data.items():
         for item_data in items_list:
             item = createItemFromData(_convert_item_json_to_internal(item_data))
             if item is not None:
@@ -696,7 +696,6 @@ def _parse_uses(uses_str: str) -> tuple:
     '3/d' means 3 charges per day.
     '2/e' means 2 charges per encounter.
     """
-    from engine.azure_constants import RechargePeriod
 
     if not uses_str or uses_str == '-':
         return -1, RechargePeriod.INFINITE.value

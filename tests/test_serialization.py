@@ -11,14 +11,12 @@ import pytest
 
 from engine import (
     close_turn,
-    create_character,
     register_room,
     resolve_turn,
     set_light_source,
 )
 from models import (
     NPC,
-    CharacterClass,
     CharacterStatus,
     DoorState,
     Dungeon,

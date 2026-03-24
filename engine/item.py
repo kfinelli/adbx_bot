@@ -4,8 +4,17 @@ Items and Equipment
 """
 import json
 import warnings
-from engine.azure_constants import BUNDLE_SIZE, BundleData, ItemData, Slot, SortMode, Stat, ItemType, POWER_LEVEL, \
-    RechargePeriod
+
+from engine.azure_constants import (
+    BUNDLE_SIZE,
+    POWER_LEVEL,
+    BundleData,
+    ItemData,
+    ItemType,
+    RechargePeriod,
+    SortMode,
+    Stat,
+)
 
 # ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
 # Items have a field called "prototype", which contains the UNMODIFIED item data as a dictionary.
@@ -47,7 +56,8 @@ class Item:
         elif type(item) is not type(self):
             warnings.warn(
                 f"\n'{item.name}' is a different item type than '{self.name}'"
-                f"\n'{item.name}': '{type(item)}', '{self.name}': '{type(self)}'"
+                f"\n'{item.name}': '{type(item)}', '{self.name}': '{type(self)}'",
+                stacklevel=2
             )
             return
         #Export the item as a dictionary if we got to this point
@@ -125,7 +135,7 @@ class LightContainer(Item):
             self.contents.sort(key=lambda x: x.name, reverse=True)
     def toDictionary(self):
         exportData = super().toDictionary()
-        contents = list()
+        contents = []
         for item in self.contents:
             contents.append(item.toDictionary())
         exportData.update({
@@ -144,9 +154,9 @@ class EquipItem(Item):
     def __init__(self, item_id, name, rank, tags=None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight=False):
         super().__init__(item_id, name, description, isLight)
         if attackStatus is None:
-            attackStatus = list()
+            attackStatus = []
         if heldStatus is None:
-            heldStatus = list()
+            heldStatus = []
         if tags is None:
             tags = []
         self.rank = rank
@@ -304,7 +314,7 @@ def parseChargeString(charge_str):
         except (ValueError, TypeError):
             recharge = RechargePeriod.INFINITE
             maxCharges = -1
-        chargeData = dict()
+        chargeData = {}
         chargeData['rechargePeriod'] = recharge
         chargeData['maxCharges'] = maxCharges
         return chargeData
@@ -322,7 +332,7 @@ def parseChargeString(charge_str):
     elif charge_str.contains('e'):
         recharge = RechargePeriod.ENCOUNTER
 
-    chargeData = dict()
+    chargeData = {}
     chargeData['rechargePeriod'] = recharge
     chargeData['maxCharges'] = maxCharges
     return chargeData
@@ -418,11 +428,11 @@ def createItemFromData(itemData):
                 itemData[BundleData.MAX_SIZE],
             )
             contentList = itemData[BundleData.CONTENTS]
-            contents = list()
+            contents = []
             for i in contentList:
                 contents.append(createItemFromData(i))
             newItem.contents = contents
         case _:
-            warnings.warn(f"Unknown item type: {itemData[ItemData.ITEM_TYPE]}")
+            warnings.warn(f"Unknown item type: {itemData[ItemData.ITEM_TYPE]}", stacklevel=2)
             return None
     return newItem

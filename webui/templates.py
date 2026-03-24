@@ -1465,16 +1465,6 @@ def character_sheet_panel(
             f'{inv_cells}</div>'
             f'</div>'
             )
-    spell_grid = _display_spellbook_spell(character.spellbook)
-    spells = (
-            f'<div style="padding:0.75rem;border:1px solid #0f3460;'
-            f'width:fit-content;border-radius:8px;margin:0.5rem 0">'
-            f'<div class="section-header" style="margin-bottom:0.5rem">'
-            f'  <h3>Spellbook</h3>'
-            f'</div>'
-            f'{spell_grid}'
-            f'</div>'
-              ) if character.spellbook else ""
 
     return f"""
 <div class="card">
@@ -1487,5 +1477,4 @@ XP &nbsp;·&nbsp; {character.gold} gp</div>
   {saves}
   </div>
   {inventory}
-  {spells}
 </div>"""
