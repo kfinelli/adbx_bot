@@ -588,24 +588,6 @@ def _build_item_registry(items_dir: Path) -> dict[str, Item]:
     return registry
 
 
-    if '/' in uses_str:
-        parts = uses_str.split('/')
-        max_charges = int(parts[0])
-        period_char = parts[1].lower() if len(parts) > 1 else ''
-        if period_char == 'd':
-            recharge_period = RechargePeriod.DAY.value
-        elif period_char == 'e':
-            recharge_period = RechargePeriod.ENCOUNTER.value
-        else:
-            recharge_period = RechargePeriod.NEVER.value
-        return max_charges, recharge_period
-
-    # Just a number
-    try:
-        return int(uses_str), RechargePeriod.NEVER.value
-    except ValueError:
-        return -1, RechargePeriod.INFINITE.value
-
 # ---------------------------------------------------------------------------
 # Cross-registry validation
 # ---------------------------------------------------------------------------
