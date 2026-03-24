@@ -125,13 +125,13 @@ def validate_description(
 # Numeric validators
 # ---------------------------------------------------------------------------
 
-def validate_positive_int(
+def validate_bounded_int(
     value: Any,
     field_name: str = "Value",
     min_value: int = 1,
     max_value: int | None = None,
 ) -> ValidationResult:
-    """Validate that a value is a positive integer within bounds."""
+    """Validate that a value is an integer within bounds."""
     if not isinstance(value, int):
         try:
             value = int(value)
@@ -163,19 +163,6 @@ def validate_hp_value(value: Any, max_hp: int | None = None) -> ValidationResult
         return ValidationResult.fail(f"{field_name} cannot exceed {max_hp}.")
 
     return ValidationResult.ok(value)
-
-
-def validate_ac_value(value: Any) -> ValidationResult:
-    """Validate armor class (descending AC system: typically 1-10)."""
-    result = validate_positive_int(value, "Armor class", min_value=1, max_value=20)
-    if not result:
-        return result
-
-    if result.value > 10:
-        # Warning but not failure - some systems use ascending AC
-        pass  # Could add a warning field if needed
-
-    return result
 
 
 def validate_turn_hours(value: Any) -> ValidationResult:

@@ -141,7 +141,7 @@ class NPCManager:
         description: str,
         hp_max:      int,
         hp_current:  int,
-        armor_class: int,
+        defense:     int,
         notes:       str = "",
     ):
         """Update an NPC's attributes. Searches the entire roster."""
@@ -163,11 +163,11 @@ class NPCManager:
         if not hp_current_result:
             return _err(state, hp_current_result.error)
 
-        # Validate AC
-        from validation import validate_positive_int
-        ac_result = validate_positive_int(armor_class, "Armor class", min_value=1, max_value=20)
-        if not ac_result:
-            return _err(state, ac_result.error)
+        # Validate DEF
+        from validation import validate_bounded_int
+        def_result = validate_bounded_int(armor_class, "Defense", min_value=0)
+        if not def_result:
+            return _err(state, def_result.error)
 
         # Validate description and notes
         from validation import validate_description

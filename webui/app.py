@@ -501,7 +501,7 @@ async def route_addnpc(
     channel_id: str,
     name: Annotated[str, Form()],
     hp: Annotated[int, Form()],
-    ac: Annotated[int, Form()] = 9,
+    defense: Annotated[int, Form()] = 0,
     damage_dice: Annotated[str, Form()] = "1d6",
     description: Annotated[str, Form()] = "",
     notes: Annotated[str, Form()] = "",
@@ -511,7 +511,7 @@ async def route_addnpc(
         return HTMLResponse("Session not found.", status_code=404)
     npc = NPC(
         name=name, hp_max=hp, hp_current=hp,
-        armor_class=ac, damage_dice=damage_dice,
+        defense=defense, damage_dice=damage_dice,
         description=description, notes=notes,
     )
     eng_add_npc(state, npc)
@@ -752,14 +752,14 @@ async def route_npc_update(
     description: Annotated[str, Form()],
     hp_max: Annotated[int, Form()],
     hp_current: Annotated[int, Form()],
-    armor_class: Annotated[int, Form()],
+    defense: Annotated[int, Form()],
     notes: Annotated[str, Form()] = "",
     view_room_id: Annotated[str, Form()] = "",
 ):
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse("Session not found.", status_code=404)
-    result = update_npc(state, UUID(npc_id), name, description, hp_max, hp_current, armor_class, notes)
+    result = update_npc(state, UUID(npc_id), name, description, hp_max, hp_current, defense, notes)
     if not result.ok:
         return _respond(channel_id, error=result.error, view_room_id=view_room_id)
     await save_session_async(state)

@@ -1167,7 +1167,7 @@ def npc_panel(
         <div><label>Name</label><input type="text" name="name" value="{npc.name}" required></div>
         <div><label>HP Max</label><input type="number" name="hp_max" value="{npc.hp_max}" min="1" style="width:60px"></div>
         <div><label>HP Now</label><input type="number" name="hp_current" value="{npc.hp_current}" min="0" style="width:60px"></div>
-        <div><label>AC</label><input type="number" name="armor_class" value="{npc.armor_class}" min="1" style="width:55px"></div>
+        <div><label>DEF</label><input type="number" name="defense" value="{npc.defense}" min="0" style="width:55px"></div>
       </div>
       <label>Description</label>
       <input type="text" name="description" value="{npc.description}">
@@ -1224,7 +1224,7 @@ def npc_panel(
   <div class="row">
     <div><label>Name</label><input type="text" name="name" placeholder="Goblin A"></div>
     <div><label>HP</label><input type="number" name="hp" value="4" min="1"></div>
-    <div><label>AC</label><input type="number" name="ac" value="7" min="1"></div>
+    <div><label>DEF</label><input type="number" name="defense" value="0" min="0"></div>
   </div>
   <div class="row">
     <div><label>Damage</label><input type="text" name="damage_dice" value="1d6"></div>
@@ -1396,7 +1396,7 @@ def character_page(
     return page("Characters — DM Panel", body)
 
 def _stat_block(stats: list[tuple[str, str]], cols: int | None = None, name: str | None = None) -> str:
-    """Render a row of label/value pairs, e.g. [('HP', '8/10'), ('AC', '5')]"""
+    """Render a row of label/value pairs, e.g. [('HP', '8/10'), ('DEF', '5')]"""
     col_count = cols or len(stats)
     cells = "".join(
             f'<div style="text-align:center">'
@@ -1443,7 +1443,8 @@ def character_sheet_panel(
         ("SVY", _fmt_stat(a.savvy)),
     ], name="Stats")
     hp_ac_movement = _stat_block([("HP", f"{character.hp_current}/{character.hp_max}"),
-                                  ("AC", character.armor_class),
+                                  ("DEF", character.defense),
+                                  ("RES", character.resistance),
                                   ("Move", f"{character.movement_speed}'")], 1)
     saves = _stat_block([
         ("Save", character.saving_throws.get("save", "—")),

@@ -143,14 +143,14 @@ def update_npc(
     description: str,
     hp_max: int,
     hp_current: int,
-    armor_class: int,
+    defense: int,
     notes: str = "",
 ):
     """Update an NPC."""
     nm = NPCManager()
     return nm.update_npc(
         state, npc_id, name, description, hp_max,
-        hp_current, armor_class, notes,
+        hp_current, defense, notes,
     )
 
 

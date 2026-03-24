@@ -609,13 +609,13 @@ def deserialize_state(json_str: str, characters: dict | None = None) -> GameStat
 # Schema:
 #   {
 #     "format":  "adbx-dungeon",   // sentinel to catch wrong file types
-#     "version": 2,
+#     "version": 3,
 #     "dungeon": { ...serialize_dungeon() output... }
 #     "npc_roster": { ... serialize_npc_roster() output ... }
 #   }
 
 _DUNGEON_FILE_FORMAT  = "adbx-dungeon"
-_DUNGEON_FILE_VERSION = 2
+_DUNGEON_FILE_VERSION = 3
 
 
 def serialize_dungeon_file(dungeon: Dungeon, npc_roster: NPCRoster | None = None) -> str:
