@@ -23,7 +23,7 @@ from engine import create_character, roll_stats
 from engine.azure_constants import POWER_LEVEL
 from engine.data_loader import ITEM_REGISTRY
 from engine.item import Gear, Weapon, ChargeWeapon, Item
-from models import CharacterClass, SessionMode
+from models import CharacterClass, InventoryItem, SessionMode
 from store import get_characters_by_owner, get_session, save_session, update_status
 from validation import validate_character_name
 
@@ -314,11 +314,19 @@ class JobView(discord.ui.View):
                 if state.party.leader_id is None:
                     state.party.leader_id = state.party.member_ids[-1]
 
+                # Get the newly created character (last added to party member_ids)
+                new_char_id = state.party.member_ids[-1]
+                new_char = state.characters.get(new_char_id)
+                if new_char is None:
+                    await interaction.followup.send(
+                        "⚠ Character created but could not be retrieved.", ephemeral=True
+                    )
+                    return
+
                 save_session(state)
 
                 await interaction.followup.send(
-                    f"✓ **{self.character_name}** the {character_class.value} has arrived! "
-                    f"Head back to the game channel.",
+                    f"✓ **{self.character_name}** the {character_class.value} has arrived!",
                     ephemeral=False,
                 )
 
@@ -330,6 +338,16 @@ class JobView(discord.ui.View):
                         channel = None
                 if channel is not None:
                     await update_status(channel, state)
+
+                # Now present the item shop view in DMs
+                dm_channel = await interaction.user.create_dm()
+                shop_view = ShopView(self.channel_id, str(new_char_id), self.owner_id)
+                await dm_channel.send(
+                    f"**Welcome to the Item Shop!**\n\n"
+                    f"You can browse and purchase starting equipment for **{self.character_name}**.\n"
+                    f"Select a category to see available items:",
+                    view=shop_view,
+                )
 
             except Exception as exc:
                 with contextlib.suppress(discord.HTTPException):
