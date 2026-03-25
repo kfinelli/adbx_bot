@@ -5,7 +5,7 @@ Light source management for the dungeon crawler engine.
 from models import GameState, LightSource
 from validation import validate_non_empty_string
 
-from .helpers import _err, _ok
+from .helpers import _err, _now, _ok
 
 
 class LightManager:
@@ -61,9 +61,3 @@ def _tick_light(state: GameState) -> None:
     if light is None or light.turns_remaining is None:
         return  # no light, or permanent/magical source
     light.turns_remaining = max(0, light.turns_remaining - 1)
-
-
-def _now():
-    """Get current UTC datetime."""
-    from datetime import UTC, datetime
-    return datetime.now(UTC)

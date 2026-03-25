@@ -15,7 +15,7 @@ from validation import (
     validate_non_empty_string,
 )
 
-from .helpers import _err, _ok, _resolve_room
+from .helpers import _err, _now, _ok, _resolve_room
 
 
 class RoomManager:
@@ -281,9 +281,3 @@ class RoomManager:
         n = len(room.exits)
         state.updated_at = _now()
         return _ok(state, f"Exit {n} added: {label_result.value}.")
-
-
-def _now():
-    """Get current UTC datetime."""
-    from datetime import UTC, datetime
-    return datetime.now(UTC)

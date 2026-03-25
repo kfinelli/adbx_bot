@@ -5,7 +5,7 @@ NPC management for the dungeon crawler engine.
 from models import NPC, GameState, NPCGroup, NPCMovementLogic
 from validation import validate_hp_value, validate_non_empty_string
 
-from .helpers import _err, _find_npc_in_roster, _find_npcgroup_with_npc, _ok
+from .helpers import _err, _find_npc_in_roster, _find_npcgroup_with_npc, _now, _ok
 
 
 class NPCManager:
@@ -187,9 +187,3 @@ class NPCManager:
         npc.notes       = notes_result.value
         state.updated_at = _now()
         return _ok(state, f"NPC updated: {npc.name}.")
-
-
-def _now():
-    """Get current UTC datetime."""
-    from datetime import UTC, datetime
-    return datetime.now(UTC)

@@ -2,7 +2,7 @@
 Turn management for the dungeon crawler engine.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 from models import (
     GameState,
@@ -12,13 +12,8 @@ from models import (
     TurnStatus,
 )
 
-from .helpers import _err, _ok, _snapshot
+from .helpers import _err, _now, _ok, _snapshot
 from .light import _tick_light
-
-
-def _now() -> datetime:
-    """Get current UTC datetime."""
-    return datetime.now(UTC)
 
 
 class TurnManager:

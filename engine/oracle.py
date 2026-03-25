@@ -4,7 +4,7 @@ Oracle and say/emote functions for the dungeon crawler engine.
 
 from models import GameState, Oracle
 
-from .helpers import _err, _ok
+from .helpers import _err, _now, _ok
 
 
 class OracleManager:
@@ -71,9 +71,3 @@ class OracleManager:
         result = _ok(state, f"Oracle #{number} answered.")
         result.data = oracle
         return result
-
-
-def _now():
-    """Get current UTC datetime."""
-    from datetime import UTC, datetime
-    return datetime.now(UTC)

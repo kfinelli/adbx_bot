@@ -2,10 +2,15 @@
 Helper utilities for the dungeon crawler engine.
 """
 
+from datetime import UTC, datetime
 from uuid import UUID
 
 from models import GameState, Room
 
+
+def _now() -> datetime:
+    """Get current UTC datetime."""
+    return datetime.now(UTC)
 
 def _ok(state: GameState, message: str = "", notify_dm: bool = False):
     """Create a successful EngineResult."""
@@ -17,7 +22,6 @@ def _err(state: GameState, error: str):
     """Create an error EngineResult."""
     from . import EngineResult
     return EngineResult(ok=False, error=error, state=state)
-
 
 def _find_npc_in_roster(state: GameState, npc_id: UUID):
     """Find an NPC by ID in the NPC roster (searches all groups)."""

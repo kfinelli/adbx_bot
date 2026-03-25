@@ -47,7 +47,6 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from uuid import UUID
 
 from engine.azure_constants import POWER_LEVEL
@@ -63,7 +62,7 @@ from models import (
 
 from .data_loader import ACTION_REGISTRY, CONDITION_REGISTRY
 from .dice import roll_dice_expr
-from .helpers import _err, _ok
+from .helpers import _err, _now, _ok
 
 # ---------------------------------------------------------------------------
 # Range band ordering — used for movement and adjacency checks
@@ -844,7 +843,3 @@ def _lowest_hp_player(
             best_hp = char.hp_current
             best_id = cid
     return best_id
-
-
-def _now() -> datetime:
-    return datetime.now(UTC)

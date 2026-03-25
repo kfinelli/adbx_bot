@@ -4,7 +4,7 @@ Session management for the dungeon crawler engine.
 
 from models import GameState, SessionMode
 
-from .helpers import _err, _ok
+from .helpers import _err, _now, _ok
 
 
 class SessionManager:
@@ -121,9 +121,3 @@ class SessionManager:
         state.updated_at = _now()
         room_count = len(dungeon.rooms)
         return _ok(state, f"Dungeon '{dungeon.name}' loaded ({room_count} room(s)).")
-
-
-def _now():
-    """Get current UTC datetime."""
-    from datetime import UTC, datetime
-    return datetime.now(UTC)

@@ -43,7 +43,7 @@ from .dice import (
     roll_stats,
     roll_sum,
 )
-from .helpers import _find_npc_in_roster, _resolve_room, _snapshot
+from .helpers import _find_npc_in_roster, _now, _resolve_room, _snapshot, _ok, _err
 from .light import LightManager, _tick_light
 from .npc import NPCManager
 from .oracle import OracleManager
@@ -60,15 +60,6 @@ class EngineResult:
     notify_dm:     bool             = False  # platform should notify DM to resolve
     auto_resolved: bool             = False  # round auto-resolved; platform should post narrative + fresh status
     data:          Any              = None  # optional additional data (e.g., Oracle object for platform layer)
-
-
-def _ok(state: GameState, message: str = "", notify_dm: bool = False) -> EngineResult:
-    return EngineResult(ok=True, message=message, state=state, notify_dm=notify_dm)
-
-
-def _err(state: GameState, error: str) -> EngineResult:
-    return EngineResult(ok=False, error=error, state=state)
-
 
 
 # Convenience functions for backward compatibility
@@ -558,13 +549,6 @@ def render_status(state: GameState) -> str:
     lines.append(sep)
 
     return "\n".join(lines)
-
-
-def _now():
-    """Get current UTC datetime."""
-    from datetime import datetime
-    return datetime.now(UTC)
-
 
 __all__ = [
     # Core types
