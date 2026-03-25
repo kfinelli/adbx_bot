@@ -77,7 +77,7 @@ class SessionCog(commands.Cog):
         sep = "\u2500" * 32
 
         inv_lines = "\n".join(
-            f"  {i.quantity}x {i.name}" for i in char.inventory
+            f"  {i.quantity}x {i.definition.name}" for i in char.inventory
         ) if char.inventory else "  (empty)"
 
         st = char.saving_throws
