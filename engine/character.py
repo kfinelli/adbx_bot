@@ -262,15 +262,15 @@ class CharacterManager:
             return _err(state, f"Unknown item '{item_id}'.")
 
         slot_cost = defn.slot_cost
-        if slot_cost > 0 and char.slots_used + slot_cost > char.inventory_size:
-            return _err(
-                state,
-                f"{char.name}'s inventory is full "
-                f"({char.slots_used}/{char.inventory_size} slots used).",
-            )
 
         if isinstance(defn, ChargeWeapon):
             # Never stack charged items — each needs its own charge counter.
+            if slot_cost > 0 and char.slots_used + slot_cost > char.inventory_size:
+                return _err(
+                    state,
+                    f"{char.name}'s inventory is full "
+                    f"({char.slots_used}/{char.inventory_size} slots used).",
+                )
             char.inventory.append(InventoryItem(
                 item_id=item_id,
                 quantity=quantity,
@@ -282,8 +282,15 @@ class CharacterManager:
                 None,
             )
             if existing is not None:
+                # Stacking onto an existing entry uses no new slot.
                 existing.quantity += quantity
             else:
+                if slot_cost > 0 and char.slots_used + slot_cost > char.inventory_size:
+                    return _err(
+                        state,
+                        f"{char.name}'s inventory is full "
+                        f"({char.slots_used}/{char.inventory_size} slots used).",
+                    )
                 char.inventory.append(InventoryItem(item_id=item_id, quantity=quantity))
 
         state.updated_at = _now()

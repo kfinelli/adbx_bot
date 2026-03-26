@@ -277,6 +277,34 @@ class TestGiveItem:
         defn = ITEM_REGISTRY[cwid]
         assert entry.charges == defn.maxCharges
 
+    def test_give_item_stacks_onto_existing_when_full(self, bare_state):
+        """Stacking onto an existing entry must succeed even when inventory is full."""
+        create_character(
+            bare_state, name="Full", character_class=CharacterClass.KNIGHT,
+            equipment_package="", owner_id="u1",
+            ability_scores=AzureStats(physique=0, finesse=0, reason=0, savvy=0),
+        )
+        char = _get_char(bare_state)
+        capacity = char.inventory_size
+
+        # Fill with distinct non-charged items (one per slot) up to capacity.
+        distinct_ids = [
+            item_id for item_id, defn in ITEM_REGISTRY.items()
+            if not isinstance(defn, ChargeWeapon)
+        ]
+        assert len(distinct_ids) >= capacity, "Not enough distinct items in registry to fill inventory"
+        fill_ids = distinct_ids[:capacity]
+        for item_id in fill_ids:
+            result = give_item(bare_state, char.character_id, item_id)
+            assert result.ok, result.error
+
+        assert char.slots_used == capacity
+        # Stacking onto the first entry must succeed — no new slot consumed.
+        result = give_item(bare_state, char.character_id, fill_ids[0])
+        assert result.ok, result.error
+        stacked = next(i for i in char.inventory if i.item_id == fill_ids[0])
+        assert stacked.quantity == 2
+
     def test_give_item_unknown_character(self, bare_state):
         from uuid import uuid4
         wid = _find_weapon_id()
