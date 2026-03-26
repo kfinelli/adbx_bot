@@ -18,6 +18,7 @@ import json
 from datetime import datetime
 from uuid import UUID
 
+from engine.azure_constants import DEFAULT_EQUIPPED_SLOTS
 from models import (
     NPC,
     ActiveCondition,
@@ -46,7 +47,6 @@ from models import (
     TurnRecord,
     TurnStatus,
 )
-from engine.azure_constants import DEFAULT_EQUIPPED_SLOTS, ItemSlot
 
 # ---------------------------------------------------------------------------
 # Serialization (GameState → dict → JSON string)

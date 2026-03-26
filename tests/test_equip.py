@@ -16,7 +16,7 @@ Covers:
 import pytest
 
 from engine import create_character, equip_item, unequip_item
-from engine.azure_constants import ACCESSORY_SLOTS, ItemSlot, UI_SLOTS
+from engine.azure_constants import UI_SLOTS, ItemSlot
 from engine.data_loader import ITEM_REGISTRY
 from engine.item import Gear, Weapon
 from models import (
@@ -24,7 +24,6 @@ from models import (
     InventoryItem,
 )
 from serialization import deserialize_state, serialize_state
-
 
 # ---------------------------------------------------------------------------
 # Helpers

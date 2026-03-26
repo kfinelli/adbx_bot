@@ -142,7 +142,7 @@ UI_SLOTS: tuple[ItemSlot, ...] = (
 
 # Default equipped_slots dict for a new Character.
 # Only primary slots are included; legacy aliases are item-data tags, not slots.
-DEFAULT_EQUIPPED_SLOTS: dict[str, str | None] = {s: None for s in UI_SLOTS}
+DEFAULT_EQUIPPED_SLOTS: dict[str, str | None] = dict.fromkeys(UI_SLOTS)
 
 
 class SortMode(IntEnum):

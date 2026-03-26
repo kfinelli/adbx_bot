@@ -21,7 +21,7 @@ from engine import (
     submit_turn,
     unequip_item,
 )
-from engine.azure_constants import ACCESSORY_SLOTS, ItemSlot, UI_SLOTS
+from engine.azure_constants import UI_SLOTS, ItemSlot
 from engine.data_loader import ITEM_REGISTRY
 from engine.item import EquipItem
 from models import SessionMode, TurnStatus

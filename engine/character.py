@@ -9,6 +9,8 @@ from engine.azure_constants import (
     ItemSlot,
 )
 from engine.azure_engine import CREATION_RULES, POWER_LEVEL
+from engine.data_loader import ITEM_REGISTRY
+from engine.item import EquipItem, Gear, Weapon
 from models import (
     AzureStats,
     Character,
@@ -16,8 +18,6 @@ from models import (
     CharacterStatus,
     GameState,
 )
-from engine.item import Gear, Weapon, EquipItem
-from engine.data_loader import ITEM_REGISTRY
 from validation import validate_hp_value
 
 from .dice import roll_stat_block
@@ -156,7 +156,7 @@ class CharacterManager:
         if isinstance(definition, Weapon):
             # Weapons always go to MAIN_HAND
             if requested_slot is not None and requested_slot != ItemSlot.MAIN_HAND:
-                return None, f"Weapons must be equipped in the main hand slot."
+                return None, "Weapons must be equipped in the main hand slot."
             return ItemSlot.MAIN_HAND, ""
 
         if isinstance(definition, Gear):

@@ -110,7 +110,8 @@ class InventoryItem:
     notes:       str    = ""
 
     @property
-    def definition(self) -> Item:
+    def definition(self):
+        # Returns Item: No return type hint to avoid imports
         return ITEM_REGISTRY[self.item_id]
 
 
@@ -173,7 +174,7 @@ class Character:
                 total += definition.resistance
         return total
 
-    def equipped_weapon(self) -> "InventoryItem | None":
+    def equipped_weapon(self) -> InventoryItem | None:
         """
         Return the InventoryItem in the main-hand slot, or None.
         Uses the hard-coded slot key 'main_hand'; if the ruleset changes this
@@ -184,7 +185,7 @@ class Character:
             return None
         return next((i for i in self.inventory if i.item_id == item_id), None)
 
-    def items_in_slot(self, slot_key: str) -> list["InventoryItem"]:
+    def items_in_slot(self, slot_key: str) -> list[InventoryItem]:
         """Return InventoryItem(s) occupying the given slot key (0 or 1 items)."""
         item_id = self.equipped_slots.get(slot_key)
         if item_id is None:
