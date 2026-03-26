@@ -1,10 +1,14 @@
 """
 Character management for the dungeon crawler engine.
 """
-from uuid import UUID, uuid4
 
+from engine.azure_constants import (
+    ACCESSORY_SLOTS,
+    DEFAULT_EQUIPPED_SLOTS,
+    GEAR_SLOT_MAP,
+    ItemSlot,
+)
 from engine.azure_engine import CREATION_RULES, POWER_LEVEL
-from engine.azure_constants import ItemSlot
 from models import (
     AzureStats,
     Character,
@@ -12,6 +16,8 @@ from models import (
     CharacterStatus,
     GameState,
 )
+from engine.item import Gear, Weapon, EquipItem
+from engine.data_loader import ITEM_REGISTRY
 from validation import validate_hp_value
 
 from .dice import roll_stat_block
@@ -77,6 +83,7 @@ class CharacterManager:
             saving_throws={"save": base_save},
             gold=100, #Placeholder value to test arrive shopping
             inventory=[],
+            equipped_slots=dict(DEFAULT_EQUIPPED_SLOTS),  # fresh copy per character
         )
 
         state.characters[character.character_id] = character
@@ -123,19 +130,135 @@ class CharacterManager:
         state.updated_at = _now()
         return _ok(state, f"{char.name} status → {status.value}. {notes_result.value}".strip())
 
-    def equip_inventory_item(self, state: GameState, character_id: UUID, item_id: UUID, item_slot: ItemSlot):
-        """ Check for item with item_id UUID, if it belongs to the character's
-        inventory, equip it to the designated slot. If no slot is specified,
-        equip it to the appropriate slot, trying to find an empty slot if
-        possible. """
+    # ------------------------------------------------------------------
+    # Equip / Unequip
+    # ------------------------------------------------------------------
+
+    def _resolve_target_slot(
+        self,
+        char: Character,
+        inv_item,
+        requested_slot: ItemSlot | None,
+    ) -> "tuple[ItemSlot, str] | tuple[None, str]":
+        """
+        Work out which ItemSlot the item should go into.
+
+        Returns (slot, error_message).  On success error_message is "".
+        On failure slot is None.
+        """
+        definition = ITEM_REGISTRY.get(inv_item.item_id)
+        if definition is None:
+            return None, f"Unknown item '{inv_item.item_id}'."
+
+        if not isinstance(definition, EquipItem):
+            return None, f"'{definition.name}' cannot be equipped (not a weapon or gear piece)."
+
+        if isinstance(definition, Weapon):
+            # Weapons always go to MAIN_HAND
+            if requested_slot is not None and requested_slot != ItemSlot.MAIN_HAND:
+                return None, f"Weapons must be equipped in the main hand slot."
+            return ItemSlot.MAIN_HAND, ""
+
+        if isinstance(definition, Gear):
+            gear_slot_str = definition.slot  # e.g. "head", "legs", "accessory"
+            if gear_slot_str == "accessory":
+                # Player may specify accessory1 or accessory2; otherwise pick the first free one
+                if requested_slot in ACCESSORY_SLOTS:
+                    return requested_slot, ""
+                if requested_slot is not None:
+                    return None, "Accessories can only go into accessory1 or accessory2 slots."
+                # Auto-pick a free accessory slot
+                for slot in ACCESSORY_SLOTS:
+                    if char.equipped_slots.get(slot.value) is None:
+                        return slot, ""
+                return None, "Both accessory slots are already filled."
+            # Non-accessory gear slot
+            mapped = GEAR_SLOT_MAP.get(gear_slot_str)
+            if mapped is None:
+                return None, f"Gear slot '{gear_slot_str}' is not supported for equipping."
+            if requested_slot is not None and requested_slot != mapped:
+                return None, (
+                    f"'{definition.name}' belongs in the {mapped.value} slot, "
+                    f"not {requested_slot.value}."
+                )
+            return mapped, ""
+
+        return None, f"'{definition.name}' cannot be equipped."
+
+    def equip_item(
+        self,
+        state: GameState,
+        character_id,
+        item_id: str,
+        slot: ItemSlot | None = None,
+    ):
+        """
+        Equip an item from the character's inventory.
+
+        - If the target slot is already occupied the previous item is
+          automatically unequipped first (its equipped flag is cleared
+          and the slot is freed before the new item goes in).
+        - For accessory slots the caller may specify slot=ACCESSORY1 or
+          ACCESSORY2 explicitly; if omitted the first free slot is used.
+        - Returns EngineResult with .ok=True on success.
+        """
         from engine import _now
         char = state.characters.get(character_id)
         if char is None:
             return _err(state, f"Character {character_id} not found.")
-        # check if item_id is in character inventory
 
-        # check if item slot is available
+        inv_item = next((i for i in char.inventory if i.item_id == item_id), None)
+        if inv_item is None:
+            return _err(state, f"Item '{item_id}' not in {char.name}'s inventory.")
 
-        # unequip old item
+        target_slot, err = self._resolve_target_slot(char, inv_item, slot)
+        if target_slot is None:
+            return _err(state, err)
 
-        # equip the item
+        # Unequip whatever is currently in that slot
+        existing_id = char.equipped_slots.get(target_slot.value)
+        if existing_id is not None:
+            existing = next((i for i in char.inventory if i.item_id == existing_id), None)
+            if existing:
+                existing.equipped = False
+            char.equipped_slots[target_slot.value] = None
+
+        # Equip the new item
+        inv_item.equipped = True
+        char.equipped_slots[target_slot.value] = item_id
+
+        definition = ITEM_REGISTRY.get(item_id)
+        item_name = definition.name if definition else item_id
+        state.updated_at = _now()
+        return _ok(state, f"{char.name} equipped {item_name} in the {target_slot.value} slot.")
+
+    def unequip_item(
+        self,
+        state: GameState,
+        character_id,
+        slot: ItemSlot,
+    ):
+        """
+        Unequip whatever item is in the given slot.
+
+        Returns EngineResult with .ok=True on success.
+        """
+        from engine import _now
+        char = state.characters.get(character_id)
+        if char is None:
+            return _err(state, f"Character {character_id} not found.")
+
+        item_id = char.equipped_slots.get(slot.value)
+        if item_id is None:
+            return _err(state, f"{char.name} has nothing equipped in the {slot.value} slot.")
+
+        inv_item = next((i for i in char.inventory if i.item_id == item_id), None)
+        if inv_item:
+            inv_item.equipped = False
+
+        char.equipped_slots[slot.value] = None
+
+        definition = ITEM_REGISTRY.get(item_id)
+        item_name = definition.name if definition else item_id
+        state.updated_at = _now()
+        return _ok(state, f"{char.name} unequipped {item_name} from the {slot.value} slot.")

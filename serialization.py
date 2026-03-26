@@ -46,6 +46,7 @@ from models import (
     TurnRecord,
     TurnStatus,
 )
+from engine.azure_constants import DEFAULT_EQUIPPED_SLOTS, ItemSlot
 
 # ---------------------------------------------------------------------------
 # Serialization (GameState → dict → JSON string)
@@ -98,6 +99,7 @@ def serialize_character(c: Character) -> dict:
         "status_notes":    c.status_notes,
         "inventory":       [serialize_inventory_item(i) for i in c.inventory],
         "gold":            c.gold,
+        "equipped_slots":  c.equipped_slots,  # dict[str, str|None] — no special encoding needed
         "created_at":      _dt(c.created_at),
         "is_pregenerated": c.is_pregenerated,
     }
@@ -357,6 +359,16 @@ def deserialize_ability_scores(d: dict) -> AzureStats:
 
 
 def deserialize_character(d: dict) -> Character:
+    # Merge saved slots onto the current ruleset defaults.
+    # Characters saved before equipped_slots existed get all-None slots.
+    # Unknown slot keys from future versions are silently dropped.
+    valid_slot_keys = set(DEFAULT_EQUIPPED_SLOTS.keys())
+    saved_slots: dict = d.get("equipped_slots", {})
+    merged_slots = {
+        **DEFAULT_EQUIPPED_SLOTS,
+        **{k: v for k, v in saved_slots.items() if k in valid_slot_keys},
+    }
+
     return Character(
         character_id=_load_uuid(d["character_id"]),
         owner_id=d["owner_id"],
@@ -373,6 +385,7 @@ def deserialize_character(d: dict) -> Character:
         status_notes=d["status_notes"],
         inventory=[deserialize_inventory_item(i) for i in d["inventory"]],
         gold=d["gold"],
+        equipped_slots=merged_slots,
         created_at=_load_dt(d["created_at"]),
         is_pregenerated=d["is_pregenerated"],
     )

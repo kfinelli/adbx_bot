@@ -79,8 +79,8 @@ class Character:
             ItemSlot.BODY: None,
             ItemSlot.ARMS: None,
             ItemSlot.LEGS : None,
-            ItemSlot.MAIN: None,
-            ItemSlot.OFF: None,
+            ItemSlot.MAIN_HAND: None,
+            ItemSlot.OFF_HAND: None,
             ItemSlot.ACCESSORY: []
         }
 

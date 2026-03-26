@@ -62,16 +62,6 @@ class ItemData(StrEnum):
     PURCHASEABLE = "purchaseable"
     PRICE = "price"
 
-class ItemSlot(Enum):
-    MAIN = 'mainhand'
-    OFF = 'offhand'
-    HEAD = 'head'
-    BODY = 'body'
-    ARMS = 'arms'
-    LEGS = 'legs'
-    ACCESSORY1 = 'accessory'
-    ACCESSORY2 = 'accessory'
-
 class ItemType(StrEnum):
     LIGHT_CONTAINER = "light_container"
     ITEM = "item"
@@ -91,7 +81,71 @@ class SkillType(Enum):
     STATUS = 8
     COMPLEX = 9
 
-class SortMode (IntEnum):
+
+class ItemSlot(StrEnum):
+    """
+    Canonical equipment slot enum for the Azure ruleset.
+
+    Merges the old ``Slot`` class into a single authoritative definition.
+
+    Primary slot names (used by the equip system and character sheet):
+        MAIN_HAND, OFF_HAND, HEAD, BODY, ARMS, LEGS, ACCESSORY1, ACCESSORY2
+
+    All primary slots hold at most one item.  The two accessory slots are
+    independent so a character can wear two accessories simultaneously.
+    """
+    # Primary slots (equip system)
+    MAIN_HAND   = "main_hand"    # primary weapon / staff / rod
+    OFF_HAND    = "off_hand"     # shield, torch, off-hand weapon
+    HEAD        = "head"         # helmet, hat, crown
+    BODY        = "body"         # chest armour, robes
+    ARMS        = "arms"         # gauntlets, bracers
+    LEGS        = "legs"         # boots, shoes
+    ACCESSORY1  = "accessory1"   # ring, amulet, etc.
+    ACCESSORY2  = "accessory2"   # second ring / accessory
+
+
+# Backwards-compatibility alias so existing `from engine.azure_constants import Slot`
+# imports (e.g. in hero.py) continue to work without modification.
+Slot = ItemSlot
+
+
+# Maps Gear.slot strings (from items.json) and legacy hero.py slot values
+# to the canonical ItemSlot used by the equip system.
+# Weapons always go to MAIN_HAND and are handled separately in character.py.
+GEAR_SLOT_MAP: dict[str, ItemSlot] = {
+    # items.json values
+    "head":      ItemSlot.HEAD,
+    "body":      ItemSlot.BODY,
+    "arms":      ItemSlot.ARMS,
+    "legs":      ItemSlot.LEGS,        # items.json uses "legs" for boots/shoes
+    "offhand":   ItemSlot.OFF_HAND,
+    "accessory": ItemSlot.ACCESSORY1,  # fallback; engine picks ACC1 or ACC2
+    # legacy hero.py values
+    "mainhand":  ItemSlot.MAIN_HAND,
+}
+
+# Slots that accept more than one item (auto-filled in order).
+ACCESSORY_SLOTS: tuple[ItemSlot, ...] = (ItemSlot.ACCESSORY1, ItemSlot.ACCESSORY2)
+
+# Ordered list of primary slots shown in the /character equip/unequip UI.
+UI_SLOTS: tuple[ItemSlot, ...] = (
+    ItemSlot.MAIN_HAND,
+    ItemSlot.OFF_HAND,
+    ItemSlot.HEAD,
+    ItemSlot.BODY,
+    ItemSlot.ARMS,
+    ItemSlot.LEGS,
+    ItemSlot.ACCESSORY1,
+    ItemSlot.ACCESSORY2,
+)
+
+# Default equipped_slots dict for a new Character.
+# Only primary slots are included; legacy aliases are item-data tags, not slots.
+DEFAULT_EQUIPPED_SLOTS: dict[str, str | None] = {s: None for s in UI_SLOTS}
+
+
+class SortMode(IntEnum):
     ALPHABETICAL = 0
 
 class Stat(StrEnum):

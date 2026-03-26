@@ -19,12 +19,13 @@ from uuid import UUID, uuid4
 # CharacterClass is generated in azure_engine.py from job JSON files.
 # Import it here so the rest of the codebase can import from models as before.
 from engine.azure_engine import CharacterClass
-from engine.azure_constants import ItemSlot
 from engine.data_loader import ITEM_REGISTRY
+from engine.item import Gear
 
 # ---------------------------------------------------------------------------
 # Enumerations (non-ruleset — these don't change between game systems)
 # ---------------------------------------------------------------------------
+
 
 class CharacterStatus(Enum):
     ACTIVE    = "active"
@@ -80,7 +81,6 @@ class ExitDirection(Enum):
     # Named/arbitrary exits are handled by free-form label strings
 
 
-
 # ---------------------------------------------------------------------------
 # Character
 # ---------------------------------------------------------------------------
@@ -110,8 +110,7 @@ class InventoryItem:
     notes:       str    = ""
 
     @property
-    def definition(self):
-        # Returns data_loader.Item - no hint to avoid import
+    def definition(self) -> Item:
         return ITEM_REGISTRY[self.item_id]
 
 
@@ -140,7 +139,11 @@ class Character:
     inventory:       list[InventoryItem] = field(default_factory=list)
     gold:            int               = 0
 
-    equipped_items:  dict[ItemSlot, UUID] = field(default_factory=dict)
+    # Maps equipment slot keys (opaque strings defined by the ruleset engine)
+    # to the item_id of the equipped InventoryItem, or None if empty.
+    # The default empty dict is intentional: engine/character.py populates the
+    # correct slot keys for the active ruleset when creating a character.
+    equipped_slots:  dict[str, str | None] = field(default_factory=dict)
 
     # Metadata
     created_at:      datetime          = field(default_factory=datetime.utcnow)
@@ -148,13 +151,45 @@ class Character:
 
     @property
     def defense(self) -> int:
-        #STUB: search through equipped items and add up DEF to get character DEF
-        return 0
+        """Sum DEF from all equipped Gear items."""
+        total = 0
+        for item_id in self.equipped_slots.values():
+            if item_id is None:
+                continue
+            definition = ITEM_REGISTRY.get(item_id)
+            if isinstance(definition, Gear):
+                total += definition.defense
+        return total
 
     @property
     def resistance(self) -> int:
-        #STUB: search through equipped items and add up RST to get character RST
-        return 0
+        """Sum RST from all equipped Gear items."""
+        total = 0
+        for item_id in self.equipped_slots.values():
+            if item_id is None:
+                continue
+            definition = ITEM_REGISTRY.get(item_id)
+            if isinstance(definition, Gear):
+                total += definition.resistance
+        return total
+
+    def equipped_weapon(self) -> "InventoryItem | None":
+        """
+        Return the InventoryItem in the main-hand slot, or None.
+        Uses the hard-coded slot key 'main_hand'; if the ruleset changes this
+        key the engine should override this method.
+        """
+        item_id = self.equipped_slots.get("main_hand")
+        if item_id is None:
+            return None
+        return next((i for i in self.inventory if i.item_id == item_id), None)
+
+    def items_in_slot(self, slot_key: str) -> list["InventoryItem"]:
+        """Return InventoryItem(s) occupying the given slot key (0 or 1 items)."""
+        item_id = self.equipped_slots.get(slot_key)
+        if item_id is None:
+            return []
+        return [i for i in self.inventory if i.item_id == item_id]
 
 
 # ---------------------------------------------------------------------------

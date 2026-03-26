@@ -92,6 +92,28 @@ def set_character_status(state: GameState, character_id, status, notes: str = ""
     return cm.set_character_status(state, character_id, status, notes)
 
 
+def equip_item(state: GameState, character_id, item_id: str, slot=None):
+    """
+    Equip an item from the character's inventory into the appropriate slot.
+
+    ``slot`` may be an ItemSlot enum value or None (auto-detect).
+    For weapons it is always MAIN_HAND; for gear the slot is read from
+    the item definition.  For accessories the caller may pass
+    ItemSlot.ACCESSORY1 or ItemSlot.ACCESSORY2 explicitly; if omitted
+    the first free accessory slot is used.
+    """
+    cm = CharacterManager()
+    return cm.equip_item(state, character_id, item_id, slot)
+
+
+def unequip_item(state: GameState, character_id, slot):
+    """
+    Unequip whatever item is in the given slot (an ItemSlot enum value).
+    """
+    cm = CharacterManager()
+    return cm.unequip_item(state, character_id, slot)
+
+
 def add_npc(state: GameState, npc):
     """Add an NPC."""
     nm = NPCManager()
@@ -595,6 +617,8 @@ __all__ = [
     "create_character",
     "set_character_hp",
     "set_character_status",
+    "equip_item",
+    "unequip_item",
     "add_npc",
     "set_npc_hp",
     "set_npc_status",
