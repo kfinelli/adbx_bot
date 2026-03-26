@@ -87,7 +87,7 @@ class Character:
         #Items
         self.inventory = []
 
-    def addNewJob(self, jobID, isFirst=False):
+    def addNewJob(self, jobID, isFirst=False):  # Partially implemented in engine/character.py:30, engine/azure_engine.py
         job = getJobFromID(jobID)
         health = d(job.hitDie * POWER_LEVEL)
         if (isFirst):
@@ -96,14 +96,14 @@ class Character:
         jobExperience = JobExperience(job.id, 1, health, job.weaponRanks)
         self.jobs[job.id] = jobExperience
 
-    def levelUp(self, jobID):
+    def levelUp(self, jobID):  # Not yet implemented elsewhere
         if jobID in self.jobs:
             self.jobs[jobID].levelUpJob()
         else:
             self.addNewJob(jobID)
         self.refreshSheet(True)
 
-    def refreshSheet(self, heal=False):
+    def refreshSheet(self, heal=False):  # Not yet implemented elsewhere
         self.recalculateAllStats()
         self.recalculateInventorySize()
         self.recalculateMaxHealth()
@@ -112,7 +112,7 @@ class Character:
         if heal:
             self.health = self.maxHealth
 
-    def rebuildSkills(self):
+    def rebuildSkills(self):  # Not yet implemented elsewhere
         skills = {
             SkillType.SIMPLE: {},
             SkillType.TURN_ACTION: {},
@@ -133,7 +133,7 @@ class Character:
                 skills[cSkill.type][skill] = cSkill
         self.skills = skills
 
-    def recalculateAllStats(self):
+    def recalculateAllStats(self):  # Not yet implemented elsewhere
         totals = self.baseStats
         for job in self.jobs:
             for stat in Stat:
@@ -143,7 +143,7 @@ class Character:
         self.reason = totals[Stat.REASON]
         self.savvy = totals[Stat.SAVVY]
 
-    def recalculateInventorySize(self):
+    def recalculateInventorySize(self):  # Implemented at models.py:196
         strBonus = self.physique/100
         if (strBonus > 0):
             strBonus = math.floor(strBonus)
@@ -153,20 +153,20 @@ class Character:
         self.invSize = total
 
 
-    def recalculateMaxHealth(self):
+    def recalculateMaxHealth(self):  # Not yet implemented elsewhere
         total = 0
         for job in self.jobs:
             total += self.jobs[job].health
         self.maxHealth = total
 
-    def recalculateWeaponRank(self):
+    def recalculateWeaponRank(self):  # Not yet implemented elsewhere
         weaponRank = set()
         for job in self.jobs:
             ranks = self.jobs[job].weaponRanks
             weaponRank.update(ranks)
         self.weaponRank = weaponRank
 
-    def toDictionary(self):
+    def toDictionary(self):  # Implemented at serialization.py:85
         charSheet = {
             'name': self.name,
             'experience': self.experience,
@@ -188,15 +188,15 @@ class Character:
         }
         return charSheet
 
-    def export(self):
+    def export(self):  # Implemented at serialization.py:85
         return json.dumps(self.toDictionary())
 
-    def addItem(self, item):
+    def addItem(self, item):  # Implemented at engine/character.py:236
             if len(self.inventory) >= self.invSize:
                 return
             self.inventory.append(item)
 
-    def removeItem(self, item):
+    def removeItem(self, item):  # Implemented at engine/character.py:293
         self.inventory.remove(item)
 
 
@@ -217,10 +217,10 @@ class JobExperience:
         }
         self.rebuildSkills()
 
-    def getJob(self):
+    def getJob(self):  # Partially implemented in engine/azure_engine.py, engine/data_loader.py
         return getJobFromID(self.jobID)
 
-    def rebuildSkills(self):
+    def rebuildSkills(self):  # Not yet implemented elsewhere
         job = self.getJob()
         skills = {}
         for skillName in job.skills:
@@ -229,7 +229,7 @@ class JobExperience:
                 skills[skill.id] = skill
         self.skills = skills
 
-    def levelUpJob(self):
+    def levelUpJob(self):  # Not yet implemented elsewhere
         job = self.getJob()
         changes = {
             Stat.PHYSIQUE: 0,

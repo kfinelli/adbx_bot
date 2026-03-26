@@ -192,6 +192,22 @@ class Character:
             return []
         return [i for i in self.inventory if i.item_id == item_id]
 
+    @property
+    def inventory_size(self) -> int:
+        """Maximum inventory slots: BASE_INVENTORY_SIZE + floor(PHY / POWER_LEVEL)."""
+        from engine.azure_constants import BASE_INVENTORY_SIZE, POWER_LEVEL
+        return BASE_INVENTORY_SIZE + (self.ability_scores.physique // POWER_LEVEL)
+
+    @property
+    def slots_used(self) -> int:
+        """Slots currently occupied by unequipped items."""
+        total = 0
+        for inv_item in self.inventory:
+            if not inv_item.equipped:
+                defn = ITEM_REGISTRY.get(inv_item.item_id)
+                total += defn.slot_cost if defn is not None else 1
+        return total
+
 
 # ---------------------------------------------------------------------------
 # Dungeon map

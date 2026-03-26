@@ -20,7 +20,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from engine import create_character, roll_stats
+from engine import create_character, give_item, roll_stats
 from engine.azure_constants import POWER_LEVEL
 from engine.data_loader import ITEM_REGISTRY
 from engine.item import ChargeWeapon, Gear, Item, Weapon
@@ -233,10 +233,17 @@ class ItemSelectView(discord.ui.View):
             )
             return
 
-        # Deduct gold and add item to inventory
+        # Attempt to add item to inventory (enforces slot limit)
+        result = give_item(state, char_uuid, self.selected_item_id)
+        if not result.ok:
+            await interaction.response.edit_message(
+                content=f"⚠ {result.error}",
+                view=self,
+            )
+            return
+
+        # Deduct gold only after inventory check passes
         character.gold -= price
-        inv_item = InventoryItem(item_id=self.selected_item_id, quantity=1)
-        character.inventory.append(inv_item)
         log.info(
             "_buy_callback: purchased %r (%d gp) for character %s; gold remaining=%d",
             self.selected_item_id, price, char_uuid, character.gold,

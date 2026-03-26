@@ -114,6 +114,30 @@ def unequip_item(state: GameState, character_id, slot):
     return cm.unequip_item(state, character_id, slot)
 
 
+def remove_item(state: GameState, character_id, item_id: str, quantity: int = 1):
+    """
+    Remove item(s) from a character's inventory.
+
+    Equipped items must be unequipped first. For stacked entries, decrements
+    quantity; removes the entry entirely when quantity reaches zero.
+    Returns EngineResult with ok=False if the item isn't found or is equipped.
+    """
+    cm = CharacterManager()
+    return cm.remove_item(state, character_id, item_id, quantity)
+
+
+def give_item(state: GameState, character_id, item_id: str, quantity: int = 1):
+    """
+    Add item(s) to a character's inventory, enforcing slot limits.
+
+    ChargeWeapons always get a new entry (independent charge state).
+    All other items stack onto an existing unequipped entry when possible.
+    Returns EngineResult with ok=False if inventory is full.
+    """
+    cm = CharacterManager()
+    return cm.give_item(state, character_id, item_id, quantity)
+
+
 def add_npc(state: GameState, npc):
     """Add an NPC."""
     nm = NPCManager()
@@ -619,6 +643,8 @@ __all__ = [
     "set_character_status",
     "equip_item",
     "unequip_item",
+    "give_item",
+    "remove_item",
     "add_npc",
     "set_npc_hp",
     "set_npc_status",

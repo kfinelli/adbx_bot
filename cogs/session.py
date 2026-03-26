@@ -326,7 +326,7 @@ def _character_sheet(char, state) -> str:
         "Equipped:",
         *slot_lines,
         sep,
-        "Inventory:",
+        f"Inventory ({char.slots_used}/{char.inventory_size} slots):",
         inv_lines,
         sep,
     ]

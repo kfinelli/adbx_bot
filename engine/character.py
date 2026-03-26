@@ -10,13 +10,14 @@ from engine.azure_constants import (
 )
 from engine.azure_engine import CREATION_RULES, POWER_LEVEL
 from engine.data_loader import ITEM_REGISTRY
-from engine.item import EquipItem, Gear, Weapon
+from engine.item import ChargeWeapon, EquipItem, Gear, Weapon
 from models import (
     AzureStats,
     Character,
     CharacterClass,
     CharacterStatus,
     GameState,
+    InventoryItem,
 )
 from validation import validate_hp_value
 
@@ -231,6 +232,109 @@ class CharacterManager:
         item_name = definition.name if definition else item_id
         state.updated_at = _now()
         return _ok(state, f"{char.name} equipped {item_name} in the {target_slot.value} slot.")
+
+    def give_item(
+        self,
+        state: GameState,
+        character_id,
+        item_id: str,
+        quantity: int = 1,
+    ):
+        """
+        Add one or more copies of an item to a character's inventory,
+        enforcing the inventory slot limit.
+
+        Stacking rules:
+        - ChargeWeapons are never stacked (each has independent charge state);
+          a new InventoryItem entry is always created.
+        - All other items are stacked onto an existing unequipped entry if one
+          exists for that item_id; otherwise a new entry is created.
+        - Items with slot_cost == 0 (future light-item bundles) bypass the
+          capacity check — the bundling system manages their slots separately.
+        """
+        from engine import _now
+        char = state.characters.get(character_id)
+        if char is None:
+            return _err(state, f"Character {character_id} not found.")
+
+        defn = ITEM_REGISTRY.get(item_id)
+        if defn is None:
+            return _err(state, f"Unknown item '{item_id}'.")
+
+        slot_cost = defn.slot_cost
+        if slot_cost > 0 and char.slots_used + slot_cost > char.inventory_size:
+            return _err(
+                state,
+                f"{char.name}'s inventory is full "
+                f"({char.slots_used}/{char.inventory_size} slots used).",
+            )
+
+        if isinstance(defn, ChargeWeapon):
+            # Never stack charged items — each needs its own charge counter.
+            char.inventory.append(InventoryItem(
+                item_id=item_id,
+                quantity=quantity,
+                charges=defn.maxCharges,
+            ))
+        else:
+            existing = next(
+                (i for i in char.inventory if i.item_id == item_id and not i.equipped),
+                None,
+            )
+            if existing is not None:
+                existing.quantity += quantity
+            else:
+                char.inventory.append(InventoryItem(item_id=item_id, quantity=quantity))
+
+        state.updated_at = _now()
+        qty_str = f"{quantity}x " if quantity > 1 else ""
+        return _ok(state, f"{char.name} received {qty_str}{defn.name}.")
+
+    def remove_item(
+        self,
+        state: GameState,
+        character_id,
+        item_id: str,
+        quantity: int = 1,
+    ):
+        """
+        Remove one or more copies of an item from a character's inventory.
+
+        - Equipped items must be unequipped before removal.
+        - For stacked entries, decrements quantity; removes the entry when
+          quantity reaches zero.
+        - quantity must be >= 1 and <= the entry's current quantity.
+        """
+        from engine import _now
+        char = state.characters.get(character_id)
+        if char is None:
+            return _err(state, f"Character {character_id} not found.")
+
+        inv_item = next((i for i in char.inventory if i.item_id == item_id and not i.equipped), None)
+        if inv_item is None:
+            # Give a more specific error if the item exists but is equipped
+            if any(i.item_id == item_id and i.equipped for i in char.inventory):
+                defn = ITEM_REGISTRY.get(item_id)
+                name = defn.name if defn else item_id
+                return _err(state, f"{name} is equipped and must be unequipped first.")
+            return _err(state, f"Item '{item_id}' not in {char.name}'s inventory.")
+
+        if quantity < 1 or quantity > inv_item.quantity:
+            return _err(
+                state,
+                f"Cannot remove {quantity}x '{item_id}': only {inv_item.quantity} available.",
+            )
+
+        defn = ITEM_REGISTRY.get(item_id)
+        name = defn.name if defn else item_id
+
+        inv_item.quantity -= quantity
+        if inv_item.quantity == 0:
+            char.inventory.remove(inv_item)
+
+        state.updated_at = _now()
+        qty_str = f"{quantity}x " if quantity > 1 else ""
+        return _ok(state, f"{qty_str}{name} removed from {char.name}'s inventory.")
 
     def unequip_item(
         self,

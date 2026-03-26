@@ -23,13 +23,14 @@ from engine.azure_constants import (
 
 class Item:
     ITEM_TYPE = ItemType.ITEM.value
-    def __init__(self, item_id, name, description = "", isLight = False, purchaseable=False, price=0):
+    def __init__(self, item_id, name, description = "", isLight = False, purchaseable=False, price=0, slot_cost=1):
         self.item_id = item_id
         self.name = name
         self.description = description
         self.isLight = isLight
         self.purchaseable = purchaseable
         self.price = price
+        self.slot_cost = slot_cost
         self.prototype = None
         if type(self) is Item:
             self.updatePrototype()
