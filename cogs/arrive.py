@@ -24,7 +24,7 @@ from engine import create_character, give_item, roll_stats
 from engine.azure_constants import POWER_LEVEL
 from engine.data_loader import ITEM_REGISTRY
 from engine.item import ChargeWeapon, Gear, Item, Weapon
-from models import CharacterClass, InventoryItem, SessionMode
+from models import CharacterClass, SessionMode
 from store import get_characters_by_owner, get_session, save_session, update_status
 from validation import validate_character_name
 

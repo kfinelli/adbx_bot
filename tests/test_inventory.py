@@ -14,11 +14,10 @@ Covers:
 import pytest
 
 from engine import create_character, equip_item, give_item
-from engine.azure_constants import BASE_INVENTORY_SIZE, POWER_LEVEL
+from engine.azure_constants import BASE_INVENTORY_SIZE
 from engine.data_loader import ITEM_REGISTRY
 from engine.item import ChargeWeapon, Gear, Weapon
 from models import AzureStats, CharacterClass, InventoryItem
-
 
 # ---------------------------------------------------------------------------
 # Helpers

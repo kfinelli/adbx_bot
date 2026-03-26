@@ -1297,6 +1297,38 @@
       "tags": [
         "Warm"
       ]
+    },
+    {
+      "attack_status": "",
+      "defense": 0,
+      "description": "",
+      "health": 0,
+      "held_status": "",
+      "is_light": false,
+      "item_id": "silver_ring",
+      "item_type": "gear",
+      "name": "Silver Ring",
+      "other_abilities": "\"emits a faint glow\"",
+      "price": 10,
+      "purchaseable": true,
+      "rank": "C",
+      "resistance": 0,
+      "slot": "accessory",
+      "tags": []
+    },
+    {
+      "attack_status": "",
+      "description": "The +5 vorpal sword of old-school exploration",
+      "held_status": "",
+      "is_light": false,
+      "item_id": "ten_foot_pole",
+      "item_type": "item",
+      "name": "Ten Foot Pole",
+      "other_abilities": "",
+      "price": 1,
+      "purchaseable": true,
+      "rank": "",
+      "tags": []
     }
   ],
   "Weapon": [
