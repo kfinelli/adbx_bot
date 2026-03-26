@@ -1,8 +1,10 @@
 """
 Character management for the dungeon crawler engine.
 """
+from uuid import UUID, uuid4
 
 from engine.azure_engine import CREATION_RULES, POWER_LEVEL
+from engine.azure_constants import ItemSlot
 from models import (
     AzureStats,
     Character,
@@ -120,3 +122,20 @@ class CharacterManager:
         char.status_notes = notes_result.value
         state.updated_at = _now()
         return _ok(state, f"{char.name} status → {status.value}. {notes_result.value}".strip())
+
+    def equip_inventory_item(self, state: GameState, character_id: UUID, item_id: UUID, item_slot: ItemSlot):
+        """ Check for item with item_id UUID, if it belongs to the character's
+        inventory, equip it to the designated slot. If no slot is specified,
+        equip it to the appropriate slot, trying to find an empty slot if
+        possible. """
+        from engine import _now
+        char = state.characters.get(character_id)
+        if char is None:
+            return _err(state, f"Character {character_id} not found.")
+        # check if item_id is in character inventory
+
+        # check if item slot is available
+
+        # unequip old item
+
+        # equip the item

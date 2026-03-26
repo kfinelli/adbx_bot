@@ -4,8 +4,8 @@ import math
 from engine.azure_constants import (
     BASE_INVENTORY_SIZE,
     POWER_LEVEL,
+    ItemSlot,
     SkillType,
-    Slot,
     Stat,
     StatusType,
 )
@@ -75,13 +75,13 @@ class Character:
         self.invSize = 0
         #Currently Equipped Gear
         self.equipment = {
-            Slot.HEAD : None,
-            Slot.BODY: None,
-            Slot.ARMS: None,
-            Slot.LEGS : None,
-            Slot.MAIN: None,
-            Slot.OFF: None,
-            Slot.ACCESSORY: []
+            ItemSlot.HEAD : None,
+            ItemSlot.BODY: None,
+            ItemSlot.ARMS: None,
+            ItemSlot.LEGS : None,
+            ItemSlot.MAIN: None,
+            ItemSlot.OFF: None,
+            ItemSlot.ACCESSORY: []
         }
 
         #Items

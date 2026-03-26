@@ -35,7 +35,6 @@ class BundleData(StrEnum):
     MAX_SIZE = "maxSize"
     CONTENTS = "contents"
 
-#TODO: keep or change? These are different than the Json names
 class ItemData(StrEnum):
     PROTOTYPE = "prototype"
     ITEM_ID = "item_id"
@@ -63,6 +62,16 @@ class ItemData(StrEnum):
     PURCHASEABLE = "purchaseable"
     PRICE = "price"
 
+class ItemSlot(Enum):
+    MAIN = 'mainhand'
+    OFF = 'offhand'
+    HEAD = 'head'
+    BODY = 'body'
+    ARMS = 'arms'
+    LEGS = 'legs'
+    ACCESSORY1 = 'accessory'
+    ACCESSORY2 = 'accessory'
+
 class ItemType(StrEnum):
     LIGHT_CONTAINER = "light_container"
     ITEM = "item"
@@ -81,15 +90,6 @@ class SkillType(Enum):
     ROLEPLAY = 7
     STATUS = 8
     COMPLEX = 9
-
-class Slot(StrEnum):
-    MAIN = 'mainhand'
-    OFF = 'offhand'
-    HEAD = 'head'
-    BODY = 'body'
-    ARMS = 'arms'
-    LEGS = 'legs'
-    ACCESSORY = 'accessory'
 
 class SortMode (IntEnum):
     ALPHABETICAL = 0

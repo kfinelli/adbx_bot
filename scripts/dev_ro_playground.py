@@ -1,5 +1,5 @@
-from engine.azure_constants import Slot
 from engine.item import ChargeWeapon, Gear, Weapon, createItemFromData
+from models import ItemSlot
 
 testWeapon = Weapon(
     "Longsword", #name,
@@ -37,7 +37,7 @@ testClone = createItemFromData(testMagic.toJSON())
 testGear = Gear(
     "Casting Robes",
     "V",
-    Slot.BODY.value,
+    ItemSlot.BODY.value,
     0.75,
     0.5,
     0.5,

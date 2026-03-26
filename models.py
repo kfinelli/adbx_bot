@@ -19,13 +19,12 @@ from uuid import UUID, uuid4
 # CharacterClass is generated in azure_engine.py from job JSON files.
 # Import it here so the rest of the codebase can import from models as before.
 from engine.azure_engine import CharacterClass
+from engine.azure_constants import ItemSlot
 from engine.data_loader import ITEM_REGISTRY
-from engine.item import Item
 
 # ---------------------------------------------------------------------------
 # Enumerations (non-ruleset — these don't change between game systems)
 # ---------------------------------------------------------------------------
-
 
 class CharacterStatus(Enum):
     ACTIVE    = "active"
@@ -81,6 +80,7 @@ class ExitDirection(Enum):
     # Named/arbitrary exits are handled by free-form label strings
 
 
+
 # ---------------------------------------------------------------------------
 # Character
 # ---------------------------------------------------------------------------
@@ -110,7 +110,8 @@ class InventoryItem:
     notes:       str    = ""
 
     @property
-    def definition(self) -> Item:
+    def definition(self):
+        # Returns data_loader.Item - no hint to avoid import
         return ITEM_REGISTRY[self.item_id]
 
 
@@ -138,6 +139,8 @@ class Character:
 
     inventory:       list[InventoryItem] = field(default_factory=list)
     gold:            int               = 0
+
+    equipped_items:  dict[ItemSlot, UUID] = field(default_factory=dict)
 
     # Metadata
     created_at:      datetime          = field(default_factory=datetime.utcnow)
