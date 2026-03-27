@@ -14,7 +14,6 @@ from models import (
     CharacterStatus,
     DoorState,
     GameState,
-    InventoryItem,
     RangeBand,
     SessionMode,
     TurnStatus,

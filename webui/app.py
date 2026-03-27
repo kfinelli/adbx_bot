@@ -28,11 +28,13 @@ from engine import (
     close_turn,
     delete_exit,
     delete_feature,
+    give_item,
     hold_session,
     import_dungeon,
     move_party_to_room,
     open_turn,
     register_room,
+    remove_item,
     remove_npc,
     resolve_turn,
     resume_session,
@@ -53,8 +55,6 @@ from engine import (
 )
 from engine import (
     add_npc as eng_add_npc,
-    give_item,
-    remove_item,
 )
 from models import (
     NPC,
