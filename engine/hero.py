@@ -87,7 +87,7 @@ class Character:
         #Items
         self.inventory = []
 
-    def addNewJob(self, jobID, isFirst=False):  # Partially implemented in engine/character.py:30, engine/azure_engine.py
+    def addNewJob(self, jobID, isFirst=False):  # Not yet implemented
         job = getJobFromID(jobID)
         health = d(job.hitDie * POWER_LEVEL)
         if (isFirst):
@@ -96,7 +96,7 @@ class Character:
         jobExperience = JobExperience(job.id, 1, health, job.weaponRanks)
         self.jobs[job.id] = jobExperience
 
-    def levelUp(self, jobID):  # Not yet implemented elsewhere
+    def levelUp(self, jobID):  # Implemented in engine/character.py:433
         if jobID in self.jobs:
             self.jobs[jobID].levelUpJob()
         else:
@@ -200,7 +200,7 @@ class Character:
         self.inventory.remove(item)
 
 
-class JobExperience:
+class JobExperience: # Partially implemented at models.py:30
     def __init__(self, jobID, level=0, health=0, ranks = None):
         if ranks is None:
             ranks = {'e'}
@@ -229,7 +229,7 @@ class JobExperience:
                 skills[skill.id] = skill
         self.skills = skills
 
-    def levelUpJob(self):  # Not yet implemented elsewhere
+    def levelUpJob(self):  # Implemented in engine/character.py:433
         job = self.getJob()
         changes = {
             Stat.PHYSIQUE: 0,

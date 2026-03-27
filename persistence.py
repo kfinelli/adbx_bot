@@ -76,6 +76,38 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _char_dict_from_row(row) -> dict:
+    """Build the dict expected by deserialize_character from a characters table row.
+
+    If jobs_json is present (new format) it is passed directly; otherwise the
+    legacy character_class value is passed so deserialize_character can migrate it.
+    """
+    d: dict = {
+        "character_id":    row["character_id"],
+        "owner_id":        row["owner_id"],
+        "name":            row["name"],
+        "level":           row["level"],
+        "experience":      row["experience"],
+        "ability_scores":  json.loads(row["ability_scores_json"]),
+        "hp_max":          row["hp_max"],
+        "hp_current":      row["hp_current"],
+        "movement_speed":  row["movement_speed"],
+        "saving_throws":   json.loads(row["saving_throws_json"]),
+        "status":          row["status"],
+        "status_notes":    row["status_notes"],
+        "inventory":       json.loads(row["inventory_json"]),
+        "gold":            row["gold"],
+        "created_at":      row["created_at"],
+        "is_pregenerated": bool(row["is_pregenerated"]),
+    }
+    jobs_json = row["jobs_json"] if "jobs_json" in row else None
+    if jobs_json:
+        d["jobs"] = json.loads(jobs_json)
+    else:
+        d["character_class"] = row["character_class"]
+    return d
+
+
 class Database:
     def __init__(self, path: str = "dungeon.db"):
         self.path = path
@@ -109,6 +141,7 @@ class Database:
                 owner_id          TEXT,
                 name              TEXT NOT NULL,
                 character_class   TEXT NOT NULL,
+                jobs_json         TEXT,
                 level             INTEGER NOT NULL DEFAULT 1,
                 experience        INTEGER NOT NULL DEFAULT 0,
                 ability_scores_json TEXT NOT NULL,
@@ -125,6 +158,15 @@ class Database:
                 updated_at        TEXT NOT NULL
             )
         """)
+        # Migrate existing databases: add jobs_json column if absent.
+        existing = {
+            row[1] for row in
+            self._conn.execute("PRAGMA table_info(characters)").fetchall()
+        }
+        if "jobs_json" not in existing:
+            self._conn.execute(
+                "ALTER TABLE characters ADD COLUMN jobs_json TEXT"
+            )
         self._conn.execute("""
             CREATE TABLE IF NOT EXISTS session_characters (
                 session_id    TEXT NOT NULL,
@@ -228,16 +270,17 @@ class Database:
         self._conn.execute(
             """
             INSERT INTO characters (
-                character_id, owner_id, name, character_class, level,
+                character_id, owner_id, name, character_class, jobs_json, level,
                 experience, ability_scores_json, hp_max, hp_current,
                 movement_speed, saving_throws_json, status,
                 status_notes, inventory_json, gold,
                 created_at, is_pregenerated, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(character_id) DO UPDATE SET
                 owner_id = excluded.owner_id,
                 name = excluded.name,
                 character_class = excluded.character_class,
+                jobs_json = excluded.jobs_json,
                 level = excluded.level,
                 experience = excluded.experience,
                 ability_scores_json = excluded.ability_scores_json,
@@ -256,7 +299,8 @@ class Database:
                 char_data["character_id"],
                 char_data["owner_id"],
                 char_data["name"],
-                char_data["character_class"],
+                character.character_class.value,        # display name for the column
+                json.dumps(char_data["jobs"]),           # full jobs dict as JSON
                 char_data["level"],
                 char_data["experience"],
                 json.dumps(char_data["ability_scores"]),
@@ -286,27 +330,7 @@ class Database:
         ).fetchone()
         if row is None:
             return None
-        # Reconstruct the dict format expected by deserialize_character
-        char_dict = {
-            "character_id": row["character_id"],
-            "owner_id": row["owner_id"],
-            "name": row["name"],
-            "character_class": row["character_class"],
-            "level": row["level"],
-            "experience": row["experience"],
-            "ability_scores": json.loads(row["ability_scores_json"]),
-            "hp_max": row["hp_max"],
-            "hp_current": row["hp_current"],
-            "movement_speed": row["movement_speed"],
-            "saving_throws": json.loads(row["saving_throws_json"]),
-            "status": row["status"],
-            "status_notes": row["status_notes"],
-            "inventory": json.loads(row["inventory_json"]),
-            "gold": row["gold"],
-            "created_at": row["created_at"],
-            "is_pregenerated": bool(row["is_pregenerated"]),
-        }
-        return deserialize_character(char_dict)
+        return deserialize_character(_char_dict_from_row(row))
 
     def _delete_character_sync(self, character_id: str) -> None:
         """Delete a character from the characters table."""
@@ -348,26 +372,7 @@ class Database:
         from serialization import deserialize_character
         characters = {}
         for row in rows:
-            char_dict = {
-                "character_id": row["character_id"],
-                "owner_id": row["owner_id"],
-                "name": row["name"],
-                "character_class": row["character_class"],
-                "level": row["level"],
-                "experience": row["experience"],
-                "ability_scores": json.loads(row["ability_scores_json"]),
-                "hp_max": row["hp_max"],
-                "hp_current": row["hp_current"],
-                "movement_speed": row["movement_speed"],
-                "saving_throws": json.loads(row["saving_throws_json"]),
-                "status": row["status"],
-                "status_notes": row["status_notes"],
-                "inventory": json.loads(row["inventory_json"]),
-                "gold": row["gold"],
-                "created_at": row["created_at"],
-                "is_pregenerated": bool(row["is_pregenerated"]),
-            }
-            char = deserialize_character(char_dict)
+            char = deserialize_character(_char_dict_from_row(row))
             characters[char.character_id] = char
         return characters
 
@@ -392,26 +397,7 @@ class Database:
         ).fetchall()
         characters = []
         for row in rows:
-            char_dict = {
-                "character_id": row["character_id"],
-                "owner_id": row["owner_id"],
-                "name": row["name"],
-                "character_class": row["character_class"],
-                "level": row["level"],
-                "experience": row["experience"],
-                "ability_scores": json.loads(row["ability_scores_json"]),
-                "hp_max": row["hp_max"],
-                "hp_current": row["hp_current"],
-                "movement_speed": row["movement_speed"],
-                "saving_throws": json.loads(row["saving_throws_json"]),
-                "status": row["status"],
-                "status_notes": row["status_notes"],
-                "inventory": json.loads(row["inventory_json"]),
-                "gold": row["gold"],
-                "created_at": row["created_at"],
-                "is_pregenerated": bool(row["is_pregenerated"]),
-            }
-            char = deserialize_character(char_dict)
+            char = deserialize_character(_char_dict_from_row(row))
             characters.append(char)
         return characters
 

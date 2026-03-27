@@ -126,6 +126,24 @@ def remove_item(state: GameState, character_id, item_id: str, quantity: int = 1)
     return cm.remove_item(state, character_id, item_id, quantity)
 
 
+def award_xp(state: GameState, character_id, amount: int):
+    """Award XP to a character and trigger level-up checks.
+
+    Returns EngineResult with .data = list[LevelUpResult].
+    """
+    cm = CharacterManager()
+    return cm.award_xp(state, character_id, amount)
+
+
+def check_level_up(state: GameState, character_id):
+    """Check if a character has enough XP to level up; apply all pending levels.
+
+    Returns list[LevelUpResult] — empty if no level-up occurred.
+    """
+    cm = CharacterManager()
+    return cm.check_level_up(state, character_id)
+
+
 def give_item(state: GameState, character_id, item_id: str, quantity: int = 1):
     """
     Add item(s) to a character's inventory, enforcing slot limits.

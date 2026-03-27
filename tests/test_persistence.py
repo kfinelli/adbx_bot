@@ -8,7 +8,7 @@ import tempfile
 
 import pytest
 
-from engine import create_character, start_session
+from engine import award_xp, create_character, start_session
 from models import CharacterClass, GameState, Party
 from persistence import Database
 
@@ -212,3 +212,163 @@ class TestConcurrency:
         asyncio.run(run())
         loaded = db.load("ch1")
         assert loaded is not None  # no corruption, something was saved
+
+
+# ---------------------------------------------------------------------------
+# Dual-path coherency
+#
+# The DB has two write paths:
+#   1. save_async(state)  — session save: writes ALL characters in the state
+#   2. save_character_async(char) — standalone save: writes ONE character
+#
+# A standalone update followed by a session save must NOT revert the
+# standalone changes. This is the class of bug caught by sync_character_to_sessions.
+# ---------------------------------------------------------------------------
+
+def _make_char_state(db: Database, channel_id="ch1") -> tuple:
+    """Create a character, enroll it in a session, and save both to DB.
+    Returns (session_state, char).
+    """
+    s = _make_state(channel_id)
+    create_character(s, "Hero", CharacterClass.KNIGHT, "", owner_id="u1")
+    char = next(iter(s.characters.values()))
+    db.save(s)
+    db.save_character(char)
+    return s, char
+
+
+class TestDualPathCoherency:
+    def test_standalone_save_persists_level(self, db):
+        """save_character writes the new level; subsequent load sees it."""
+        s, char = _make_char_state(db)
+        char.level = 5
+        char.experience = 16000
+        db.save_character(char)
+        reloaded = db.load_character(str(char.character_id))
+        assert reloaded.level == 5
+        assert reloaded.experience == 16000
+
+    def test_session_save_after_standalone_save_preserves_level(self, db):
+        """
+        The regression scenario:
+        1. standalone update → save_character (level 2)
+        2. session save with stale in-memory char (level 1)
+        3. load → must still be level 2
+        sync_character_to_sessions fixes this by updating the in-memory state
+        before any session save can clobber it.
+        """
+        s, char = _make_char_state(db)
+        assert char.level == 1
+
+        # Step 1: standalone update — simulates award_xp via webui
+        char.level = 2
+        char.experience = 2000
+        db.save_character(char)
+
+        # Step 2: session save with the UPDATED char (sync_character_to_sessions
+        # would have placed this updated char into the session state).
+        # Here we simulate that correctly: s.characters already has the same
+        # object reference, so it IS the updated char.
+        db.save(s)
+
+        # Step 3: verify the DB reflects the standalone update, not a rollback
+        reloaded = db.load_character(str(char.character_id))
+        assert reloaded.level == 2
+        assert reloaded.experience == 2000
+
+    def test_stale_session_save_would_revert_without_sync(self, db):
+        """
+        Demonstrates the original bug: a session save with a STALE char object
+        (different Python object, old data) overwrites the standalone save.
+        This test documents the unsafe pattern so we know what sync prevents.
+        """
+        from serialization import deserialize_character, serialize_character
+
+        s, char = _make_char_state(db)
+
+        # Simulate standalone update — save level 2 to DB
+        char.level = 2
+        char.experience = 2000
+        db.save_character(char)
+
+        # Simulate stale in-memory session: reconstruct the old char object
+        # (as if the session loaded before the standalone save and was never synced)
+        old_char_data = serialize_character(char)
+        old_char_data["level"] = 1
+        old_char_data["experience"] = 0
+        old_char_data["jobs"]["knight"]["level"] = 1
+        stale_char = deserialize_character(old_char_data)
+
+        stale_state = _make_state("ch1")
+        stale_state.session_id = s.session_id
+        stale_state.characters = {stale_char.character_id: stale_char}
+        db.save(stale_state)
+
+        # Without sync: the stale session save reverts the character
+        reverted = db.load_character(str(char.character_id))
+        assert reverted.level == 1   # confirms the bug exists without sync
+
+    def test_sync_character_to_sessions_updates_in_memory_state(self):
+        """
+        sync_character_to_sessions replaces the char in every in-memory
+        session that contains it — verified at the store layer.
+        """
+        import store
+        from models import GameState, Party
+
+        # Build a fake in-memory session containing the original char
+        fake_state = GameState(platform_channel_id="ch_fake", dm_user_id="dm1")
+        fake_state.party = Party(name="Test")
+        create_character(fake_state, "Tester", CharacterClass.KNIGHT, "", owner_id="u1")
+        original_char = next(iter(fake_state.characters.values()))
+        store._sessions["ch_fake"] = fake_state
+
+        try:
+            # Build an updated char (same character_id, higher level)
+            from copy import deepcopy
+            updated_char = deepcopy(original_char)
+            updated_char.level = 3
+
+            store.sync_character_to_sessions(updated_char)
+
+            # The in-memory session should now reference the updated char
+            in_memory = store._sessions["ch_fake"].characters[original_char.character_id]
+            assert in_memory.level == 3
+        finally:
+            store._sessions.pop("ch_fake", None)
+
+    def test_award_xp_level_survives_session_save(self, db):
+        """End-to-end: award_xp + save_character + sync → session save → level intact."""
+        import store
+
+        s, char = _make_char_state(db)
+
+        # Simulate what _load_char_state + award_xp + sync does in the route:
+        # 1. Register the session state in-memory (as store would)
+        store._sessions["ch1"] = s
+
+        try:
+            # 2. Load fresh from DB (as _load_char_state does) into a shadow state
+            from models import Party
+            shadow = GameState(platform_channel_id="__edit__", dm_user_id="")
+            shadow.party = Party(name="")
+            fresh_char = db.load_character(str(char.character_id))
+            shadow.characters = {fresh_char.character_id: fresh_char}
+
+            # 3. Award XP (mutates fresh_char in place)
+            award_xp(shadow, fresh_char.character_id, 2000)
+            assert fresh_char.level == 2
+
+            # 4. Save to DB and sync in-memory sessions
+            db.save_character(fresh_char)
+            store.sync_character_to_sessions(fresh_char)
+
+            # 5. Session save (simulates bot command completing a turn, etc.)
+            db.save(s)
+
+            # 6. Reload — must be level 2
+            final = db.load_character(str(char.character_id))
+            assert final.level == 2
+            assert final.experience == 2000
+        finally:
+            store._sessions.pop("ch1", None)

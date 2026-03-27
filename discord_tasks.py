@@ -21,7 +21,29 @@ import contextlib
 
 import discord
 
-from models import GameState, Oracle
+from engine.azure_constants import POWER_LEVEL
+from models import GameState, LevelUpResult, Oracle
+
+# ---------------------------------------------------------------------------
+# Level-up notifications
+# ---------------------------------------------------------------------------
+
+async def dispatch_level_up(bot: discord.Client, character, results: list[LevelUpResult]) -> None:
+    """DM the character's owner when they level up. Best-effort — failures are silent."""
+    if not character.owner_id or not results:
+        return
+    lines = [f"**{character.name} reached Level {results[-1].new_level}!**"]
+    for r in results:
+        hp_display = r.hp_gained / POWER_LEVEL
+        lines.append(f"HP +{hp_display:.0f}")
+        for stat, val in r.stat_changes.items():
+            lines.append(f"{stat.upper()} +{val / POWER_LEVEL:.2f}")
+    try:
+        user = await bot.fetch_user(int(character.owner_id))
+        await user.send("\n".join(lines))
+    except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+        pass
+
 
 # ---------------------------------------------------------------------------
 # Oracle

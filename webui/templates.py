@@ -8,6 +8,7 @@ a `name` attribute matching what the server expects.
 
 from __future__ import annotations
 
+from engine.azure_constants import XP_THRESHOLDS
 from engine.data_loader import ITEM_REGISTRY
 from models import (
     Character,
@@ -1395,6 +1396,14 @@ def character_page(
 </div>"""
     return page("Characters — DM Panel", body)
 
+def _xp_next(level: int) -> str:
+    """Return the XP threshold for the next level, or '—' if at max."""
+    idx = level  # XP_THRESHOLDS[level] = XP needed to reach level+1
+    if idx < len(XP_THRESHOLDS):
+        return str(XP_THRESHOLDS[idx])
+    return "max"
+
+
 def _sheet_stat_grid(stats: list[tuple[str, str]]) -> str:
     """Full-width grid of label/value stat cells."""
     cols = len(stats)
@@ -1506,6 +1515,19 @@ def character_sheet_panel(character: Character) -> str:
       <select name="item_id">{item_options}</select>
       <input type="number" name="quantity" value="1" min="1" style="width:70px;flex:0">
       <button type="submit">Add item</button>
+    </div>
+  </form>
+
+  <hr class="divider">
+
+  <div class="section-header" style="margin-bottom:0.5rem">
+    <h3 style="margin:0">Experience</h3>
+    <span class="muted" style="font-size:0.8rem">{character.experience} / {_xp_next(character.level)} XP</span>
+  </div>
+  <form method="post" action="/characters/{cid_str}/addxp">
+    <div class="row">
+      <input type="number" name="amount" value="100" min="1" style="width:100px;flex:0">
+      <button type="submit">Award XP</button>
     </div>
   </form>
 </div>"""

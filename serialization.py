@@ -34,6 +34,7 @@ from models import (
     ExitDirection,
     GameState,
     InventoryItem,
+    JobExperience,
     LightSource,
     NPCGroup,
     NPCMovementLogic,
@@ -73,6 +74,26 @@ def serialize_inventory_item(item: InventoryItem) -> dict:
     }
 
 
+def serialize_job_experience(j: JobExperience) -> dict:
+    return {
+        "job_id":       j.job_id,
+        "level":        j.level,
+        "hp_bonus":     j.hp_bonus,
+        "stat_bonuses": dict(j.stat_bonuses),
+    }
+
+
+def deserialize_job_experience(d: dict) -> JobExperience:
+    return JobExperience(
+        job_id=d["job_id"],
+        level=d.get("level", 1),
+        hp_bonus=d.get("hp_bonus", 0),
+        stat_bonuses=d.get("stat_bonuses", {
+            "physique": 0, "finesse": 0, "reason": 0, "savvy": 0,
+        }),
+    )
+
+
 def serialize_ability_scores(a: AzureStats) -> dict:
     return {
         "physique": a.physique,
@@ -87,7 +108,7 @@ def serialize_character(c: Character) -> dict:
         "character_id":    _uuid(c.character_id),
         "owner_id":        c.owner_id,
         "name":            c.name,
-        "character_class": _enum(c.character_class),
+        "jobs":            {k: serialize_job_experience(v) for k, v in c.jobs.items()},
         "level":           c.level,
         "experience":      c.experience,
         "ability_scores":  serialize_ability_scores(c.ability_scores),
@@ -369,11 +390,20 @@ def deserialize_character(d: dict) -> Character:
         **{k: v for k, v in saved_slots.items() if k in valid_slot_keys},
     }
 
+    # Handle both new format ("jobs" dict) and old format ("character_class" string).
+    if "jobs" in d:
+        jobs = {k: deserialize_job_experience(v) for k, v in d["jobs"].items()}
+    else:
+        # Migrate: reconstruct a single JobExperience from the old character_class field.
+        old_val  = d.get("character_class", "Knight")
+        job_key  = CharacterClass(old_val).name.lower()
+        jobs = {job_key: JobExperience(job_id=job_key, level=d.get("level", 1))}
+
     return Character(
         character_id=_load_uuid(d["character_id"]),
         owner_id=d["owner_id"],
         name=d["name"],
-        character_class=CharacterClass(d["character_class"]),
+        jobs=jobs,
         level=d["level"],
         experience=d["experience"],
         ability_scores=deserialize_ability_scores(d["ability_scores"]),

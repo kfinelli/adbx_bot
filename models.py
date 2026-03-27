@@ -27,6 +27,32 @@ from engine.item import Gear
 # ---------------------------------------------------------------------------
 
 
+@dataclass
+class JobExperience:
+    """Tracks a character's progression in a single job (class).
+
+    Serialized per-character so leveling history is fully reconstructable
+    even if job definitions change later.
+    """
+    job_id: str
+    level: int = 1
+    hp_bonus: int = 0       # cumulative HP (POWER_LEVEL units) from all level-ups in this job
+    stat_bonuses: dict[str, int] = field(default_factory=lambda: {
+        "physique": 0, "finesse": 0, "reason": 0, "savvy": 0,
+    })
+
+
+@dataclass
+class LevelUpResult:
+    """Returned by engine.check_level_up / award_xp when a level-up occurs."""
+    character_id: UUID
+    character_name: str
+    job_id: str
+    new_level: int
+    hp_gained: int              # POWER_LEVEL units
+    stat_changes: dict[str, int]  # POWER_LEVEL units, non-zero entries only
+
+
 class CharacterStatus(Enum):
     ACTIVE    = "active"
     DEAD      = "dead"
@@ -120,9 +146,16 @@ class Character:
     character_id:    UUID              = field(default_factory=uuid4)
     owner_id:        str | None     = None   # platform user ID (opaque string)
     name:            str               = ""
-    character_class: CharacterClass    = CharacterClass.KNIGHT
-    level:           int               = 1
+    jobs:            dict[str, JobExperience] = field(default_factory=dict)
+    level:           int               = 1   # mirrors primary job's level; kept in sync by level_up
     experience:      int               = 0
+
+    @property
+    def character_class(self) -> CharacterClass:
+        """Derive the primary class from the jobs dict. Backward-compat for all existing readers."""
+        if self.jobs:
+            return CharacterClass[next(iter(self.jobs)).upper()]
+        return CharacterClass.KNIGHT  # unreachable in normal flow
 
     ability_scores:  AzureStats        = field(default_factory=AzureStats)
 

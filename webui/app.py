@@ -20,11 +20,12 @@ from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import HTMLResponse, Response
 
 import store
-from discord_tasks import dispatch_oracle_answer, dispatch_turn_resolved
+from discord_tasks import dispatch_level_up, dispatch_oracle_answer, dispatch_turn_resolved
 from engine import (
     add_exit,
     answer_oracle,
     apply_condition,
+    award_xp,
     close_turn,
     delete_exit,
     delete_feature,
@@ -65,7 +66,7 @@ from models import (
     RoomFeature,
 )
 from serialization import deserialize_dungeon_file, serialize_dungeon_file
-from store import archive_session, repost_status, save_session_async
+from store import archive_session, repost_status, save_session_async, sync_character_to_sessions
 from webui.templates import (
     archive_page,
     character_page,
@@ -1041,7 +1042,13 @@ def _char_redirect(char_id: str, flash: str = "", error: str = "") -> Response:
 
 
 def _load_char_state(char_id: str):
-    """Load a character from DB and wrap it in a minimal GameState for engine calls."""
+    """Load a character from DB and wrap it in a minimal GameState for engine calls.
+
+    IMPORTANT: After mutating the character and calling save_character_async(),
+    you MUST also call sync_character_to_sessions(char). Without it, the next
+    save_session_async() call (from a bot command, turn resolution, etc.) will
+    write the stale in-memory copy back to DB, reverting your changes.
+    """
     from models import GameState, Party
     char = store.db.load_character(char_id)
     if char is None:
@@ -1065,6 +1072,7 @@ async def route_character_additem(
     if not result.ok:
         return _char_redirect(char_id, error=result.error)
     await store.db.save_character_async(char)
+    sync_character_to_sessions(char)
     return _char_redirect(char_id, flash=result.message)
 
 
@@ -1081,5 +1089,23 @@ async def route_character_removeitem(
     if not result.ok:
         return _char_redirect(char_id, error=result.error)
     await store.db.save_character_async(char)
+    sync_character_to_sessions(char)
+    return _char_redirect(char_id, flash=result.message)
+
+
+@app.post("/characters/{char_id}/addxp", response_class=HTMLResponse)
+async def route_character_addxp(
+    char_id: str,
+    amount: Annotated[int, Form()],
+):
+    state, char = _load_char_state(char_id)
+    if char is None:
+        return _char_redirect(char_id, error="Character not found.")
+    result = award_xp(state, char.character_id, amount)
+    await store.db.save_character_async(char)
+    sync_character_to_sessions(char)
+    level_ups = getattr(result, "data", [])
+    if level_ups and _bot:
+        asyncio.create_task(dispatch_level_up(_bot, char, level_ups))
     return _char_redirect(char_id, flash=result.message)
 

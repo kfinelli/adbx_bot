@@ -9,7 +9,7 @@ from engine.azure_constants import (
     ItemSlot,
 )
 from engine.azure_engine import CREATION_RULES, POWER_LEVEL
-from engine.data_loader import ITEM_REGISTRY
+from engine.data_loader import CLASS_DEFINITIONS, ITEM_REGISTRY
 from engine.item import ChargeWeapon, EquipItem, Gear, Weapon
 from models import (
     AzureStats,
@@ -18,6 +18,8 @@ from models import (
     CharacterStatus,
     GameState,
     InventoryItem,
+    JobExperience,
+    LevelUpResult,
 )
 from validation import validate_hp_value
 
@@ -71,10 +73,11 @@ class CharacterManager:
         hp_max    = rules.hitDie   * POWER_LEVEL
         base_save = rules.baseSave * POWER_LEVEL
 
+        job_key = character_class.name.lower()  # e.g. "knight"
         character = Character(
             owner_id=owner_id,
             name=name,
-            character_class=character_class,
+            jobs={job_key: JobExperience(job_id=job_key, level=1)},
             level=1,
             experience=0,
             ability_scores=scores,
@@ -373,3 +376,92 @@ class CharacterManager:
         item_name = definition.name if definition else item_id
         state.updated_at = _now()
         return _ok(state, f"{char.name} unequipped {item_name} from the {slot.value} slot.")
+
+    # ------------------------------------------------------------------
+    # XP and level-up
+    # ------------------------------------------------------------------
+
+    def award_xp(self, state: GameState, character_id, amount: int):
+        """Award XP to a character and trigger any resulting level-ups.
+
+        Returns an EngineResult whose .data is a list[LevelUpResult]
+        (empty if no level-up occurred).
+        """
+        from engine import _now
+        char = state.characters.get(character_id)
+        if char is None:
+            return _err(state, f"Character {character_id} not found.")
+        if amount < 1:
+            return _err(state, "XP amount must be at least 1.")
+        char.experience += amount
+        state.updated_at = _now()
+        level_ups = self.check_level_up(state, character_id)
+        msg = f"{char.name} gained {amount} XP."
+        if level_ups:
+            msg += " " + " ".join(f"Level {r.new_level}!" for r in level_ups)
+        result = _ok(state, msg)
+        result.data = level_ups
+        return result
+
+    def check_level_up(self, state: GameState, character_id) -> list[LevelUpResult]:
+        """Check whether char has enough XP to level up; apply all pending levels.
+
+        Safe to call at any time (e.g. after manual XP edits).
+        Returns a list of LevelUpResult — one per level gained, empty if none.
+        """
+        from engine.azure_constants import XP_THRESHOLDS
+        char = state.characters.get(character_id)
+        if char is None or not char.jobs:
+            return []
+        job_id  = next(iter(char.jobs))
+        job_exp = char.jobs[job_id]
+        job_def = CLASS_DEFINITIONS.get(job_id.upper())
+        if job_def is None:
+            return []
+        results: list[LevelUpResult] = []
+        while True:
+            next_level = job_exp.level + 1
+            if next_level > job_def.max_level:
+                break
+            if next_level - 1 >= len(XP_THRESHOLDS):
+                break
+            if char.experience < XP_THRESHOLDS[next_level - 1]:
+                break
+            results.append(self._do_level_up(char, job_exp, job_def))
+        return results
+
+    def _do_level_up(self, char, job_exp: JobExperience, job_def) -> LevelUpResult:
+        """Apply one level-up to char. Mutates char and job_exp in place."""
+        import random
+
+        from engine.azure_constants import POWER_LEVEL, StatPriority
+
+        _STAT_MAP = {"PHY": "physique", "FNS": "finesse", "RSN": "reason", "SVY": "savvy"}
+
+        # HP gain: roll d(hit_die * POWER_LEVEL), matching hero.py formula
+        hp_gain = random.randint(1, job_def.hit_die * POWER_LEVEL)
+        job_exp.hp_bonus += hp_gain
+        char.hp_max += hp_gain
+
+        # Stat gain: primary stat only, up to StatPriority.GREATEST POWER_LEVEL units
+        primary_attr = _STAT_MAP.get(job_def.primary_stat, "physique")
+        stat_gain = random.randint(1, StatPriority.GREATEST)
+        job_exp.stat_bonuses[primary_attr] += stat_gain
+        setattr(char.ability_scores, primary_attr,
+                getattr(char.ability_scores, primary_attr) + stat_gain)
+
+        # Increment level
+        job_exp.level += 1
+        char.level = job_exp.level
+
+        # Heal to full (per hero.py refreshSheet(heal=True) behaviour)
+        char.hp_current = char.hp_max
+
+        return LevelUpResult(
+            character_id=char.character_id,
+            character_name=char.name,
+            job_id=job_exp.job_id,
+            new_level=job_exp.level,
+            hp_gained=hp_gain,
+            stat_changes={primary_attr: stat_gain},
+        )

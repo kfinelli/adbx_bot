@@ -36,6 +36,18 @@ def get_characters_by_owner(owner_id: str) -> list:
     ID."""
     return db.get_characters_by_owner(owner_id)
 
+
+def sync_character_to_sessions(char) -> None:
+    """Replace a character in every in-memory session that contains it.
+
+    Call this after any standalone character update (addxp, equip, etc.) so
+    that a later session save doesn't overwrite the updated character with stale
+    in-memory data.
+    """
+    for state in _sessions.values():
+        if char.character_id in state.characters:
+            state.characters[char.character_id] = char
+
 # ---------------------------------------------------------------------------
 # In-memory session cache
 # ---------------------------------------------------------------------------
