@@ -8,6 +8,7 @@ a `name` attribute matching what the server expects.
 
 from __future__ import annotations
 
+from engine.data_loader import ITEM_REGISTRY
 from models import (
     Character,
     CharacterStatus,
@@ -1449,23 +1450,51 @@ def character_sheet_panel(
     saves = _stat_block([
         ("Save", character.saving_throws.get("save", "—")),
     ], 2, name="Saves")
-    inv_cells = "".join(
-            f'<div style="text-align:left">'
-            f'  <div style="font-size:0.9rem">{_display_inventory_item(inv_item)}</div>'
-            f'</div>'
-            for inv_item in character.inventory
-            )
+    cid_str = str(character.character_id)
+    item_rows = ""
+    for inv_item in character.inventory:
+        defn = ITEM_REGISTRY.get(inv_item.item_id)
+        name = defn.name if defn else inv_item.item_id
+        qty_badge = f" <span class='muted'>×{inv_item.quantity}</span>" if inv_item.quantity > 1 else ""
+        equip_badge = " <span class='tag tag-open' style='font-size:0.7rem'>E</span>" if inv_item.equipped else ""
+        disabled = 'disabled title="Unequip before removing"' if inv_item.equipped else ""
+        item_rows += (
+            f'<tr>'
+            f'<td style="padding:2px 6px;font-size:0.9rem">{name}{qty_badge}{equip_badge}</td>'
+            f'<td style="padding:2px 4px">'
+            f'<form method="post" action="/characters/{cid_str}/removeitem" style="margin:0">'
+            f'<input type="hidden" name="item_id" value="{inv_item.item_id}">'
+            f'<input type="hidden" name="quantity" value="{inv_item.quantity}">'
+            f'<button class="btn-sm" type="submit" style="padding:1px 6px" {disabled}>✕</button>'
+            f'</form>'
+            f'</td>'
+            f'</tr>'
+        )
+    empty_row = '<tr><td colspan="2" class="muted" style="padding:2px 6px">Empty</td></tr>'
+    item_options = "\n".join(
+        f'<option value="{iid}">{item.name}</option>'
+        for iid, item in sorted(ITEM_REGISTRY.items(), key=lambda x: x[1].name)
+    )
     inventory = (
-            f'<div style="padding:0.75rem;border:1px solid #0f3460;'
-            f'width:fit-content;border-radius:8px;margin:0.5rem 0">'
-            f'<div class="section-header" style="margin-bottom:0.5rem">'
-            f'  <h3>Inventory</h3>'
-            f'</div>'
-            f'<div style="display:grid;'
-            f'grid-template-columns:repeat(2,max-content);gap:0.5rem;">'
-            f'{inv_cells}</div>'
-            f'</div>'
-            )
+        f'<div style="padding:0.75rem;border:1px solid #0f3460;'
+        f'border-radius:8px;margin:0.5rem 0">'
+        f'<div class="section-header" style="margin-bottom:0.5rem">'
+        f'<h3>Inventory</h3>'
+        f'<span class="muted" style="font-size:0.85rem">'
+        f'{character.slots_used}/{character.inventory_size} slots</span>'
+        f'</div>'
+        f'<table style="border-collapse:collapse;margin-bottom:0.75rem">'
+        f'{item_rows if item_rows else empty_row}'
+        f'</table>'
+        f'<form method="post" action="/characters/{cid_str}/additem">'
+        f'<div class="row" style="gap:4px;flex-wrap:wrap">'
+        f'<select name="item_id" style="font-size:0.85rem">{item_options}</select>'
+        f'<input type="number" name="quantity" value="1" min="1" style="width:55px;font-size:0.85rem">'
+        f'<button class="btn-sm" type="submit">Add item</button>'
+        f'</div>'
+        f'</form>'
+        f'</div>'
+    )
 
     return f"""
 <div class="card">

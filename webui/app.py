@@ -53,6 +53,8 @@ from engine import (
 )
 from engine import (
     add_npc as eng_add_npc,
+    give_item,
+    remove_item,
 )
 from models import (
     NPC,
@@ -296,6 +298,40 @@ async def route_char_setstatus(
     if not result.ok:
         return _respond(channel_id, error=result.error)
     return _respond(channel_id)
+
+
+@app.post("/session/{channel_id}/char/{char_id}/additem", response_class=HTMLResponse)
+async def route_char_additem(
+    channel_id: str,
+    char_id: str,
+    item_id: Annotated[str, Form()],
+    quantity: Annotated[int, Form()] = 1,
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    result = give_item(state, UUID(char_id), item_id, quantity)
+    if not result.ok:
+        return _respond(channel_id, error=result.error)
+    await save_session_async(state)
+    return _respond(channel_id, flash=result.message)
+
+
+@app.post("/session/{channel_id}/char/{char_id}/removeitem", response_class=HTMLResponse)
+async def route_char_removeitem(
+    channel_id: str,
+    char_id: str,
+    item_id: Annotated[str, Form()],
+    quantity: Annotated[int, Form()] = 1,
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    result = remove_item(state, UUID(char_id), item_id, quantity)
+    if not result.ok:
+        return _respond(channel_id, error=result.error)
+    await save_session_async(state)
+    return _respond(channel_id, flash=result.message)
 
 
 @app.post("/session/{channel_id}/setleader/{char_id}", response_class=HTMLResponse)
@@ -992,4 +1028,58 @@ async def character_index(view_char: str = "", flash: str = "", error: str = "")
         if char:
             entries[cid] = char
     return character_page(_session_list(), entries, flash=flash, error=error, view_char_id=view_char)
+
+
+def _char_redirect(char_id: str, flash: str = "", error: str = "") -> Response:
+    params = f"view_char={char_id}"
+    if flash:
+        params += f"&flash={flash}"
+    if error:
+        params += f"&error={error}"
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(f"/characters?{params}", status_code=303)
+
+
+def _load_char_state(char_id: str):
+    """Load a character from DB and wrap it in a minimal GameState for engine calls."""
+    from models import GameState, Party
+    char = store.db.load_character(char_id)
+    if char is None:
+        return None, None
+    state = GameState(platform_channel_id="__char_edit__", dm_user_id="")
+    state.party = Party(name="")
+    state.characters = {char.character_id: char}
+    return state, char
+
+
+@app.post("/characters/{char_id}/additem", response_class=HTMLResponse)
+async def route_character_additem(
+    char_id: str,
+    item_id: Annotated[str, Form()],
+    quantity: Annotated[int, Form()] = 1,
+):
+    state, char = _load_char_state(char_id)
+    if char is None:
+        return _char_redirect(char_id, error="Character not found.")
+    result = give_item(state, char.character_id, item_id, quantity)
+    if not result.ok:
+        return _char_redirect(char_id, error=result.error)
+    await store.db.save_character_async(char)
+    return _char_redirect(char_id, flash=result.message)
+
+
+@app.post("/characters/{char_id}/removeitem", response_class=HTMLResponse)
+async def route_character_removeitem(
+    char_id: str,
+    item_id: Annotated[str, Form()],
+    quantity: Annotated[int, Form()] = 1,
+):
+    state, char = _load_char_state(char_id)
+    if char is None:
+        return _char_redirect(char_id, error="Character not found.")
+    result = remove_item(state, char.character_id, item_id, quantity)
+    if not result.ok:
+        return _char_redirect(char_id, error=result.error)
+    await store.db.save_character_async(char)
+    return _char_redirect(char_id, flash=result.message)
 
