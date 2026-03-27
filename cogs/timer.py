@@ -11,6 +11,7 @@ On expiry:
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 
 import discord
@@ -88,7 +89,8 @@ class TimerCog(commands.Cog):
 
     @check_timers.before_loop
     async def before_check_timers(self):
-        await self.bot.wait_until_ready()
+        while not self.bot.is_ready():
+            await asyncio.sleep(1)
 
 
 async def setup(bot: commands.Bot):
