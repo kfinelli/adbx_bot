@@ -1396,115 +1396,117 @@ def character_page(
 </div>"""
     return page("Characters — DM Panel", body)
 
-def _stat_block(stats: list[tuple[str, str]], cols: int | None = None, name: str | None = None) -> str:
-    """Render a row of label/value pairs, e.g. [('HP', '8/10'), ('DEF', '5')]"""
-    col_count = cols or len(stats)
+def _sheet_stat_grid(stats: list[tuple[str, str]]) -> str:
+    """Full-width grid of label/value stat cells."""
+    cols = len(stats)
     cells = "".join(
-            f'<div style="text-align:center">'
-            f'  <div class="muted" style="font-size:0.7rem">{label}</div>'
-            f'  <div style="font-size:1.1rem;font-weight:bold">{value}</div>'
-            f'</div>'
-            for label, value in stats
-            )
-    header = (
-            f'<div class="section-header" style="margin-bottom:0.5rem">'
-            f'  <h3>{name}</h3>'
-            f'</div>'
-            ) if name else ""
-    grid = (
-            f'<div style="display:grid;'
-            f'grid-template-columns:repeat({col_count},minmax(3rem,5rem));'
-            f'gap:0.5rem;">'
-            f'{cells}</div>'
-            )
+        f'<div style="background:#0f1e36;border:1px solid #0f3460;border-radius:6px;'
+        f'padding:0.5rem 0.25rem;text-align:center">'
+        f'<div style="font-size:0.7rem;color:#888;text-transform:uppercase;'
+        f'letter-spacing:0.05em;margin-bottom:0.25rem">{label}</div>'
+        f'<div style="font-size:1rem;font-weight:bold;color:#e0e0e0">{value}</div>'
+        f'</div>'
+        for label, value in stats
+    )
     return (
-            f'<div style="padding:0.75rem;border:1px solid #0f3460;'
-            f'border-radius:8px;margin:0.5rem 0; width:fit-content;">'
-            f'{header}{grid}'
-            f'</div>'
-            )
+        f'<div style="display:grid;grid-template-columns:repeat({cols},1fr);'
+        f'gap:0.4rem;margin-bottom:0.75rem">{cells}</div>'
+    )
 
 
-def _display_inventory_item(item: InventoryItem) -> str:
-    """Prepare a formatted name, quantity, equip indicator for an item."""
-    quantity   = f"{item.quantity}x " if item.quantity > 1 else ""
-    equipstatus = "(EQUIP) " if item.equipped else ""
-    return f"{quantity}{equipstatus}{item.definition.name}"
-
-def character_sheet_panel(
-    character: Character,
-) -> str:
+def character_sheet_panel(character: Character) -> str:
     a = character.ability_scores
-    def _fmt_stat(val: int) -> str:
+
+    def _fmt(val: int) -> str:
         return f"{val / 100:+.2f}"
-    ability_scores = _stat_block([
-        ("PHY", _fmt_stat(a.physique)),
-        ("FNS", _fmt_stat(a.finesse)),
-        ("RSN", _fmt_stat(a.reason)),
-        ("SVY", _fmt_stat(a.savvy)),
-    ], name="Stats")
-    hp_ac_movement = _stat_block([("HP", f"{character.hp_current}/{character.hp_max}"),
-                                  ("DEF", character.defense),
-                                  ("RES", character.resistance),
-                                  ("Move", f"{character.movement_speed}'")], 1)
-    saves = _stat_block([
+
+    ability_grid = _sheet_stat_grid([
+        ("Physique", _fmt(a.physique)),
+        ("Finesse",  _fmt(a.finesse)),
+        ("Reason",   _fmt(a.reason)),
+        ("Savvy",    _fmt(a.savvy)),
+    ])
+    combat_grid = _sheet_stat_grid([
+        ("HP",   f"{character.hp_current}/{character.hp_max}"),
+        ("Def",  character.defense),
+        ("Res",  character.resistance),
+        ("Move", f"{character.movement_speed}'"),
         ("Save", character.saving_throws.get("save", "—")),
-    ], 2, name="Saves")
+    ])
+
+    status_tag = ""
+    if character.status == CharacterStatus.DEAD:
+        status_tag = ' <span class="tag tag-dead">DEAD</span>'
+    elif character.status_notes:
+        status_tag = f' <span class="muted" style="font-size:0.8rem">({character.status_notes})</span>'
+
     cid_str = str(character.character_id)
     item_rows = ""
     for inv_item in character.inventory:
         defn = ITEM_REGISTRY.get(inv_item.item_id)
-        name = defn.name if defn else inv_item.item_id
-        qty_badge = f" <span class='muted'>×{inv_item.quantity}</span>" if inv_item.quantity > 1 else ""
-        equip_badge = " <span class='tag tag-open' style='font-size:0.7rem'>E</span>" if inv_item.equipped else ""
+        item_name = defn.name if defn else inv_item.item_id
+        qty_str = f'<span class="muted"> ×{inv_item.quantity}</span>' if inv_item.quantity > 1 else ""
+        equip_str = ' <span class="tag tag-open" style="font-size:0.7rem;padding:1px 5px">equip</span>' if inv_item.equipped else ""
         disabled = 'disabled title="Unequip before removing"' if inv_item.equipped else ""
         item_rows += (
             f'<tr>'
-            f'<td style="padding:2px 6px;font-size:0.9rem">{name}{qty_badge}{equip_badge}</td>'
-            f'<td style="padding:2px 4px">'
+            f'<td>{item_name}{qty_str}{equip_str}</td>'
+            f'<td style="width:1%;white-space:nowrap">'
             f'<form method="post" action="/characters/{cid_str}/removeitem" style="margin:0">'
             f'<input type="hidden" name="item_id" value="{inv_item.item_id}">'
             f'<input type="hidden" name="quantity" value="{inv_item.quantity}">'
-            f'<button class="btn-sm" type="submit" style="padding:1px 6px" {disabled}>✕</button>'
+            f'<button class="btn-sm btn-danger" type="submit" {disabled}>✕</button>'
             f'</form>'
             f'</td>'
             f'</tr>'
         )
-    empty_row = '<tr><td colspan="2" class="muted" style="padding:2px 6px">Empty</td></tr>'
+    empty_row = '<tr><td colspan="2" class="muted">Empty</td></tr>'
+
     item_options = "\n".join(
         f'<option value="{iid}">{item.name}</option>'
         for iid, item in sorted(ITEM_REGISTRY.items(), key=lambda x: x[1].name)
     )
-    inventory = (
-        f'<div style="padding:0.75rem;border:1px solid #0f3460;'
-        f'border-radius:8px;margin:0.5rem 0">'
-        f'<div class="section-header" style="margin-bottom:0.5rem">'
-        f'<h3>Inventory</h3>'
-        f'<span class="muted" style="font-size:0.85rem">'
-        f'{character.slots_used}/{character.inventory_size} slots</span>'
-        f'</div>'
-        f'<table style="border-collapse:collapse;margin-bottom:0.75rem">'
-        f'{item_rows if item_rows else empty_row}'
-        f'</table>'
-        f'<form method="post" action="/characters/{cid_str}/additem">'
-        f'<div class="row" style="gap:4px;flex-wrap:wrap">'
-        f'<select name="item_id" style="font-size:0.85rem">{item_options}</select>'
-        f'<input type="number" name="quantity" value="1" min="1" style="width:55px;font-size:0.85rem">'
-        f'<button class="btn-sm" type="submit">Add item</button>'
-        f'</div>'
-        f'</form>'
-        f'</div>'
-    )
+
+    slots_pct = int(character.slots_used / character.inventory_size * 100) if character.inventory_size else 0
+    bar_color = "#c9a84c" if slots_pct < 80 else "#f44336"
 
     return f"""
-<div class="card">
-<div class="section-header"> <h3>{character.name}</h3> </div>
-<div class="muted">{character.character_class.value} — Level {character.level} &nbsp;·&nbsp; {character.experience}
-XP &nbsp;·&nbsp; {character.gold} gp</div>
-  {ability_scores}
-  <div class="grid-2">
-  {hp_ac_movement}
-  {saves}
+<div class="card" style="max-width:640px">
+  <div class="section-header" style="margin-bottom:0.25rem">
+    <h2 style="margin:0;font-size:1.3rem">{character.name}{status_tag}</h2>
+    <span class="muted">{character.gold} gp</span>
   </div>
-  {inventory}
+  <div class="muted" style="margin-bottom:1rem">
+    {character.character_class.value} &nbsp;·&nbsp;
+    Level {character.level} &nbsp;·&nbsp;
+    {character.experience} XP
+  </div>
+
+  <div style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.4rem">Ability Scores</div>
+  {ability_grid}
+
+  <div style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.4rem">Combat</div>
+  {combat_grid}
+
+  <hr class="divider">
+
+  <div class="section-header" style="margin-bottom:0.5rem">
+    <h3 style="margin:0">Inventory</h3>
+    <div style="text-align:right">
+      <span class="muted" style="font-size:0.8rem">{character.slots_used}/{character.inventory_size} slots</span>
+      <div style="width:80px;height:4px;background:#0f3460;border-radius:2px;margin-top:3px">
+        <div style="width:{slots_pct}%;height:100%;background:{bar_color};border-radius:2px"></div>
+      </div>
+    </div>
+  </div>
+  <table style="margin-bottom:0.75rem">
+    {item_rows if item_rows else empty_row}
+  </table>
+  <form method="post" action="/characters/{cid_str}/additem">
+    <div class="row">
+      <select name="item_id">{item_options}</select>
+      <input type="number" name="quantity" value="1" min="1" style="width:70px;flex:0">
+      <button type="submit">Add item</button>
+    </div>
+  </form>
 </div>"""

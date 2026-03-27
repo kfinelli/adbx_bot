@@ -35,6 +35,7 @@ from engine import (
     add_exit,
     add_npc,
     create_character,
+    give_item,
     register_room,
     start_session,
     submit_turn,
@@ -76,6 +77,18 @@ def _build_fixture_state() -> GameState:
         create_character(state, name, cls, "Pack A", owner_id=owner)
 
     state.party.leader_id = list(state.party.member_ids)[0]
+
+    # Give each character some inventory for UI preview
+    char_ids = list(state.party.member_ids)
+    give_item(state, char_ids[0], "longsword")
+    give_item(state, char_ids[0], "kite_shield")
+    give_item(state, char_ids[0], "torch", 3)
+    give_item(state, char_ids[1], "staff")
+    give_item(state, char_ids[1], "dagger", 2)
+    give_item(state, char_ids[2], "shortsword")
+    give_item(state, char_ids[2], "short_bow")
+    give_item(state, char_ids[2], "torch", 6)
+
     start_session(state)
 
     # Build a dungeon room
@@ -100,7 +113,6 @@ def _build_fixture_state() -> GameState:
     add_npc(state, NPC(name="Stirge (wounded)", hp_current=1, hp_max=3))
 
     # Simulate one submission so the turn panel shows something
-    char_ids = list(state.characters.keys())
     submit_turn(state, char_ids[0], "Search: I check the mosaic floor carefully for loose tiles.")
 
     return state
@@ -109,6 +121,9 @@ def _build_fixture_state() -> GameState:
 # ---------------------------------------------------------------------------
 # Request handler
 # ---------------------------------------------------------------------------
+
+_FIXTURE_STATE = None  # built once so UUIDs are stable across requests
+
 
 class PreviewHandler(BaseHTTPRequestHandler):
 
@@ -135,7 +150,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
         qs = parse_qs(parsed.query)
 
         tmpl = self._reload_templates()
-        state = _build_fixture_state()
+        state = _FIXTURE_STATE
         sessions = [(FIXTURE_CHANNEL_ID, "#fixture-channel")]
 
         try:
@@ -194,7 +209,8 @@ font-family:monospace;padding:2rem"><h2>Template error</h2><pre>{tb}</pre></body
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8001
-    state = _build_fixture_state()   # validate fixtures at startup
+    _FIXTURE_STATE = _build_fixture_state()
+    state = _FIXTURE_STATE   # validate fixtures at startup
     print(f"Fixture state: {len(state.characters)} characters, "
           f"session {FIXTURE_CHANNEL_ID[:8]}...")
     print(f"Preview server running at http://localhost:{port}")
