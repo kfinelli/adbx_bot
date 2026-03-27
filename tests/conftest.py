@@ -13,8 +13,19 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
 
-from engine import create_character, start_session
-from models import CharacterClass, GameState, Party
+
+def pytest_ignore_collect(collection_path, config):
+    """Skip the discord_integration directory entirely if discord.py is not installed."""
+    if "discord_integration" in str(collection_path):
+        try:
+            import discord  # noqa: F401
+        except ImportError:
+            return True
+    return None
+
+
+from engine import create_character, start_session  # noqa: E402
+from models import CharacterClass, GameState, Party  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Bare state — no party, no characters
