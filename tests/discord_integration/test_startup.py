@@ -6,7 +6,6 @@ No human interaction required.
 
 import pytest
 
-
 EXPECTED_COGS = {"ArriveCog", "SessionCog", "DMCog", "TimerCog", "ActionButtonsCog"}
 
 EXPECTED_COMMANDS = {
@@ -20,7 +19,7 @@ EXPECTED_COMMANDS = {
 async def test_all_cogs_loaded(bot):
     """Every cog in the expected set is registered on the bot."""
     loaded = set(bot.cogs.keys())
-    assert EXPECTED_COGS == loaded, (
+    assert loaded == EXPECTED_COGS, (
         f"Cog mismatch.\n  Missing: {EXPECTED_COGS - loaded}\n  Extra: {loaded - EXPECTED_COGS}"
     )
 
@@ -28,8 +27,9 @@ async def test_all_cogs_loaded(bot):
 @pytest.mark.discord_integration
 async def test_slash_commands_registered(bot):
     """All expected slash commands are present in the command tree."""
-    from tests.discord_integration._config import GUILD_ID
     import discord
+
+    from tests.discord_integration._config import GUILD_ID
     registered = {c.name for c in bot.tree.get_commands(guild=discord.Object(id=GUILD_ID))}
     # Fall back to global commands if guild-scoped commands aren't synced yet.
     registered |= {c.name for c in bot.tree.get_commands()}

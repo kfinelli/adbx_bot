@@ -53,8 +53,8 @@ def _test_db_path(tmp_path_factory):
 @pytest.fixture(scope="session", autouse=True)
 def _patch_store_db(_test_db_path):
     """Replace the production db with a temp one for the whole test session."""
-    from persistence import Database
     import store
+    from persistence import Database
     original = store.db
     store.db = Database(_test_db_path)
     yield

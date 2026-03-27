@@ -8,10 +8,10 @@ the channel. No human interaction required.
 
 import pytest
 
-from tests.discord_integration._config import TEST_CHANNEL_ID, TEST_DM_USER_ID
-from engine import create_character, open_turn, render_status, start_session
+from engine import create_character, open_turn, start_session
 from engine.azure_engine import CharacterClass
 from models import SessionMode, TurnStatus
+from tests.discord_integration._config import TEST_CHANNEL_ID, TEST_DM_USER_ID
 
 
 def _channel_id() -> str:
@@ -108,7 +108,7 @@ async def test_status_edits_in_place(bot, test_channel, started_session):
 async def test_session_delete_cleans_up(bot, test_channel):
     """Deleting a session removes it from the store (nothing persists)."""
     from store import create_session, delete_session, get_session
-    state = create_session(_channel_id(), TEST_DM_USER_ID)
+    _state = create_session(_channel_id(), TEST_DM_USER_ID)
     assert get_session(_channel_id()) is not None
 
     delete_session(_channel_id(), keep_characters=False)

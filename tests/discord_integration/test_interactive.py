@@ -14,9 +14,9 @@ import asyncio
 import discord
 import pytest
 
-from tests.discord_integration._config import TEST_CHANNEL_ID, TEST_DM_USER_ID
 from engine import create_character, open_turn, start_session
 from engine.azure_engine import CharacterClass
+from tests.discord_integration._config import TEST_CHANNEL_ID, TEST_DM_USER_ID
 
 TIMEOUT = 90  # seconds to wait for each human action
 POLL_INTERVAL = 2  # seconds between store polls
@@ -26,7 +26,7 @@ _CHANNEL_ID = str(TEST_CHANNEL_ID)
 def _prompt(msg: str):
     """Print a clearly visible prompt to the terminal."""
     print(f"\n{'='*60}")
-    print(f"  ACTION REQUIRED")
+    print("  ACTION REQUIRED")
     print(f"  {msg}")
     print(f"  (timeout: {TIMEOUT}s)")
     print(f"{'='*60}\n", flush=True)
