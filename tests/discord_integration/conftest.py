@@ -76,7 +76,7 @@ async def bot(_patch_store_db):
     _bot = commands.Bot(command_prefix="!", intents=intents)
 
     await _bot.load_extension("cogs.arrive")
-    await _bot.load_extension("cogs.session")
+    await _bot.load_extension("cogs.slash_commands")
     await _bot.load_extension("cogs.dm_commands")
     await _bot.load_extension("cogs.timer")
     await _bot.load_extension("cogs.action_buttons")

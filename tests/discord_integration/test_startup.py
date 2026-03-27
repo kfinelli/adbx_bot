@@ -9,7 +9,7 @@ import pytest
 EXPECTED_COGS = {"ArriveCog", "SessionCog", "DMCog", "TimerCog", "ActionButtonsCog"}
 
 EXPECTED_COMMANDS = {
-    "arrive", "character", "turn", "round", "oracle",
+    "arrive", "turn", "round", "oracle",
     "abscond", "say", "emote", "strife", "help", "status",
     "dm_newsession", "dm_strife", "dm_say", "dm_emote",
 }

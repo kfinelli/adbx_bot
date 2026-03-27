@@ -25,7 +25,7 @@ a per-player, transient view with the action buttons for that character's class
   • The Affect button opens an AffectModal directly (no second step needed).
 
 On final selection / modal submit, submit_turn() is called with a CombatAction
-and the ephemeral is replaced with "✓ Action submitted."
+and the ephemeral is replaced with "Action submitted."
 
 Discord constraints observed
 -----------------------------
@@ -100,12 +100,12 @@ async def _guard_session(interaction: discord.Interaction):
     state = get_session(str(interaction.channel_id))
     if state is None:
         await interaction.response.send_message(
-            "⚠ No active session in this channel.", ephemeral=True
+            "No active session in this channel.", ephemeral=True
         )
         return None
     if not state.session_active:
         await interaction.response.send_message(
-            "⚠ The session is on hold.", ephemeral=True
+            "The session is on hold.", ephemeral=True
         )
         return None
     return state
@@ -123,14 +123,14 @@ async def _check_turn(interaction: discord.Interaction):
 
     if state.current_turn is None or state.current_turn.status != TurnStatus.OPEN:
         await interaction.response.send_message(
-            "⚠ The turn is closed — waiting for DM resolution.", ephemeral=True
+            "The turn is closed — waiting for DM resolution.", ephemeral=True
         )
         return None, None
 
     char = _find_character(state, str(interaction.user.id))
     if char is None:
         await interaction.response.send_message(
-            "⚠ You don't have a character in this session.", ephemeral=True
+            "You don't have a character in this session.", ephemeral=True
         )
         return None, None
 
@@ -149,20 +149,20 @@ async def _check_combat_turn(interaction: discord.Interaction):
 
     if state.mode != SessionMode.ROUNDS:
         await interaction.response.send_message(
-            "⚠ Not in combat — use the exploration buttons instead.", ephemeral=True
+            "Not in combat — use the exploration buttons instead.", ephemeral=True
         )
         return None, None
 
     if state.current_turn is None or state.current_turn.status != TurnStatus.OPEN:
         await interaction.response.send_message(
-            "⚠ The round is closed — waiting for resolution.", ephemeral=True
+            "The round is closed — waiting for resolution.", ephemeral=True
         )
         return None, None
 
     char = _find_character(state, str(interaction.user.id))
     if char is None:
         await interaction.response.send_message(
-            "⚠ You don't have a character in this session.", ephemeral=True
+            "You don't have a character in this session.", ephemeral=True
         )
         return None, None
 
@@ -204,33 +204,33 @@ class ActionModal(discord.ui.Modal):
         state = get_session(self.channel_id)
         if state is None:
             await interaction.response.send_message(
-                "⚠ No active session in this channel.", ephemeral=True
+                "No active session in this channel.", ephemeral=True
             )
             return
 
         char = _find_character(state, str(interaction.user.id))
         if char is None:
             await interaction.response.send_message(
-                "⚠ You don't have a character in this session.", ephemeral=True
+                "You don't have a character in this session.", ephemeral=True
             )
             return
 
         if state.mode == SessionMode.ROUNDS:
             await interaction.response.send_message(
-                "⚠ Combat is active — use the Act button to submit your action.",
+                "Combat is active — use the Act button to submit your action.",
                 ephemeral=True,
             )
             return
 
         if not state.session_active:
             await interaction.response.send_message(
-                "⚠ The session is currently on hold.", ephemeral=True
+                "The session is currently on hold.", ephemeral=True
             )
             return
 
         if state.current_turn is None or state.current_turn.status != TurnStatus.OPEN:
             await interaction.response.send_message(
-                "⚠ No open turn — the DM needs to resolve the previous turn first.",
+                "No open turn — the DM needs to resolve the previous turn first.",
                 ephemeral=True,
             )
             return
@@ -241,11 +241,11 @@ class ActionModal(discord.ui.Modal):
         result = submit_turn(state, char.character_id, action_text)
         if not result.ok:
             await interaction.response.send_message(
-                f"⚠ {result.error}", ephemeral=True
+                f"{result.error}", ephemeral=True
             )
             return
 
-        await interaction.response.send_message("✓ Turn submitted!", ephemeral=True)
+        await interaction.response.send_message("Turn submitted!", ephemeral=True)
         channel = interaction.channel
         if channel is not None:
             await update_status(channel, state)
@@ -275,7 +275,8 @@ class ExplorationActionView(discord.ui.View):
         self.leader_character_id = leader_character_id
         if not turn_is_open:
             for item in self.children:
-                item.disabled = True
+                if getattr(item, "custom_id", None) != "action:character":
+                    item.disabled = True
 
     # row 0 ----------------------------------------------------------------
 
@@ -408,16 +409,16 @@ class ExplorationActionView(discord.ui.View):
         state = get_session(channel_id)
         if state is None:
             await interaction.response.send_message(
-                "⚠ No active session in this channel.", ephemeral=True
+                "No active session in this channel.", ephemeral=True
             )
             return
         if not state.session_active:
-            await interaction.response.send_message("⚠ The session is on hold.", ephemeral=True)
+            await interaction.response.send_message("The session is on hold.", ephemeral=True)
             return
         char = _find_character(state, str(interaction.user.id))
         if char is None:
             await interaction.response.send_message(
-                "⚠ You don't have a character in this session.", ephemeral=True
+                "You don't have a character in this session.", ephemeral=True
             )
             return
         await interaction.response.send_modal(_OracleModal(channel_id=channel_id))
@@ -433,7 +434,7 @@ class ExplorationActionView(discord.ui.View):
         state = get_session(channel_id)
         if state is None:
             await interaction.response.send_message(
-                "⚠ No active session in this channel.", ephemeral=True
+                "No active session in this channel.", ephemeral=True
             )
             return
         char = _find_character(state, str(interaction.user.id))
@@ -441,7 +442,7 @@ class ExplorationActionView(discord.ui.View):
             state.party is not None and state.party.leader_id != char.character_id
         ):
             await interaction.response.send_message(
-                "⚠ Only the party leader can use Abscond.", ephemeral=True
+                "Only the party leader can use Abscond.", ephemeral=True
             )
             return
         await interaction.response.send_modal(_AbscondModal(channel_id=channel_id))
@@ -455,13 +456,13 @@ class ExplorationActionView(discord.ui.View):
         state = get_session(channel_id)
         if state is None:
             await interaction.response.send_message(
-                "⚠ No active session in this channel.", ephemeral=True
+                "No active session in this channel.", ephemeral=True
             )
             return
         char = _find_character(state, str(interaction.user.id))
         if char is None:
             await interaction.response.send_message(
-                "⚠ You don't have a character in this session.", ephemeral=True
+                "You don't have a character in this session.", ephemeral=True
             )
             return
         await interaction.response.send_modal(_SayEmoteModal(channel_id=channel_id, is_emote=False))
@@ -475,13 +476,13 @@ class ExplorationActionView(discord.ui.View):
         state = get_session(channel_id)
         if state is None:
             await interaction.response.send_message(
-                "⚠ No active session in this channel.", ephemeral=True
+                "No active session in this channel.", ephemeral=True
             )
             return
         char = _find_character(state, str(interaction.user.id))
         if char is None:
             await interaction.response.send_message(
-                "⚠ You don't have a character in this session.", ephemeral=True
+                "You don't have a character in this session.", ephemeral=True
             )
             return
         await interaction.response.send_modal(_SayEmoteModal(channel_id=channel_id, is_emote=True))
@@ -495,7 +496,7 @@ class ExplorationActionView(discord.ui.View):
         state = get_session(channel_id)
         if state is None:
             await interaction.response.send_message(
-                "⚠ No active session in this channel.", ephemeral=True
+                "No active session in this channel.", ephemeral=True
             )
             return
         user_id = str(interaction.user.id)
@@ -508,7 +509,7 @@ class ExplorationActionView(discord.ui.View):
         )
         if not (is_dm or is_leader):
             await interaction.response.send_message(
-                "⚠ Only the DM or party leader can toggle combat rounds.", ephemeral=True
+                "Only the DM or party leader can toggle combat rounds.", ephemeral=True
             )
             return
         if state.mode == SessionMode.ROUNDS:
@@ -518,12 +519,47 @@ class ExplorationActionView(discord.ui.View):
             result = enter_rounds(state)
             narrative = "Combat begins!"
         if not result.ok:
-            await interaction.response.send_message(f"⚠ {result.error}", ephemeral=True)
+            await interaction.response.send_message(f"{result.error}", ephemeral=True)
             return
         if state.current_turn is None or state.current_turn.status != TurnStatus.OPEN:
             open_turn(state)
         await interaction.response.send_message(narrative, ephemeral=True)
         await repost_status(interaction.channel, state, narrative=narrative)
+
+    # row 3 ----------------------------------------------------------------
+
+    @discord.ui.button(
+        label="View Character", style=discord.ButtonStyle.secondary,
+        custom_id="action:character", row=3,
+    )
+    async def character_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        from cogs.character_views import EquipMenuView, _character_sheet, _find_character
+        channel_id = str(interaction.channel_id)
+        state = get_session(channel_id)
+        if state is None:
+            await interaction.response.send_message(
+                "No active session in this channel.", ephemeral=True
+            )
+            return
+        char = _find_character(state, str(interaction.user.id))
+        if char is None:
+            await interaction.response.send_message(
+                "You don't have a character in this session.", ephemeral=True
+            )
+            return
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        sheet = _character_sheet(char, state)
+        try:
+            dm_channel = await interaction.user.create_dm()
+            await dm_channel.send(
+                content=sheet,
+                view=EquipMenuView(char, state, channel_id),
+            )
+            await interaction.edit_original_response(
+                content="Your character sheet has been sent to your DMs."
+            )
+        except discord.Forbidden:
+            await interaction.edit_original_response(content=sheet)
 
 
 # ---------------------------------------------------------------------------
@@ -547,7 +583,7 @@ class CombatActionView(discord.ui.View):
         super().__init__(timeout=None)
         self.channel_id = channel_id
         if not turn_is_open:
-            # Disable Act when round is closed; Oracle and Strife remain active
+            # Disable Act when round is closed; Oracle, Strife, and View Character remain active
             for item in self.children:
                 if getattr(item, "custom_id", None) == "combat:act":
                     item.disabled = True
@@ -568,7 +604,7 @@ class CombatActionView(discord.ui.View):
         # Check if this character has already submitted this round
         if state.latest_submission(char.character_id) is not None:
             await interaction.response.send_message(
-                "⚠ You've already submitted this round. "
+                "You've already submitted this round. "
                 "Wait for resolution or ask the DM to un-submit your action.",
                 ephemeral=True,
             )
@@ -595,16 +631,16 @@ class CombatActionView(discord.ui.View):
         state = get_session(channel_id)
         if state is None:
             await interaction.response.send_message(
-                "⚠ No active session in this channel.", ephemeral=True
+                "No active session in this channel.", ephemeral=True
             )
             return
         if not state.session_active:
-            await interaction.response.send_message("⚠ The session is on hold.", ephemeral=True)
+            await interaction.response.send_message("The session is on hold.", ephemeral=True)
             return
         char = _find_character(state, str(interaction.user.id))
         if char is None:
             await interaction.response.send_message(
-                "⚠ You don't have a character in this session.", ephemeral=True
+                "You don't have a character in this session.", ephemeral=True
             )
             return
         await interaction.response.send_modal(_OracleModal(channel_id=channel_id))
@@ -619,7 +655,7 @@ class CombatActionView(discord.ui.View):
         state = get_session(channel_id)
         if state is None:
             await interaction.response.send_message(
-                "⚠ No active session in this channel.", ephemeral=True
+                "No active session in this channel.", ephemeral=True
             )
             return
         user_id = str(interaction.user.id)
@@ -632,18 +668,53 @@ class CombatActionView(discord.ui.View):
         )
         if not (is_dm or is_leader):
             await interaction.response.send_message(
-                "⚠ Only the DM or party leader can end combat.", ephemeral=True
+                "Only the DM or party leader can end combat.", ephemeral=True
             )
             return
         result = exit_rounds(state)
         if not result.ok:
-            await interaction.response.send_message(f"⚠ {result.error}", ephemeral=True)
+            await interaction.response.send_message(f"{result.error}", ephemeral=True)
             return
         if state.current_turn is None or state.current_turn.status != TurnStatus.OPEN:
             open_turn(state)
         narrative = "Combat ended — returning to exploration."
         await interaction.response.send_message(narrative, ephemeral=True)
         await repost_status(interaction.channel, state, narrative=narrative)
+
+    # row 1 ----------------------------------------------------------------
+
+    @discord.ui.button(
+        label="View Character", style=discord.ButtonStyle.secondary,
+        custom_id="combat:character", row=1,
+    )
+    async def character_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        from cogs.character_views import EquipMenuView, _character_sheet, _find_character
+        channel_id = str(interaction.channel_id)
+        state = get_session(channel_id)
+        if state is None:
+            await interaction.response.send_message(
+                "No active session in this channel.", ephemeral=True
+            )
+            return
+        char = _find_character(state, str(interaction.user.id))
+        if char is None:
+            await interaction.response.send_message(
+                "You don't have a character in this session.", ephemeral=True
+            )
+            return
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        sheet = _character_sheet(char, state)
+        try:
+            dm_channel = await interaction.user.create_dm()
+            await dm_channel.send(
+                content=sheet,
+                view=EquipMenuView(char, state, channel_id),
+            )
+            await interaction.edit_original_response(
+                content="Your character sheet has been sent to your DMs."
+            )
+        except discord.Forbidden:
+            await interaction.edit_original_response(content=sheet)
 
 
 # ---------------------------------------------------------------------------
@@ -658,7 +729,7 @@ def _build_class_action_view(char, state, channel_id: str) -> discord.ui.View:
     The view is ephemeral-only (timeout=180) and NOT registered as persistent.
     """
     # Base action IDs from class definition
-    cls_key = char.character_class.name   # e.g. "FIGHTER"
+    cls_key = char.character_class.name   # e.g. "KNIGHT"
     cls_def = CLASS_DEFINITIONS.get(cls_key)
     action_ids = list(cls_def.combat_actions) if cls_def else ["attack", "move", "affect"]
 
@@ -728,14 +799,14 @@ class ClassActionView(discord.ui.View):
             owner_char = _find_character(state, str(interaction.user.id))
             if owner_char is None or owner_char.character_id != self.char_id:
                 await interaction.response.send_message(
-                    "⚠ This action panel doesn't belong to your character.", ephemeral=True
+                    "This action panel doesn't belong to your character.", ephemeral=True
                 )
                 return
 
             action_def = ACTION_REGISTRY.get(action_id)
             if action_def is None:
                 await interaction.response.send_message(
-                    f"⚠ Unknown action '{action_id}'.", ephemeral=True
+                    f"Unknown action '{action_id}'.", ephemeral=True
                 )
                 return
 
@@ -752,7 +823,7 @@ class ClassActionView(discord.ui.View):
                 ]
                 if not npc_targets:
                     await interaction.response.send_message(
-                        "⚠ No valid targets in this room.", ephemeral=True
+                        "No valid targets in this room.", ephemeral=True
                     )
                     return
                 view = TargetSelectView(
@@ -846,7 +917,7 @@ class TargetSelectView(discord.ui.View):
         owner_char = _find_character(state, str(interaction.user.id))
         if owner_char is None or owner_char.character_id != self.char_id:
             await interaction.response.edit_message(
-                content="⚠ This panel doesn't belong to your character.", view=None
+                content="This panel doesn't belong to your character.", view=None
             )
             return
 
@@ -939,7 +1010,7 @@ class DestinationSelectView(discord.ui.View):
         owner_char = _find_character(state, str(interaction.user.id))
         if owner_char is None or owner_char.character_id != self.char_id:
             await interaction.response.edit_message(
-                content="⚠ This panel doesn't belong to your character.", view=None
+                content="This panel doesn't belong to your character.", view=None
             )
             return
 
@@ -990,20 +1061,20 @@ class AffectModal(discord.ui.Modal):
         state = get_session(self.channel_id)
         if state is None:
             await interaction.response.send_message(
-                "⚠ No active session.", ephemeral=True
+                "No active session.", ephemeral=True
             )
             return
 
         char = state.characters.get(self.char_id)
         if char is None:
             await interaction.response.send_message(
-                "⚠ Character not found.", ephemeral=True
+                "Character not found.", ephemeral=True
             )
             return
 
         if state.current_turn is None or state.current_turn.status != TurnStatus.OPEN:
             await interaction.response.send_message(
-                "⚠ The round is no longer open.", ephemeral=True
+                "The round is no longer open.", ephemeral=True
             )
             return
 
@@ -1015,10 +1086,10 @@ class AffectModal(discord.ui.Modal):
             state, char.character_id, action_text, combat_action=action.to_dict()
         )
         if not result.ok:
-            await interaction.response.send_message(f"⚠ {result.error}", ephemeral=True)
+            await interaction.response.send_message(f"{result.error}", ephemeral=True)
             return
 
-        await interaction.response.send_message("✓ Action submitted.", ephemeral=True)
+        await interaction.response.send_message("Action submitted.", ephemeral=True)
         channel = interaction.channel
         if channel is None:
             return
@@ -1058,20 +1129,20 @@ async def _submit_combat_action(
     state = get_session(channel_id)
     if state is None:
         await interaction.response.edit_message(
-            content="⚠ Session ended.", view=None
+            content="Session ended.", view=None
         )
         return
 
     char = state.characters.get(char_id)
     if char is None:
         await interaction.response.edit_message(
-            content="⚠ Character not found.", view=None
+            content="Character not found.", view=None
         )
         return
 
     if state.current_turn is None or state.current_turn.status != TurnStatus.OPEN:
         await interaction.response.edit_message(
-            content="⚠ The round closed while you were choosing. Please wait for the next round.",
+            content="The round closed while you were choosing. Please wait for the next round.",
             view=None,
         )
         return
@@ -1086,12 +1157,12 @@ async def _submit_combat_action(
     )
     if not result.ok:
         await interaction.response.edit_message(
-            content=f"⚠ {result.error}", view=None
+            content=f"{result.error}", view=None
         )
         return
 
     await interaction.response.edit_message(
-        content="✓ Action submitted.", view=None
+        content="Action submitted.", view=None
     )
 
     channel = interaction.channel
@@ -1132,24 +1203,24 @@ class _AbscondModal(discord.ui.Modal, title="Abscond"):
         try:
             num = int(self.exit_number.value.strip())
         except ValueError:
-            await interaction.response.send_message("⚠ Please enter a number.", ephemeral=True)
+            await interaction.response.send_message("Please enter a number.", ephemeral=True)
             return
         state = get_session(self.channel_id)
         if state is None:
-            await interaction.response.send_message("⚠ No active session.", ephemeral=True)
+            await interaction.response.send_message("No active session.", ephemeral=True)
             return
         char = _find_character(state, str(interaction.user.id))
         if char is None:
             await interaction.response.send_message(
-                "⚠ You don't have a character in this session.", ephemeral=True
+                "You don't have a character in this session.", ephemeral=True
             )
             return
         turn_number = state.turn_number
         result = abscond(state, char.character_id, num)
         if not result.ok:
-            await interaction.response.send_message(f"⚠ {result.error}", ephemeral=True)
+            await interaction.response.send_message(f"{result.error}", ephemeral=True)
             return
-        await interaction.response.send_message("✓ Moving out.", ephemeral=True)
+        await interaction.response.send_message("Moving out.", ephemeral=True)
         await update_status(interaction.channel, state)
         if result.notify_dm:
             await notify_dm_of_turn_close(interaction.channel, state, turn_number)
@@ -1163,7 +1234,7 @@ class _SayEmoteModal(discord.ui.Modal):
         self.text = discord.ui.TextInput(
             label="Describe the action" if is_emote else "What do you say?",
             placeholder=(
-                "Describe what your character does (e.g. 'nods slowly')."
+                "Describe what your character does (e.g. 'nods sagely')."
                 if is_emote else "Speak in character."
             ),
             style=discord.TextStyle.paragraph,
@@ -1175,19 +1246,19 @@ class _SayEmoteModal(discord.ui.Modal):
     async def on_submit(self, interaction: discord.Interaction) -> None:
         state = get_session(self.channel_id)
         if state is None:
-            await interaction.response.send_message("⚠ No active session.", ephemeral=True)
+            await interaction.response.send_message("No active session.", ephemeral=True)
             return
         char = _find_character(state, str(interaction.user.id))
         if char is None:
             await interaction.response.send_message(
-                "⚠ You don't have a character in this session.", ephemeral=True
+                "You don't have a character in this session.", ephemeral=True
             )
             return
         if self.is_emote:
             emote(state, char.name, self.text.value)
         else:
             say(state, char.name, self.text.value)
-        await interaction.response.send_message("✓ Done.", ephemeral=True)
+        await interaction.response.send_message("Done.", ephemeral=True)
         await update_status(interaction.channel, state)
 
 
@@ -1210,7 +1281,7 @@ class _OracleModal(discord.ui.Modal):
     async def on_submit(self, interaction: discord.Interaction) -> None:
         state = get_session(self.channel_id)
         if state is None:
-            await interaction.response.send_message("⚠ No active session.", ephemeral=True)
+            await interaction.response.send_message("No active session.", ephemeral=True)
             return
         char = _find_character(state, str(interaction.user.id))
         asker = char.name if char else interaction.user.display_name
@@ -1219,10 +1290,10 @@ class _OracleModal(discord.ui.Modal):
             asker_owner_id=str(interaction.user.id),
         )
         if not result.ok:
-            await interaction.response.send_message(f"⚠ {result.error}", ephemeral=True)
+            await interaction.response.send_message(f"{result.error}", ephemeral=True)
             return
         oracle = result.data
-        await interaction.response.send_message("✓ Oracle submitted.", ephemeral=True)
+        await interaction.response.send_message("Oracle submitted.", ephemeral=True)
         msg = await post_oracle_question(interaction.channel, oracle)
         oracle.message_id = msg.id
         await save_session_async(state)

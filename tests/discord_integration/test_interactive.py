@@ -162,13 +162,13 @@ async def test_turn_submission(bot, test_channel, session_with_character):
 
 
 # ---------------------------------------------------------------------------
-# /character — DM sheet delivery
+# "My Character" button — DM sheet delivery
 # ---------------------------------------------------------------------------
 
 @pytest.mark.discord_integration
 async def test_character_command_responds(bot, test_channel, session_with_character):
     """
-    Human step: run /character.
+    Human step: click the "My Character" button on the status message.
     The bot should send the character sheet to the user's DMs.
     """
     from store import update_status
@@ -178,10 +178,10 @@ async def test_character_command_responds(bot, test_channel, session_with_charac
 
     timestamp_before = discord.utils.utcnow()
 
-    _prompt(f"Run /character in #{test_channel.name}.")
+    _prompt(f"Click the 'My Character' button on the status message in #{test_channel.name}.")
 
-    # /character responds ephemerally in the channel and sends the sheet via DM.
-    # Check the user's DM channel for a bot message sent after the prompt.
+    # The button sends the sheet via DM.  Poll the user's DM channel for a bot
+    # message that arrived after the prompt was issued.
     async def _dm_sheet_received():
         user = await bot.fetch_user(int(TEST_DM_USER_ID))
         dm = await user.create_dm()
@@ -201,7 +201,7 @@ async def test_character_command_responds(bot, test_channel, session_with_charac
 
     try:
         if msg is None:
-            pytest.fail(f"No /character DM seen within {TIMEOUT}s.")
+            pytest.fail(f"No 'My Character' DM seen within {TIMEOUT}s.")
     finally:
         await purge_bot_messages(test_channel, bot)
 
