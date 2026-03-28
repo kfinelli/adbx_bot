@@ -311,64 +311,58 @@ class TestDualPathCoherency:
     def test_sync_character_to_sessions_updates_in_memory_state(self):
         """
         sync_character_to_sessions replaces the char in every in-memory
-        session that contains it — verified at the store layer.
+        session that contains it — verified against the real session_cache.
         """
-        import store
-        from models import GameState, Party
+        from copy import deepcopy
+
+        import session_cache
 
         # Build a fake in-memory session containing the original char
         fake_state = GameState(platform_channel_id="ch_fake", dm_user_id="dm1")
         fake_state.party = Party(name="Test")
         create_character(fake_state, "Tester", CharacterClass.KNIGHT, "", owner_id="u1")
         original_char = next(iter(fake_state.characters.values()))
-        store._sessions["ch_fake"] = fake_state
+        session_cache._sessions["ch_fake"] = fake_state
 
         try:
-            # Build an updated char (same character_id, higher level)
-            from copy import deepcopy
             updated_char = deepcopy(original_char)
             updated_char.level = 3
 
-            store.sync_character_to_sessions(updated_char)
+            session_cache.sync_character_to_sessions(updated_char)
 
-            # The in-memory session should now reference the updated char
-            in_memory = store._sessions["ch_fake"].characters[original_char.character_id]
+            in_memory = session_cache._sessions["ch_fake"].characters[original_char.character_id]
             assert in_memory.level == 3
         finally:
-            store._sessions.pop("ch_fake", None)
+            session_cache._sessions.pop("ch_fake", None)
 
     def test_award_xp_level_survives_session_save(self, db):
         """End-to-end: award_xp + save_character + sync → session save → level intact."""
-        import store
+        import session_cache
 
         s, char = _make_char_state(db)
-
-        # Simulate what _load_char_state + award_xp + sync does in the route:
-        # 1. Register the session state in-memory (as store would)
-        store._sessions["ch1"] = s
+        session_cache._sessions["ch1"] = s
 
         try:
-            # 2. Load fresh from DB (as _load_char_state does) into a shadow state
-            from models import Party
+            # Load fresh from DB (as _load_char_state does) into a shadow state
             shadow = GameState(platform_channel_id="__edit__", dm_user_id="")
             shadow.party = Party(name="")
             fresh_char = db.load_character(str(char.character_id))
             shadow.characters = {fresh_char.character_id: fresh_char}
 
-            # 3. Award XP (mutates fresh_char in place)
+            # Award XP (mutates fresh_char in place)
             award_xp(shadow, fresh_char.character_id, 2000)
             assert fresh_char.level == 2
 
-            # 4. Save to DB and sync in-memory sessions
+            # Save to DB and sync in-memory sessions
             db.save_character(fresh_char)
-            store.sync_character_to_sessions(fresh_char)
+            session_cache.sync_character_to_sessions(fresh_char)
 
-            # 5. Session save (simulates bot command completing a turn, etc.)
+            # Session save (simulates bot command completing a turn, etc.)
             db.save(s)
 
-            # 6. Reload — must be level 2
+            # Reload — must be level 2
             final = db.load_character(str(char.character_id))
             assert final.level == 2
             assert final.experience == 2000
         finally:
-            store._sessions.pop("ch1", None)
+            session_cache._sessions.pop("ch1", None)

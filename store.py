@@ -16,6 +16,7 @@ import discord
 from engine import render_status, render_status_header
 from models import GameState, Party
 from persistence import Database
+from session_cache import _sessions, sync_character_to_sessions  # noqa: F401 (re-exported)
 
 # build_action_view is imported lazily inside _build_view() to avoid a
 # circular import: action_buttons.py imports store.py at module level,
@@ -37,23 +38,11 @@ def get_characters_by_owner(owner_id: str) -> list:
     return db.get_characters_by_owner(owner_id)
 
 
-def sync_character_to_sessions(char) -> None:
-    """Replace a character in every in-memory session that contains it.
-
-    Call this after any standalone character update (addxp, equip, etc.) so
-    that a later session save doesn't overwrite the updated character with stale
-    in-memory data.
-    """
-    for state in _sessions.values():
-        if char.character_id in state.characters:
-            state.characters[char.character_id] = char
-
 # ---------------------------------------------------------------------------
-# In-memory session cache
+# In-memory session cache  (_sessions and sync_character_to_sessions
+# live in session_cache.py so non-Discord code can import them without
+# pulling in this module's discord dependency)
 # ---------------------------------------------------------------------------
-
-# channel_id (str) -> GameState
-_sessions: dict[str, GameState] = {}
 
 # channel_id (str) -> discord.Message  (the live status message)
 _status_messages: dict[str, discord.Message] = {}

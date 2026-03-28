@@ -100,7 +100,7 @@ def _char_dict_from_row(row) -> dict:
         "created_at":      row["created_at"],
         "is_pregenerated": bool(row["is_pregenerated"]),
     }
-    jobs_json = row["jobs_json"] if "jobs_json" in row else None
+    jobs_json = row["jobs_json"] if "jobs_json" in row else None # noqa: SIM401 (json, not dict)
     if jobs_json:
         d["jobs"] = json.loads(jobs_json)
     else:
