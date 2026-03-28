@@ -551,6 +551,19 @@ def _hook_check_death(
         target_npc.status = "dead"
         log.append(f"{target_name} has been slain!")
         state.battlefield.combatants.pop(target_id, None)
+        xp_total = target_npc.hit_dice * 100
+        if xp_total > 0:
+            from engine.character import CharacterManager
+            from models import CharacterStatus
+            active = [c for c in state.characters.values()
+                      if c.status == CharacterStatus.ACTIVE]
+            if active:
+                cm = CharacterManager()
+                cm.distribute_xp(state, xp_total)
+                log.append(
+                    f"The party gains {xp_total} XP "
+                    f"({xp_total // len(active)} each)."
+                )
 
 
 def _hook_move_to_band(
@@ -642,6 +655,19 @@ def _hook_deal_damage(
             actor_npc.status = "dead"
             state.battlefield.combatants.pop(actor_id, None)
             log.append(f"{actor_name} takes {damage} {damage_type} damage and is slain!")
+            xp_total = actor_npc.hit_dice * 100
+            if xp_total > 0:
+                from engine.character import CharacterManager
+                from models import CharacterStatus
+                active = [c for c in state.characters.values()
+                          if c.status == CharacterStatus.ACTIVE]
+                if active:
+                    cm = CharacterManager()
+                    cm.distribute_xp(state, xp_total)
+                    log.append(
+                        f"The party gains {xp_total} XP "
+                        f"({xp_total // len(active)} each)."
+                    )
             return
     else:
         return

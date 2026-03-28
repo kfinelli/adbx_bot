@@ -283,8 +283,9 @@ class Room:
     exits:       list[Exit]         = field(default_factory=list)
 
     # Bookkeeping
-    visited:     bool               = False
-    authored:    bool               = True   # False = placeholder node in graph
+    visited:       bool               = False
+    authored:      bool               = True   # False = placeholder node in graph
+    exploration_xp: int               = 0      # XP per character on first visit (0 = use DEFAULT_ROOM_XP)
 
 
 @dataclass
@@ -427,7 +428,7 @@ class NPC:
     damage_dice:    str               = "1d6"       # e.g. "1d6", "2d4+1"
     morale:         int               = 7           # B/X morale score
     saving_throw:   int               = 15          # single value for simplicity
-    xp_value:       int               = 0
+    hit_dice:       int               = 1           # used to compute XP on kill (hit_dice * 100)
     status:         str               = "active"    # free-form: active/dead/fled/charmed/etc.
     notes:          str               = ""          # DM-facing
 
@@ -591,7 +592,6 @@ class Party:
     leader_id:      UUID | None     = None   # character_id of party leader
     member_ids:     list[UUID]         = field(default_factory=list)
     gold:           int                = 0
-    experience:     int                = 0
     light_sources:  list[LightSource]  = field(default_factory=list)
 
     @property

@@ -154,10 +154,11 @@ def serialize_room(r: Room) -> dict:
         "name":        r.name,
         "description": r.description,
         "notes":       r.notes,
-        "features":    [serialize_room_feature(f) for f in r.features],
-        "exits":       [serialize_exit(e) for e in r.exits],
-        "visited":     r.visited,
-        "authored":    r.authored,
+        "features":       [serialize_room_feature(f) for f in r.features],
+        "exits":          [serialize_exit(e) for e in r.exits],
+        "visited":        r.visited,
+        "authored":       r.authored,
+        "exploration_xp": r.exploration_xp,
     }
 
 
@@ -211,7 +212,7 @@ def serialize_npc(n: NPC) -> dict:
         "damage_dice":    n.damage_dice,
         "morale":         n.morale,
         "saving_throw":   n.saving_throw,
-        "xp_value":       n.xp_value,
+        "hit_dice":       n.hit_dice,
         "status":         n.status,
         "notes":          n.notes,
     }
@@ -453,6 +454,7 @@ def deserialize_room(d: dict) -> Room:
         exits=[deserialize_exit(e) for e in d["exits"]],
         visited=d["visited"],
         authored=d["authored"],
+        exploration_xp=d.get("exploration_xp", 0),
     )
 
 
@@ -482,7 +484,7 @@ def deserialize_npc(d: dict) -> NPC:
         damage_dice=d["damage_dice"],
         morale=d["morale"],
         saving_throw=d["saving_throw"],
-        xp_value=d["xp_value"],
+        hit_dice=d.get("hit_dice", 1),
         status=d["status"],
         notes=d["notes"],
     )

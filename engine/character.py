@@ -403,6 +403,26 @@ class CharacterManager:
         result.data = level_ups
         return result
 
+    def distribute_xp(self, state: GameState, total: int) -> list[LevelUpResult]:
+        """Award total XP split evenly among all ACTIVE characters.
+
+        Remainder is discarded (integer floor division). Returns flat list of
+        all LevelUpResult objects across all characters.
+        """
+        from models import CharacterStatus
+        active = [c for c in state.characters.values()
+                  if c.status == CharacterStatus.ACTIVE]
+        if not active or total < 1:
+            return []
+        each = total // len(active)
+        if each < 1:
+            return []
+        all_level_ups: list[LevelUpResult] = []
+        for char in active:
+            result = self.award_xp(state, char.character_id, each)
+            all_level_ups.extend(result.data or [])
+        return all_level_ups
+
     def check_level_up(self, state: GameState, character_id) -> list[LevelUpResult]:
         """Check whether char has enough XP to level up; apply all pending levels.
 

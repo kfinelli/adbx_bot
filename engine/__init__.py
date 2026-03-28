@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from datetime import UTC
 from typing import Any
 
+from engine.azure_constants import DEFAULT_ROOM_XP
 from models import DoorState, GameState, PlayerTurnSubmission, SessionMode, TurnStatus
 
 # Import managers and utilities from submodules
@@ -144,6 +145,15 @@ def check_level_up(state: GameState, character_id):
     return cm.check_level_up(state, character_id)
 
 
+def distribute_xp(state: GameState, total: int) -> list:
+    """Award total XP split evenly among all ACTIVE characters.
+
+    Returns flat list of LevelUpResult objects across all characters.
+    """
+    cm = CharacterManager()
+    return cm.distribute_xp(state, total)
+
+
 def give_item(state: GameState, character_id, item_id: str, quantity: int = 1):
     """
     Add item(s) to a character's inventory, enforcing slot limits.
@@ -200,12 +210,13 @@ def update_npc(
     hp_current: int,
     defense: int,
     notes: str = "",
+    hit_dice: int = 1,
 ):
     """Update an NPC."""
     nm = NPCManager()
     return nm.update_npc(
         state, npc_id, name, description, hp_max,
-        hp_current, defense, notes,
+        hp_current, defense, notes, hit_dice,
     )
 
 
@@ -256,15 +267,30 @@ def register_room(state: GameState, room):
 
 
 def set_room(state: GameState, room):
-    """Set current room."""
+    """Set current room (always awards exploration XP — room is always new)."""
     rm = RoomManager()
-    return rm.set_room(state, room)
+    result = rm.set_room(state, room)
+    if result.ok:
+        xp = getattr(room, "exploration_xp", 0) or DEFAULT_ROOM_XP
+        cm = CharacterManager()
+        cm.distribute_xp(state, xp)
+        result.message += f" (Party gained {xp} XP for exploring.)"
+    return result
 
 
 def move_party_to_room(state: GameState, room_id):
-    """Move party to room."""
+    """Move party to room, awarding exploration XP on first visit."""
+    dungeon = state.dungeon
+    room = dungeon.rooms.get(room_id) if dungeon else None
+    was_unvisited = room is not None and not room.visited
     rm = RoomManager()
-    return rm.move_party_to_room(state, room_id)
+    result = rm.move_party_to_room(state, room_id)
+    if result.ok and was_unvisited:
+        xp = room.exploration_xp or DEFAULT_ROOM_XP
+        cm = CharacterManager()
+        cm.distribute_xp(state, xp)
+        result.message += f" (Party gained {xp} XP for exploring.)"
+    return result
 
 
 def update_room(state: GameState, room_id, name: str, description: str, notes: str = ""):
@@ -533,7 +559,7 @@ def render_status(state: GameState) -> str:
             lines.append("No light source")
 
         # Gold / XP
-        lines.append(f"Gold: {state.party.gold} XP: {state.party.experience}")
+        lines.append(f"Gold: {state.party.gold}")
 
     lines.append(sep)
 
@@ -699,4 +725,7 @@ __all__ = [
     "abscond",
     "render_status_header",
     "render_status",
+    "award_xp",
+    "check_level_up",
+    "distribute_xp",
 ]

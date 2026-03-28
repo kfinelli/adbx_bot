@@ -29,6 +29,7 @@ from engine import (
     close_turn,
     delete_exit,
     delete_feature,
+    distribute_xp,
     give_item,
     hold_session,
     import_dungeon,
@@ -378,9 +379,13 @@ async def route_party_addxp(
         return HTMLResponse("Session not found.", status_code=404)
     if state.party is None:
         return _respond(channel_id, error="No party.")
-    state.party.experience += amount
+    from models import CharacterStatus
+    active = [c for c in state.characters.values() if c.status == CharacterStatus.ACTIVE]
+    n = len(active)
+    distribute_xp(state, amount)
     await save_session_async(state)
-    return _respond(channel_id, flash=f"Added {amount} XP to party.")
+    each = amount // n if n else 0
+    return _respond(channel_id, flash=f"Distributed {amount} XP among {n} active characters ({each} each).")
 
 
 # ---------------------------------------------------------------------------
@@ -540,6 +545,7 @@ async def route_addnpc(
     hp: Annotated[int, Form()],
     defense: Annotated[int, Form()] = 0,
     damage_dice: Annotated[str, Form()] = "1d6",
+    hit_dice: Annotated[int, Form()] = 1,
     description: Annotated[str, Form()] = "",
     notes: Annotated[str, Form()] = "",
 ):
@@ -549,6 +555,7 @@ async def route_addnpc(
     npc = NPC(
         name=name, hp_max=hp, hp_current=hp,
         defense=defense, damage_dice=damage_dice,
+        hit_dice=hit_dice,
         description=description, notes=notes,
     )
     eng_add_npc(state, npc)
@@ -791,12 +798,13 @@ async def route_npc_update(
     hp_current: Annotated[int, Form()],
     defense: Annotated[int, Form()],
     notes: Annotated[str, Form()] = "",
+    hit_dice: Annotated[int, Form()] = 1,
     view_room_id: Annotated[str, Form()] = "",
 ):
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse("Session not found.", status_code=404)
-    result = update_npc(state, UUID(npc_id), name, description, hp_max, hp_current, defense, notes)
+    result = update_npc(state, UUID(npc_id), name, description, hp_max, hp_current, defense, notes, hit_dice)
     if not result.ok:
         return _respond(channel_id, error=result.error, view_room_id=view_room_id)
     await save_session_async(state)

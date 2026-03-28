@@ -22,6 +22,9 @@ BASE_INVENTORY_SIZE = 6
 # e.g. XP_THRESHOLDS[1] = 2000 means 2000 XP needed to reach level 2.
 # Based on B/X D&D fighter progression; exact values to be tuned.
 XP_THRESHOLDS: list[int] = [0, 2000, 4000, 8000, 16000, 32000]
+
+DEFAULT_ROOM_XP: int = 100   # XP per character for entering an unvisited room
+
 #Number of light items can fit in a bundle by default.
 BUNDLE_SIZE = 10
 

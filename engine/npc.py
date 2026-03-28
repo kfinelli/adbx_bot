@@ -143,6 +143,7 @@ class NPCManager:
         hp_current:  int,
         defense:     int,
         notes:       str = "",
+        hit_dice:    int = 1,
     ):
         """Update an NPC's attributes. Searches the entire roster."""
         npc = _find_npc_in_roster(state, npc_id)
@@ -185,5 +186,6 @@ class NPCManager:
         npc.hp_current  = hp_current_result.value
         npc.defense     = def_result.value
         npc.notes       = notes_result.value
+        npc.hit_dice    = max(1, int(hit_dice))
         state.updated_at = _now()
         return _ok(state, f"NPC updated: {npc.name}.")

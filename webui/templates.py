@@ -736,7 +736,7 @@ def party_panel(state: GameState) -> str:
 <div class="card">
   <div class="section-header">
     <h3>Party</h3>
-    <span class="muted">Gold: {state.party.gold} | XP: {state.party.experience}</span>
+    <span class="muted">Gold: {state.party.gold}</span>
   </div>
   <form hx-post="/session/{channel_id}/party/addgold"
         hx-target="#dashboard" hx-swap="outerHTML" style="margin-bottom:0.5rem">
@@ -749,9 +749,9 @@ def party_panel(state: GameState) -> str:
   <form hx-post="/session/{channel_id}/party/addxp"
         hx-target="#dashboard" hx-swap="outerHTML" style="margin-bottom:0.5rem">
     <div class="row">
-      <div><label>Add XP</label>
+      <div><label>Distribute XP (split evenly)</label>
       <input type="number" name="amount" value="0" min="0"></div>
-      <button type="submit">Add XP</button>
+      <button type="submit">Distribute XP</button>
     </div>
   </form>
   <table>
@@ -1170,6 +1170,9 @@ def npc_panel(
         <div><label>HP Now</label><input type="number" name="hp_current" value="{npc.hp_current}" min="0" style="width:60px"></div>
         <div><label>DEF</label><input type="number" name="defense" value="{npc.defense}" min="0" style="width:55px"></div>
       </div>
+      <div class="row">
+        <div><label>HD</label><input type="number" name="hit_dice" value="{npc.hit_dice}" min="1" style="width:55px"></div>
+      </div>
       <label>Description</label>
       <input type="text" name="description" value="{npc.description}">
       <label>Notes</label>
@@ -1229,6 +1232,7 @@ def npc_panel(
   </div>
   <div class="row">
     <div><label>Damage</label><input type="text" name="damage_dice" value="1d6"></div>
+    <div><label>HD</label><input type="number" name="hit_dice" value="1" min="1"></div>
     <div><label>Description</label><input type="text" name="description" placeholder="Brief description"></div>
   </div>
   <label>DM Notes</label>
