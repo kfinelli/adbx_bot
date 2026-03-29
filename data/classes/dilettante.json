@@ -3,6 +3,7 @@
   "display_name": "Dilettante",
   "hit_die": 8,
   "weapon_rank": "D",
+  "armor_rank": "D",
   "base_save": 3,
   "primary_stat": "SVY",
   "max_level": 5,

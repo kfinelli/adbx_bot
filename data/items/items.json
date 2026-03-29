@@ -4,7 +4,7 @@
       "attack_status": "",
       "defense": 0,
       "description": "",
-      "health": 0,
+      "health": 0.5,
       "held_status": "",
       "is_light": false,
       "item_id": "fieldworkers_gloves",
@@ -22,9 +22,9 @@
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.25,
       "description": "",
-      "health": 0,
+      "health": 0.25,
       "held_status": "",
       "is_light": false,
       "item_id": "wool_bracers",
@@ -44,7 +44,7 @@
       "attack_status": "",
       "defense": 0,
       "description": "",
-      "health": 0,
+      "health": 0.25,
       "held_status": "",
       "is_light": false,
       "item_id": "wool_gloves",
@@ -74,15 +74,15 @@
       "price": 5,
       "purchaseable": true,
       "rank": "E",
-      "resistance": 0,
+      "resistance": 0.25,
       "slot": "arms",
       "tags": []
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.25,
       "description": "",
-      "health": 0,
+      "health": 0.5,
       "held_status": "",
       "is_light": false,
       "item_id": "leather_gloves",
@@ -98,9 +98,9 @@
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.5,
       "description": "",
-      "health": 0,
+      "health": 0.5,
       "held_status": "",
       "is_light": false,
       "item_id": "studded_leather_gauntlets",
@@ -116,9 +116,9 @@
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.5,
       "description": "",
-      "health": 0,
+      "health": 0.75,
       "held_status": "",
       "is_light": false,
       "item_id": "chain_gauntlets",
@@ -136,9 +136,9 @@
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.5,
       "description": "",
-      "health": 1,
+      "health": 1.0,
       "held_status": "",
       "is_light": false,
       "item_id": "plate_gauntlets",
@@ -148,7 +148,7 @@
       "price": 9,
       "purchaseable": true,
       "rank": "B",
-      "resistance": 0,
+      "resistance": 0.25,
       "slot": "arms",
       "tags": [
         "Heavy",
@@ -157,9 +157,9 @@
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.25,
       "description": "",
-      "health": 0,
+      "health": 0.25,
       "held_status": "",
       "is_light": false,
       "item_id": "casting_wraps",
@@ -169,15 +169,15 @@
       "price": 4,
       "purchaseable": true,
       "rank": "V",
-      "resistance": 0,
+      "resistance": 0.25,
       "slot": "arms",
       "tags": []
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.25,
       "description": "",
-      "health": 0,
+      "health": 0.25,
       "held_status": "",
       "is_light": false,
       "item_id": "mage_wraps",
@@ -187,15 +187,15 @@
       "price": 5,
       "purchaseable": true,
       "rank": "W",
-      "resistance": 0,
+      "resistance": 0.5,
       "slot": "arms",
       "tags": []
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.25,
       "description": "",
-      "health": 0,
+      "health": 0.75,
       "held_status": "",
       "is_light": false,
       "item_id": "hexing_wraps",
@@ -205,7 +205,25 @@
       "price": 6,
       "purchaseable": true,
       "rank": "X",
-      "resistance": 0,
+      "resistance": 0.5,
+      "slot": "arms",
+      "tags": []
+    },
+    {
+      "attack_status": "",
+      "defense": 0.25,
+      "description": "",
+      "health": 0.25,
+      "held_status": "",
+      "is_light": false,
+      "item_id": "executioners_gloves",
+      "item_type": "gear",
+      "name": "Executioner's Gloves",
+      "other_abilities": "",
+      "price": 4,
+      "purchaseable": true,
+      "rank": "D",
+      "resistance": 0.25,
       "slot": "arms",
       "tags": []
     }
@@ -215,7 +233,7 @@
       "attack_status": "",
       "defense": 0,
       "description": "",
-      "health": 0,
+      "health": 0.5,
       "held_status": "",
       "is_light": false,
       "item_id": "fieldworkers_tunic",
@@ -225,7 +243,7 @@
       "price": 2,
       "purchaseable": true,
       "rank": "E",
-      "resistance": 0,
+      "resistance": 0.25,
       "slot": "body",
       "tags": [
         "Shabby"
@@ -233,9 +251,9 @@
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.25,
       "description": "",
-      "health": 0,
+      "health": 0.5,
       "held_status": "",
       "is_light": false,
       "item_id": "wool_dress",
@@ -255,7 +273,7 @@
       "attack_status": "",
       "defense": 0,
       "description": "",
-      "health": 0,
+      "health": 0.75,
       "held_status": "",
       "is_light": false,
       "item_id": "wool_tunic",
@@ -273,9 +291,9 @@
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.25,
       "description": "",
-      "health": 0,
+      "health": 0.25,
       "held_status": "",
       "is_light": false,
       "item_id": "wool_lined_robe",
@@ -285,15 +303,15 @@
       "price": 5,
       "purchaseable": true,
       "rank": "E",
-      "resistance": 0,
+      "resistance": 0.25,
       "slot": "body",
       "tags": []
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.5,
       "description": "",
-      "health": 1,
+      "health": 1.0,
       "held_status": "",
       "is_light": false,
       "item_id": "leather_armor",
@@ -303,15 +321,15 @@
       "price": 6,
       "purchaseable": true,
       "rank": "D",
-      "resistance": 0,
+      "resistance": 0.25,
       "slot": "body",
       "tags": []
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.75,
       "description": "",
-      "health": 1,
+      "health": 1.0,
       "held_status": "",
       "is_light": false,
       "item_id": "studded_leather_armor",
@@ -327,9 +345,9 @@
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.75,
       "description": "",
-      "health": 1,
+      "health": 1.25,
       "held_status": "",
       "is_light": false,
       "item_id": "chain_shirt",
@@ -347,9 +365,9 @@
     },
     {
       "attack_status": "",
-      "defense": 1,
+      "defense": 1.0,
       "description": "",
-      "health": 2,
+      "health": 2.0,
       "held_status": "",
       "is_light": false,
       "item_id": "plate_mail",
@@ -359,7 +377,7 @@
       "price": 9,
       "purchaseable": true,
       "rank": "B",
-      "resistance": 0,
+      "resistance": 0.25,
       "slot": "body",
       "tags": [
         "Heavy",
@@ -368,9 +386,9 @@
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.5,
       "description": "",
-      "health": 0,
+      "health": 0.75,
       "held_status": "",
       "is_light": false,
       "item_id": "casting_robes",
@@ -380,15 +398,15 @@
       "price": 4,
       "purchaseable": true,
       "rank": "V",
-      "resistance": 0,
+      "resistance": 0.5,
       "slot": "body",
       "tags": []
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.5,
       "description": "",
-      "health": 1,
+      "health": 1.0,
       "held_status": "",
       "is_light": false,
       "item_id": "mage_robes",
@@ -398,15 +416,15 @@
       "price": 5,
       "purchaseable": true,
       "rank": "W",
-      "resistance": 1,
+      "resistance": 1.0,
       "slot": "body",
       "tags": []
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.5,
       "description": "",
-      "health": 1,
+      "health": 1.0,
       "held_status": "",
       "is_light": false,
       "item_id": "hexing_robes",
@@ -416,7 +434,25 @@
       "price": 6,
       "purchaseable": true,
       "rank": "X",
-      "resistance": 1,
+      "resistance": 1.0,
+      "slot": "body",
+      "tags": []
+    },
+    {
+      "attack_status": "",
+      "defense": 0.5,
+      "description": "",
+      "health": 0.75,
+      "held_status": "",
+      "is_light": false,
+      "item_id": "executioners_cloak",
+      "item_type": "gear",
+      "name": "Executioner's Cloak",
+      "other_abilities": "",
+      "price": 4,
+      "purchaseable": true,
+      "rank": "D",
+      "resistance": 0.5,
       "slot": "body",
       "tags": []
     }
@@ -439,6 +475,7 @@
       "price": 10,
       "purchaseable": true,
       "rank": "V",
+      "slot": "main_hand",
       "tags": []
     },
     {
@@ -455,16 +492,17 @@
       "item_type": "container",
       "name": "Casting Book",
       "other_abilities": "",
-      "price": 0,
-      "purchaseable": false,
+      "price": 10,
+      "purchaseable": true,
       "rank": "V",
+      "slot": "main_hand",
       "tags": []
     }
   ],
   "Head": [
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.25,
       "description": "",
       "health": 0,
       "held_status": "",
@@ -496,7 +534,7 @@
       "price": 3,
       "purchaseable": true,
       "rank": "E",
-      "resistance": 0,
+      "resistance": 0.25,
       "slot": "head",
       "tags": [
         "Shabby"
@@ -506,7 +544,7 @@
       "attack_status": "",
       "defense": 0,
       "description": "",
-      "health": 0,
+      "health": 0.25,
       "held_status": "",
       "is_light": false,
       "item_id": "wool_hat",
@@ -526,7 +564,7 @@
       "attack_status": "",
       "defense": 0,
       "description": "",
-      "health": 0,
+      "health": 0.25,
       "held_status": "",
       "is_light": false,
       "item_id": "wool_lined_cone_hat",
@@ -536,15 +574,15 @@
       "price": 5,
       "purchaseable": true,
       "rank": "E",
-      "resistance": 0,
+      "resistance": 0.25,
       "slot": "head",
       "tags": []
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.25,
       "description": "",
-      "health": 0,
+      "health": 0.5,
       "held_status": "",
       "is_light": false,
       "item_id": "leather_helmet",
@@ -560,9 +598,9 @@
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.25,
       "description": "",
-      "health": 0,
+      "health": 0.5,
       "held_status": "",
       "is_light": false,
       "item_id": "studded_leather_helmet",
@@ -578,9 +616,9 @@
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.5,
       "description": "",
-      "health": 0,
+      "health": 0.75,
       "held_status": "",
       "is_light": false,
       "item_id": "chain_coif",
@@ -598,9 +636,9 @@
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.75,
       "description": "",
-      "health": 1,
+      "health": 1.0,
       "held_status": "",
       "is_light": false,
       "item_id": "full_helm",
@@ -621,7 +659,7 @@
       "attack_status": "",
       "defense": 0,
       "description": "",
-      "health": 0,
+      "health": 0.25,
       "held_status": "",
       "is_light": false,
       "item_id": "casting_hood",
@@ -631,15 +669,15 @@
       "price": 4,
       "purchaseable": true,
       "rank": "E",
-      "resistance": 0,
+      "resistance": 0.5,
       "slot": "head",
       "tags": []
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.25,
       "description": "",
-      "health": 0,
+      "health": 0.5,
       "held_status": "",
       "is_light": false,
       "item_id": "mage_hat",
@@ -649,15 +687,15 @@
       "price": 5,
       "purchaseable": true,
       "rank": "W",
-      "resistance": 0,
+      "resistance": 0.5,
       "slot": "head",
       "tags": []
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.5,
       "description": "",
-      "health": 0,
+      "health": 0.5,
       "held_status": "",
       "is_light": false,
       "item_id": "hexing_hat",
@@ -667,7 +705,25 @@
       "price": 6,
       "purchaseable": true,
       "rank": "X",
-      "resistance": 1,
+      "resistance": 1.0,
+      "slot": "head",
+      "tags": []
+    },
+    {
+      "attack_status": "",
+      "defense": 0,
+      "description": "",
+      "health": 0.25,
+      "held_status": "",
+      "is_light": false,
+      "item_id": "executioners_hood",
+      "item_type": "gear",
+      "name": "Executioner's Hood",
+      "other_abilities": "",
+      "price": 4,
+      "purchaseable": true,
+      "rank": "D",
+      "resistance": 0.5,
       "slot": "head",
       "tags": []
     }
@@ -687,7 +743,7 @@
       "price": 2,
       "purchaseable": true,
       "rank": "E",
-      "resistance": 0,
+      "resistance": 0.25,
       "slot": "legs",
       "tags": [
         "Shabby"
@@ -695,7 +751,7 @@
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.25,
       "description": "",
       "health": 0,
       "held_status": "",
@@ -717,7 +773,7 @@
       "attack_status": "",
       "defense": 0,
       "description": "",
-      "health": 0,
+      "health": 0.25,
       "held_status": "",
       "is_light": false,
       "item_id": "wool_shoes",
@@ -735,7 +791,7 @@
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.25,
       "description": "",
       "health": 0,
       "held_status": "",
@@ -747,13 +803,13 @@
       "price": 5,
       "purchaseable": true,
       "rank": "E",
-      "resistance": 0,
+      "resistance": 0.25,
       "slot": "legs",
       "tags": []
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.25,
       "description": "",
       "health": 0,
       "held_status": "",
@@ -771,9 +827,9 @@
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.25,
       "description": "",
-      "health": 0,
+      "health": 0.5,
       "held_status": "",
       "is_light": false,
       "item_id": "studded_leather_boots",
@@ -789,9 +845,9 @@
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.5,
       "description": "",
-      "health": 0,
+      "health": 0.75,
       "held_status": "",
       "is_light": false,
       "item_id": "chain_boots",
@@ -809,9 +865,9 @@
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.75,
       "description": "",
-      "health": 1,
+      "health": 1.0,
       "held_status": "",
       "is_light": false,
       "item_id": "plate_boots",
@@ -830,9 +886,9 @@
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.25,
       "description": "",
-      "health": 0,
+      "health": 0.25,
       "held_status": "",
       "is_light": false,
       "item_id": "casting_boots",
@@ -842,15 +898,15 @@
       "price": 4,
       "purchaseable": true,
       "rank": "V",
-      "resistance": 0,
+      "resistance": 0.25,
       "slot": "legs",
       "tags": []
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.25,
       "description": "",
-      "health": 0,
+      "health": 0.25,
       "held_status": "",
       "is_light": false,
       "item_id": "mage_boots",
@@ -860,15 +916,15 @@
       "price": 5,
       "purchaseable": true,
       "rank": "W",
-      "resistance": 0,
+      "resistance": 0.5,
       "slot": "legs",
       "tags": []
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.25,
       "description": "",
-      "health": 0,
+      "health": 0.75,
       "held_status": "",
       "is_light": false,
       "item_id": "hexing_boots",
@@ -878,7 +934,25 @@
       "price": 6,
       "purchaseable": true,
       "rank": "X",
-      "resistance": 0,
+      "resistance": 0.5,
+      "slot": "legs",
+      "tags": []
+    },
+    {
+      "attack_status": "",
+      "defense": 0.25,
+      "description": "",
+      "health": 0.25,
+      "held_status": "",
+      "is_light": false,
+      "item_id": "executioners_boots",
+      "item_type": "gear",
+      "name": "Executioner's Boots",
+      "other_abilities": "",
+      "price": 4,
+      "purchaseable": true,
+      "rank": "D",
+      "resistance": 0.25,
       "slot": "legs",
       "tags": []
     }
@@ -902,6 +976,7 @@
       "range": 2,
       "rank": "V",
       "recharge_period": "infinite",
+      "slot": "main_hand",
       "stat": "reason",
       "tags": [
         "Black"
@@ -926,6 +1001,7 @@
       "range": 2,
       "rank": "W",
       "recharge_period": "encounter",
+      "slot": "main_hand",
       "stat": "reason",
       "tags": [
         "Black"
@@ -950,6 +1026,7 @@
       "range": 4,
       "rank": "X",
       "recharge_period": "day",
+      "slot": "main_hand",
       "stat": "reason",
       "tags": [
         "Black"
@@ -974,6 +1051,7 @@
       "range": 2,
       "rank": "V",
       "recharge_period": "infinite",
+      "slot": "main_hand",
       "stat": "reason",
       "tags": [
         "Black"
@@ -998,6 +1076,7 @@
       "range": 2,
       "rank": "W",
       "recharge_period": "encounter",
+      "slot": "main_hand",
       "stat": "reason",
       "tags": [
         "Black"
@@ -1022,6 +1101,7 @@
       "range": 4,
       "rank": "X",
       "recharge_period": "day",
+      "slot": "main_hand",
       "stat": "reason",
       "tags": [
         "Black"
@@ -1046,6 +1126,7 @@
       "range": 2,
       "rank": "V",
       "recharge_period": "infinite",
+      "slot": "main_hand",
       "stat": "reason",
       "tags": [
         "Black"
@@ -1070,6 +1151,7 @@
       "range": 2,
       "rank": "W",
       "recharge_period": "encounter",
+      "slot": "main_hand",
       "stat": "reason",
       "tags": [
         "Black"
@@ -1094,6 +1176,7 @@
       "range": 4,
       "rank": "X",
       "recharge_period": "day",
+      "slot": "main_hand",
       "stat": "reason",
       "tags": [
         "Black"
@@ -1118,6 +1201,7 @@
       "range": 2,
       "rank": "V",
       "recharge_period": "infinite",
+      "slot": "main_hand",
       "stat": "reason",
       "tags": [
         "White"
@@ -1142,6 +1226,7 @@
       "range": 2,
       "rank": "W",
       "recharge_period": "encounter",
+      "slot": "main_hand",
       "stat": "reason",
       "tags": [
         "White"
@@ -1166,6 +1251,7 @@
       "range": 4,
       "rank": "X",
       "recharge_period": "day",
+      "slot": "main_hand",
       "stat": "reason",
       "tags": [
         "White"
@@ -1190,6 +1276,7 @@
       "range": 2,
       "rank": "V",
       "recharge_period": "infinite",
+      "slot": "main_hand",
       "stat": "reason",
       "tags": [
         "White"
@@ -1214,6 +1301,7 @@
       "range": 2,
       "rank": "W",
       "recharge_period": "encounter",
+      "slot": "main_hand",
       "stat": "reason",
       "tags": [
         "White"
@@ -1238,6 +1326,7 @@
       "range": 4,
       "rank": "X",
       "recharge_period": "day",
+      "slot": "main_hand",
       "stat": "reason",
       "tags": [
         "White"
@@ -1260,15 +1349,15 @@
       "price": 5,
       "purchaseable": true,
       "rank": "E",
-      "resistance": 0,
+      "resistance": 0.25,
       "slot": "accessory",
       "tags": []
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.25,
       "description": "",
-      "health": 0,
+      "health": 0.5,
       "held_status": "",
       "is_light": false,
       "item_id": "buckler",
@@ -1279,14 +1368,14 @@
       "purchaseable": true,
       "rank": "D",
       "resistance": 0,
-      "slot": "offhand",
+      "slot": "off_hand",
       "tags": []
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.5,
       "description": "",
-      "health": 1,
+      "health": 1.0,
       "held_status": "",
       "is_light": false,
       "item_id": "heater",
@@ -1297,14 +1386,14 @@
       "purchaseable": true,
       "rank": "C",
       "resistance": 0,
-      "slot": "offhand",
+      "slot": "off_hand",
       "tags": []
     },
     {
       "attack_status": "",
-      "defense": 1,
+      "defense": 1.0,
       "description": "",
-      "health": 2,
+      "health": 2.0,
       "held_status": "",
       "is_light": false,
       "item_id": "kite_shield",
@@ -1315,14 +1404,14 @@
       "purchaseable": true,
       "rank": "B",
       "resistance": 0,
-      "slot": "offhand",
+      "slot": "off_hand",
       "tags": []
     },
     {
       "attack_status": "",
       "defense": 0,
       "description": "",
-      "health": 0,
+      "health": 0.5,
       "held_status": "",
       "is_light": false,
       "item_id": "scarf",
@@ -1332,7 +1421,7 @@
       "price": 1,
       "purchaseable": true,
       "rank": "E",
-      "resistance": 0,
+      "resistance": 0.25,
       "slot": "accessory",
       "tags": [
         "Warm"
@@ -1340,9 +1429,9 @@
     },
     {
       "attack_status": "",
-      "defense": 0,
+      "defense": 0.0,
       "description": "",
-      "health": 0,
+      "health": 0.5,
       "held_status": "",
       "is_light": false,
       "item_id": "silver_ring",
@@ -1352,7 +1441,7 @@
       "price": 10,
       "purchaseable": true,
       "rank": "C",
-      "resistance": 0,
+      "resistance": 0.5,
       "slot": "accessory",
       "tags": []
     },
@@ -1411,6 +1500,21 @@
       "purchaseable": true,
       "rank": "",
       "tags": []
+    },
+    {
+      "attack_status": "",
+      "contained_items": [],
+      "description": "A sack that can store items",
+      "held_status": "",
+      "is_light": false,
+      "item_id": "burlap_sack",
+      "item_type": "container",
+      "name": "Burlap Sack",
+      "other_abilities": "",
+      "price": 1,
+      "purchaseable": true,
+      "rank": "",
+      "tags": []
     }
   ],
   "Weapon": [
@@ -1428,6 +1532,7 @@
       "purchaseable": true,
       "range": 0,
       "rank": "C",
+      "slot": "main_hand",
       "stat": "physique",
       "tags": [],
       "type": "Axe"
@@ -1446,6 +1551,7 @@
       "purchaseable": true,
       "range": 0,
       "rank": "E",
+      "slot": "main_hand",
       "stat": "physique",
       "tags": [],
       "type": "Blunt"
@@ -1455,7 +1561,7 @@
       "damage": "1d4",
       "description": "",
       "held_status": "",
-      "is_light": false,
+      "is_light": true,
       "item_id": "dagger",
       "item_type": "weapon",
       "name": "Dagger",
@@ -1464,6 +1570,7 @@
       "purchaseable": true,
       "range": 0,
       "rank": "E",
+      "slot": "main_hand",
       "stat": "physique",
       "tags": [
         "Light"
@@ -1484,6 +1591,7 @@
       "purchaseable": true,
       "range": 0,
       "rank": "B",
+      "slot": "main_hand",
       "stat": "physique",
       "tags": [
         "Heavy",
@@ -1505,6 +1613,7 @@
       "purchaseable": true,
       "range": 1,
       "rank": "B",
+      "slot": "main_hand",
       "stat": "physique",
       "tags": [
         "Heavy",
@@ -1526,6 +1635,7 @@
       "purchaseable": true,
       "range": 0,
       "rank": "B",
+      "slot": "main_hand",
       "stat": "physique",
       "tags": [
         "Heavy",
@@ -1547,6 +1657,7 @@
       "purchaseable": true,
       "range": 0,
       "rank": "D",
+      "slot": "main_hand",
       "stat": "physique",
       "tags": [
         "Light",
@@ -1568,6 +1679,7 @@
       "purchaseable": true,
       "range": 1,
       "rank": "D",
+      "slot": "main_hand",
       "stat": "physique",
       "tags": [
         "Throwable 2"
@@ -1588,6 +1700,7 @@
       "purchaseable": true,
       "range": 0,
       "rank": "C",
+      "slot": "main_hand",
       "stat": "physique",
       "tags": [
         "Mount",
@@ -1609,6 +1722,7 @@
       "purchaseable": true,
       "range": 4,
       "rank": "C",
+      "slot": "main_hand",
       "stat": "finesse",
       "tags": [],
       "type": "Bow"
@@ -1627,6 +1741,7 @@
       "purchaseable": true,
       "range": 1,
       "rank": "C",
+      "slot": "main_hand",
       "stat": "physique",
       "tags": [
         "Two-Handed"
@@ -1647,6 +1762,7 @@
       "purchaseable": true,
       "range": 0,
       "rank": "C",
+      "slot": "main_hand",
       "stat": "physique",
       "tags": [],
       "type": "Sword"
@@ -1665,6 +1781,7 @@
       "purchaseable": true,
       "range": 0,
       "rank": "D",
+      "slot": "main_hand",
       "stat": "physique",
       "tags": [],
       "type": "Blunt"
@@ -1683,6 +1800,7 @@
       "purchaseable": true,
       "range": 1,
       "rank": "B",
+      "slot": "main_hand",
       "stat": "physique",
       "tags": [
         "Two-Handed"
@@ -1703,6 +1821,7 @@
       "purchaseable": true,
       "range": 3,
       "rank": "D",
+      "slot": "main_hand",
       "stat": "finesse",
       "tags": [],
       "type": "Bow"
@@ -1721,6 +1840,7 @@
       "purchaseable": true,
       "range": 0,
       "rank": "D",
+      "slot": "main_hand",
       "stat": "physique",
       "tags": [
         "Light"
@@ -1741,6 +1861,7 @@
       "purchaseable": true,
       "range": 3,
       "rank": "E",
+      "slot": "main_hand",
       "stat": "physique",
       "tags": [
         "Light"
@@ -1761,6 +1882,7 @@
       "purchaseable": true,
       "range": 1,
       "rank": "D",
+      "slot": "main_hand",
       "stat": "physique",
       "tags": [
         "Two-Handed"
@@ -1781,6 +1903,7 @@
       "purchaseable": true,
       "range": 0,
       "rank": "E",
+      "slot": "main_hand",
       "stat": "physique",
       "tags": [
         "Two-Handed"
@@ -1801,6 +1924,7 @@
       "purchaseable": true,
       "range": 0,
       "rank": "E",
+      "slot": "main_hand",
       "stat": "physique",
       "tags": [],
       "type": "Fire"
@@ -1819,6 +1943,7 @@
       "purchaseable": true,
       "range": 0,
       "rank": "B",
+      "slot": "main_hand",
       "stat": "physique",
       "tags": [],
       "type": "Blunt/Axe"
@@ -1837,6 +1962,7 @@
       "purchaseable": false,
       "range": 0,
       "rank": "E",
+      "slot": "main_hand",
       "stat": "physique",
       "tags": [],
       "type": "Blunt"

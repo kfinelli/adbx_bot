@@ -193,7 +193,9 @@ class JobDef:
     display_name : Player-facing name (e.g. "Knight").
     hit_die      : HP die size (e.g. 12 for d12), pre-scaled by POWER_LEVEL
                    at creation time.
-    weapon_rank  : Highest weapon rank the job starts with ("E"–"A").
+    weapon_rank  : Highest physical weapon rank the job starts with ("E"–"A").
+    armor_rank   : Highest armor/gear rank the job can equip ("E"–"A"). Defaults to "E".
+    spell_rank   : Highest arcane/spell rank the job can equip ("V"–"Z"), or None for no arcane access.
     base_save    : Starting save value (raw, scaled by POWER_LEVEL at creation).
     primary_stat : Which of the four stats (PHY/FNS/RSN/SVY) grows on level-up.
                    Maps to StatPriority.GREATEST for that stat; others are NONE.
@@ -210,6 +212,8 @@ class JobDef:
     display_name:   str             = ""
     hit_die:        int             = 6
     weapon_rank:    str             = "E"
+    armor_rank:     str             = "E"
+    spell_rank:     str | None      = None
     base_save:      int             = 0
     primary_stat:   str             = "PHY"
     max_level:      int             = 5
@@ -487,6 +491,20 @@ def _load_job(path: Path) -> JobDef:
             f"valid ranks: {sorted(_VALID_WEAPON_RANKS)}"
         )
 
+    armor_rank = data.get("armor_rank", "E")
+    if armor_rank not in _VALID_WEAPON_RANKS:
+        raise ValueError(
+            f"{path}: invalid armor_rank '{armor_rank}'; "
+            f"valid ranks: {sorted(_VALID_WEAPON_RANKS)}"
+        )
+
+    spell_rank = data.get("spell_rank", None)
+    if spell_rank is not None and spell_rank not in _VALID_WEAPON_RANKS:
+        raise ValueError(
+            f"{path}: invalid spell_rank '{spell_rank}'; "
+            f"valid ranks: {sorted(_VALID_WEAPON_RANKS)}"
+        )
+
     skills = _load_job_skills(path)
 
     return JobDef(
@@ -494,6 +512,8 @@ def _load_job(path: Path) -> JobDef:
         display_name=data["display_name"],
         hit_die=int(data["hit_die"]),
         weapon_rank=weapon_rank,
+        armor_rank=armor_rank,
+        spell_rank=spell_rank,
         base_save=int(data["base_save"]),
         primary_stat=primary_stat,
         max_level=int(data["max_level"]),

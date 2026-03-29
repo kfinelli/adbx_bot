@@ -3,6 +3,7 @@
   "display_name": "Thief",
   "hit_die": 6,
   "weapon_rank": "D",
+  "armor_rank": "D",
   "base_save": 2,
   "primary_stat": "FNS",
   "max_level": 5,

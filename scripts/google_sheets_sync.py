@@ -64,10 +64,13 @@ _SLOT_MAP = {
     "body":      "body",
     "arms":      "arms",
     "legs":      "legs",
-    "main":      "mainhand",
-    "mainhand":  "mainhand",
-    "offhand":   "offhand",
     "accessory": "accessory",
+    # hand slots — normalise all variants to canonical underscore form
+    "main_hand": "main_hand",
+    "main":      "main_hand",
+    "mainhand":  "main_hand",
+    "off_hand":  "off_hand",
+    "offhand":   "off_hand",
 }
 
 _STAT_MAP = {
@@ -91,6 +94,15 @@ def _int_or_zero(value) -> int:
         return 0
     try:
         return int(float(value))
+    except (ValueError, TypeError):
+        return 0
+
+def _float_or_zero(value) -> int:
+    """Return float or 0 if empty"""
+    if value in ("", None):
+        return 0
+    try:
+        return float(value)
     except (ValueError, TypeError):
         return 0
 
@@ -177,6 +189,9 @@ def _normalise_item(row: dict) -> dict:
         item["stat"]   = _STAT_MAP.get(str(row.get("stat", "")).strip().lower(), "physique")
         item["damage"] = str(row.get("damage", "0")).strip() or "0"
         item["range"]  = _int_or_zero(row.get("range", 0))
+        # Slot for weapons: canonical underscore form, default main_hand.
+        raw_slot = str(row.get("slot", "")).strip().lower()
+        item["slot"] = _SLOT_MAP.get(raw_slot, raw_slot) if raw_slot else "main_hand"
 
     # --- charge weapon fields ---
     if item["item_type"] == "charge_weapon":
@@ -190,9 +205,16 @@ def _normalise_item(row: dict) -> dict:
     if item["item_type"] == "gear":
         raw_slot = str(row.get("slot", "")).strip().lower()
         item["slot"]       = _SLOT_MAP.get(raw_slot, raw_slot)
-        item["health"]     = _int_or_zero(row.get("health", 0))
-        item["defense"]    = _int_or_zero(row.get("defense", 0))
-        item["resistance"] = _int_or_zero(row.get("resistance", 0))
+        item["health"]     = _float_or_zero(row.get("health", 0))
+        item["defense"]    = _float_or_zero(row.get("defense", 0))
+        item["resistance"] = _float_or_zero(row.get("resistance", 0))
+
+    # --- container fields ---
+    if item["item_type"] == "container":
+        raw_slot = str(row.get("slot", "")).strip().lower()
+        if raw_slot:
+            item["slot"] = _SLOT_MAP.get(raw_slot, raw_slot)
+        # If no slot specified, omit the key (container is inventory-only).
 
     return item
 

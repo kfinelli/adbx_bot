@@ -61,9 +61,11 @@ def _find_gear_id(slot: str):
 
 
 def _find_weapon_id():
-    """Return the first Weapon item_id available."""
+    """Return the first physical Weapon (non-arcane rank) so tests work with a Knight."""
+    from engine.item import ChargeWeapon
+    _ARCANE = {"V", "W", "X", "Y", "Z"}
     for item_id, defn in ITEM_REGISTRY.items():
-        if isinstance(defn, Weapon):
+        if isinstance(defn, Weapon) and not isinstance(defn, ChargeWeapon) and defn.rank not in _ARCANE:
             return item_id
     return None
 
@@ -156,11 +158,14 @@ class TestEquipWeapon:
 
     def test_equip_second_weapon_displaces_first(self, state_char):
         """Equipping a new weapon into MAIN_HAND automatically unequips the old one."""
+        from engine.item import ChargeWeapon
+        _ARCANE = {"V", "W", "X", "Y", "Z"}
         w1 = _find_weapon_id()
-        # Find a *different* weapon if possible
+        # Find a *different* physical weapon (one the Knight test char can equip)
         w2 = None
         for item_id, defn in ITEM_REGISTRY.items():
-            if isinstance(defn, Weapon) and item_id != w1:
+            if (isinstance(defn, Weapon) and not isinstance(defn, ChargeWeapon)
+                    and defn.rank not in _ARCANE and item_id != w1):
                 w2 = item_id
                 break
         if w2 is None:
@@ -387,13 +392,16 @@ class TestStatDerivation:
         assert char.defense == expected
 
     def test_resistance_from_equipped_gear(self, state_char):
+        # Only look for physical-ranked gear so the Knight test character can equip it.
+        # Arcane resistance gear (robes, etc.) requires spell_rank which Knight lacks.
+        _PHYSICAL = {"E", "D", "C", "B", "A"}
         gear_id = next(
             (item_id for item_id, defn in ITEM_REGISTRY.items()
-             if isinstance(defn, Gear) and defn.resistance > 0),
+             if isinstance(defn, Gear) and defn.resistance > 0 and defn.rank in _PHYSICAL),
             None,
         )
         if gear_id is None:
-            pytest.skip("No Gear with resistance > 0 in ITEM_REGISTRY")
+            pytest.skip("No physical-ranked Gear with resistance > 0 in ITEM_REGISTRY")
 
         char = _get_char(state_char)
         _add_item(char, gear_id)

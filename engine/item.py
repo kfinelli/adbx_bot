@@ -158,15 +158,14 @@ class EquipItem(Item):
 
 class Weapon(EquipItem):
     ITEM_TYPE = ItemType.WEAPON.value
-    def __init__(self, item_id, name, rank, weaponType, stat, damage, range=0, tags = None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight = False, purchaseable=False, price=0):
+    def __init__(self, item_id, name, rank, weaponType, stat, damage, range=0, slot="main_hand", tags=None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight=False, purchaseable=False, price=0):
         super().__init__(item_id, name, rank, tags, otherAbilities, heldStatus, attackStatus, description, isLight, purchaseable, price)
+        self.slot = slot or "main_hand"
         self.type = weaponType
         self.stat = stat
-        # Handle damage and range that may come as strings from JSON
-        try:
-            self.damage = max(0, int(damage) if damage not in (None, '', []) else 0)
-        except (ValueError, TypeError):
-            self.damage = 0
+        # Store damage as a dice expression string (e.g. "1d8", "2d6+4").
+        # Range remains a plain integer.
+        self.damage = str(damage).strip() if damage not in (None, '', []) else "0"
         try:
             self.range = max(0, int(range) if range not in (None, '', []) else 0)
         except (ValueError, TypeError):
@@ -184,14 +183,13 @@ class Weapon(EquipItem):
         self.range = max(0, range)
 
     def setDamage(self, damage):
-        self.damage = max(0, damage)
-    def changeDamage(self, deltaDamage):
-        self.damage = max(0, self.damage - deltaDamage)
+        self.damage = str(damage).strip() if damage not in (None, '', []) else "0"
 
     def toDictionary(self):
         exportData = super().toDictionary()
         exportData.update({
             ItemData.ITEM_TYPE.value: Weapon.ITEM_TYPE,
+            ItemData.SLOT.value: self.slot,
             ItemData.TYPE.value: self.type,
             ItemData.STAT.value: self.stat,
             ItemData.DAMAGE.value: self.damage,
@@ -202,8 +200,8 @@ class Weapon(EquipItem):
 
 class ChargeWeapon(Weapon):
     ITEM_TYPE = ItemType.CHARGE_WEAPON.value
-    def __init__(self, item_id, name, rank, weaponType, stat, damage, range=0, maxCharges=1, destroyOnEmpty=False, tags=None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight=False, purchaseable=False, price=0, rechargePeriod=None):
-        super().__init__(item_id, name, rank, weaponType, stat, damage, range, tags, otherAbilities, heldStatus, attackStatus, description, isLight, purchaseable, price)
+    def __init__(self, item_id, name, rank, weaponType, stat, damage, range=0, slot="main_hand", maxCharges=1, destroyOnEmpty=False, tags=None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight=False, purchaseable=False, price=0, rechargePeriod=None):
+        super().__init__(item_id, name, rank, weaponType, stat, damage, range, slot, tags, otherAbilities, heldStatus, attackStatus, description, isLight, purchaseable, price)
         if rechargePeriod is not None:
             # recharge period supplied directly (e.g. loaded from normalised JSON)
             self.rechargePeriod = rechargePeriod
@@ -266,6 +264,58 @@ class Gear(EquipItem):
         return exportData
 
 
+class ContainerItem(EquipItem):
+    """
+    A container that holds other items (typically ChargeWeapon spells).
+
+    If slot is set (e.g. "main_hand"), the container can be equipped to that slot
+    and its contained items become accessible for attacks.  If slot is None the
+    container is inventory-only and cannot be equipped.
+
+    Per-instance charge state for contained spells is tracked in
+    InventoryItem.contained_charges on the container's own InventoryItem.
+
+    contained_item_ids : ordered list of item_ids for the bound spells/items.
+    slot               : equipment slot string (e.g. "main_hand"), or None.
+    """
+    ITEM_TYPE = ItemType.CONTAINER.value
+
+    def __init__(
+        self,
+        item_id,
+        name,
+        rank,
+        contained_item_ids=None,
+        slot=None,
+        tags=None,
+        otherAbilities=None,
+        heldStatus=None,
+        attackStatus=None,
+        description="",
+        isLight=False,
+        purchaseable=False,
+        price=0,
+    ):
+        super().__init__(
+            item_id, name, rank, tags, otherAbilities, heldStatus, attackStatus,
+            description, isLight, purchaseable, price,
+        )
+        self.contained_item_ids: list[str] = contained_item_ids if contained_item_ids is not None else []
+        self.slot: str | None = slot or None
+        if type(self) is ContainerItem:
+            self.updatePrototype()
+
+    def toDictionary(self):
+        exportData = super().toDictionary()
+        exportData.update({
+            ItemData.ITEM_TYPE.value: ContainerItem.ITEM_TYPE,
+            ItemData.SLOT.value: self.slot,
+            ItemData.CONTAINED_ITEMS.value: list(self.contained_item_ids),
+            ItemData.PROTOTYPE.value: self.prototype,
+        })
+        return exportData
+
+
 def parseChargeString(charge_str):
     recharge = RechargePeriod.NEVER
 
@@ -312,9 +362,9 @@ def upscaleItemData(itemData):
             itemData[ItemData.DEFENSE] *= POWER_LEVEL
             itemData[ItemData.RESISTANCE] *= POWER_LEVEL
         case ItemType.CHARGE_WEAPON:
-            itemData[ItemData.DAMAGE] *= POWER_LEVEL
+            pass  # damage is a dice expression string; upscaling handled elsewhere
         case ItemType.WEAPON:
-            itemData[ItemData.DAMAGE] *= POWER_LEVEL
+            pass  # damage is a dice expression string; upscaling handled elsewhere
         case _:
             pass
 
@@ -353,6 +403,7 @@ def createItemFromData(itemData):
         "stat": itemData.get(ItemData.STAT, ""),
         "damage": itemData.get(ItemData.DAMAGE, 0),
         "range": itemData.get(ItemData.RANGE, 0),
+        "slot": itemData.get(ItemData.SLOT, "main_hand"),
     }
 
     match item_type:
@@ -381,6 +432,13 @@ def createItemFromData(itemData):
                 health     = itemData.get(ItemData.HEALTH, 0),
                 defense    = itemData.get(ItemData.DEFENSE, 0),
                 resistance = itemData.get(ItemData.RESISTANCE, 0),
+            )
+
+        case ItemType.CONTAINER:
+            return ContainerItem(
+                **base, **equip,
+                contained_item_ids = itemData.get(ItemData.CONTAINED_ITEMS, []),
+                slot               = itemData.get(ItemData.SLOT, None),
             )
 
         case _:

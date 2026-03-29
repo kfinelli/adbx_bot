@@ -65,12 +65,14 @@ class ItemData(StrEnum):
     RESISTANCE = "resistance"
     PURCHASEABLE = "purchaseable"
     PRICE = "price"
+    CONTAINED_ITEMS = "contained_items"
 
 class ItemType(StrEnum):
     ITEM = "item"
     GEAR = "gear"
     WEAPON = "weapon"
     CHARGE_WEAPON = "charge_weapon"
+    CONTAINER = "container"
 
 class SkillType(Enum):
     SIMPLE = 0
@@ -113,19 +115,20 @@ class ItemSlot(StrEnum):
 Slot = ItemSlot
 
 
-# Maps Gear.slot strings (from items.json) and legacy hero.py slot values
-# to the canonical ItemSlot used by the equip system.
-# Weapons always go to MAIN_HAND and are handled separately in character.py.
+# Maps the slot string on any EquipItem (Weapon, Gear, ContainerItem) to the
+# canonical ItemSlot used by the equip system.
+# "accessory" is intentionally absent — it's handled separately (auto-pick ACC1/ACC2).
 GEAR_SLOT_MAP: dict[str, ItemSlot] = {
-    # items.json values
+    # canonical underscore form (items.json / new data)
+    "main_hand": ItemSlot.MAIN_HAND,
+    "off_hand":  ItemSlot.OFF_HAND,
     "head":      ItemSlot.HEAD,
     "body":      ItemSlot.BODY,
     "arms":      ItemSlot.ARMS,
-    "legs":      ItemSlot.LEGS,        # items.json uses "legs" for boots/shoes
-    "offhand":   ItemSlot.OFF_HAND,
-    "accessory": ItemSlot.ACCESSORY1,  # fallback; engine picks ACC1 or ACC2
-    # legacy hero.py values
+    "legs":      ItemSlot.LEGS,
+    # legacy / alternative spellings
     "mainhand":  ItemSlot.MAIN_HAND,
+    "offhand":   ItemSlot.OFF_HAND,
 }
 
 # Slots that accept more than one item (auto-filled in order).

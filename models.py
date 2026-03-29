@@ -11,6 +11,7 @@ Any update here requires a parallel update in serialization.py!
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
@@ -20,7 +21,9 @@ from uuid import UUID, uuid4
 # Import it here so the rest of the codebase can import from models as before.
 from engine.azure_engine import CharacterClass
 from engine.data_loader import ITEM_REGISTRY
-from engine.item import Gear
+from engine.item import ContainerItem, Gear, Weapon
+
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Enumerations (non-ruleset — these don't change between game systems)
@@ -217,6 +220,35 @@ class Character:
         if item_id is None:
             return None
         return next((i for i in self.inventory if i.item_id == item_id), None)
+
+    def equipped_weapons(self) -> list[tuple[InventoryItem, Weapon]]:
+        """
+        Return all accessible weapons as (inv_item, definition) pairs.
+
+        - Regular Weapon/ChargeWeapon in main_hand → one entry.
+        - ContainerItem in main_hand → one entry per contained spell,
+          each sharing the container's InventoryItem.
+        - No weapon equipped → empty list.
+
+        The first entry is used for attacks when no explicit weapon is chosen.
+        Weapon picker (choosing among multiple options) is a follow-up feature.
+        """
+        inv_item = self.equipped_weapon()
+        if inv_item is None:
+            return []
+        definition = ITEM_REGISTRY.get(inv_item.item_id)
+        if definition is None:
+            return []
+        if isinstance(definition, ContainerItem):
+            results = []
+            for spell_id in definition.contained_item_ids:
+                spell_def = ITEM_REGISTRY.get(spell_id)
+                if spell_def is not None and isinstance(spell_def, Weapon):
+                    results.append((inv_item, spell_def))
+            return results
+        if isinstance(definition, Weapon):
+            return [(inv_item, definition)]
+        return []
 
     def items_in_slot(self, slot_key: str) -> list[InventoryItem]:
         """Return InventoryItem(s) occupying the given slot key (0 or 1 items)."""

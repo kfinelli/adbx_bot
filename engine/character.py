@@ -9,8 +9,9 @@ from engine.azure_constants import (
     ItemSlot,
 )
 from engine.azure_engine import CREATION_RULES, POWER_LEVEL
+from engine.azure_helpers import getLowerWeaponRanks
 from engine.data_loader import CLASS_DEFINITIONS, ITEM_REGISTRY
-from engine.item import ChargeWeapon, EquipItem, Gear, Weapon
+from engine.item import ChargeWeapon, ContainerItem, EquipItem, Weapon
 from models import (
     AzureStats,
     Character,
@@ -138,6 +139,30 @@ class CharacterManager:
     # Equip / Unequip
     # ------------------------------------------------------------------
 
+    _PHYSICAL_RANKS = {"E", "D", "C", "B", "A"}
+    _ARCANE_RANKS   = {"V", "W", "X", "Y", "Z"}
+
+    def _char_allowed_ranks(self, char: Character, rank_type: str) -> set:
+        """
+        Return the set of item ranks the character is allowed to equip for the
+        given rank_type ("weapon", "armor", or "spell").
+
+        Unions across all jobs so multi-class characters get the best rank.
+        Returns an empty set if no rank is available for that category.
+        """
+        allowed: set[str] = set()
+        for job_key in char.jobs:
+            job_def = CLASS_DEFINITIONS.get(job_key.upper())
+            if job_def is None:
+                continue
+            if rank_type == "weapon":
+                allowed |= getLowerWeaponRanks(job_def.weapon_rank)
+            elif rank_type == "armor":
+                allowed |= getLowerWeaponRanks(job_def.armor_rank)
+            elif rank_type == "spell" and job_def.spell_rank is not None:
+                allowed |= getLowerWeaponRanks(job_def.spell_rank)
+        return allowed
+
     def _resolve_target_slot(
         self,
         char: Character,
@@ -157,37 +182,67 @@ class CharacterManager:
         if not isinstance(definition, EquipItem):
             return None, f"'{definition.name}' cannot be equipped (not a weapon or gear piece)."
 
-        if isinstance(definition, Weapon):
-            # Weapons always go to MAIN_HAND
-            if requested_slot is not None and requested_slot != ItemSlot.MAIN_HAND:
-                return None, "Weapons must be equipped in the main hand slot."
-            return ItemSlot.MAIN_HAND, ""
+        slot_str: str | None = getattr(definition, "slot", None)
+        if not slot_str:
+            return None, f"'{definition.name}' cannot be equipped (no equipment slot defined)."
 
-        if isinstance(definition, Gear):
-            gear_slot_str = definition.slot  # e.g. "head", "legs", "accessory"
-            if gear_slot_str == "accessory":
-                # Player may specify accessory1 or accessory2; otherwise pick the first free one
-                if requested_slot in ACCESSORY_SLOTS:
-                    return requested_slot, ""
-                if requested_slot is not None:
-                    return None, "Accessories can only go into accessory1 or accessory2 slots."
-                # Auto-pick a free accessory slot
-                for slot in ACCESSORY_SLOTS:
-                    if char.equipped_slots.get(slot.value) is None:
-                        return slot, ""
-                return None, "Both accessory slots are already filled."
-            # Non-accessory gear slot
-            mapped = GEAR_SLOT_MAP.get(gear_slot_str)
-            if mapped is None:
-                return None, f"Gear slot '{gear_slot_str}' is not supported for equipping."
-            if requested_slot is not None and requested_slot != mapped:
+        # --- Accessories: special auto-pick logic ---
+        if slot_str == "accessory":
+            item_rank = definition.rank
+            if item_rank in self._PHYSICAL_RANKS:
+                allowed = self._char_allowed_ranks(char, "armor")
+                if item_rank not in allowed:
+                    return None, (
+                        f"{char.name} cannot equip '{definition.name}' "
+                        f"(requires armor rank {item_rank})."
+                    )
+            if requested_slot in ACCESSORY_SLOTS:
+                return requested_slot, ""
+            if requested_slot is not None:
+                return None, "Accessories can only go into accessory1 or accessory2 slots."
+            for slot in ACCESSORY_SLOTS:
+                if char.equipped_slots.get(slot.value) is None:
+                    return slot, ""
+            return None, "Both accessory slots are already filled."
+
+        # --- All other slots: map string → ItemSlot ---
+        mapped = GEAR_SLOT_MAP.get(slot_str)
+        if mapped is None:
+            return None, f"'{definition.name}' has an unrecognised slot '{slot_str}'."
+
+        if requested_slot is not None and requested_slot != mapped:
+            return None, (
+                f"'{definition.name}' belongs in the {mapped.value} slot, "
+                f"not {requested_slot.value}."
+            )
+
+        # --- Rank check ---
+        # Rank category: arcane (V–Z) → spell_rank; physical (E–A) → weapon_rank
+        # for Weapons, armor_rank for Gear/Containers.  isinstance is still the
+        # correct discriminator here because a shield (Gear) in OFF_HAND uses
+        # armor_rank while an off-hand weapon (Weapon) uses weapon_rank.
+        item_rank = definition.rank
+        if item_rank in self._ARCANE_RANKS:
+            allowed = self._char_allowed_ranks(char, "spell")
+            if item_rank not in allowed:
                 return None, (
-                    f"'{definition.name}' belongs in the {mapped.value} slot, "
-                    f"not {requested_slot.value}."
+                    f"{char.name} cannot equip '{definition.name}' "
+                    f"(requires spell rank {item_rank})."
                 )
-            return mapped, ""
+        elif item_rank in self._PHYSICAL_RANKS:
+            if isinstance(definition, Weapon):
+                allowed = self._char_allowed_ranks(char, "weapon")
+                rank_label = "weapon"
+            else:
+                allowed = self._char_allowed_ranks(char, "armor")
+                rank_label = "armor"
+            if item_rank not in allowed:
+                return None, (
+                    f"{char.name} cannot equip '{definition.name}' "
+                    f"(requires {rank_label} rank {item_rank})."
+                )
 
-        return None, f"'{definition.name}' cannot be equipped."
+        return mapped, ""
 
     def equip_item(
         self,
@@ -309,6 +364,17 @@ class CharacterManager:
                 quantity=quantity,
                 charges=defn.maxCharges,
             ))
+
+        elif isinstance(defn, ContainerItem):
+            # Containers are never stacked — each is its own InventoryItem.
+            if slot_cost > 0 and char.slots_used + slot_cost * quantity > char.inventory_size:
+                return _err(
+                    state,
+                    f"{char.name}'s inventory is full "
+                    f"({char.slots_used}/{char.inventory_size} slots used).",
+                )
+            for _ in range(quantity):
+                char.inventory.append(InventoryItem(item_id=item_id, quantity=1))
 
         else:
             if slot_cost > 0 and char.slots_used + slot_cost * quantity > char.inventory_size:
