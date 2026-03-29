@@ -52,6 +52,7 @@ class ItemSheet(StrEnum):
     ARMS      = "Arms"
     LEGS      = "Legs"
     ACCESSORY = "Offhand/Accessory"
+    CASTING   = "Casting"
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +106,14 @@ def _parse_tags(tags_str: str) -> list[str]:
         return []
     return [t.strip() for t in s.split("][") if t.strip()]
 
+def _parse_contained_items(tags_str: str) -> list[str]:
+    """Parse "fulmin1,fulmin2" → ["fulmin1", "fulmin2"]. Empty string → []."""
+    s = str(tags_str).strip()
+    if not s:
+        return []
+    # strip leading/trailing brackets then split on ']['
+    return [t.strip() for t in s.split(",") if t.strip()]
+
 
 def _parse_uses(uses_str: str) -> tuple[int, str]:
     """
@@ -152,6 +161,10 @@ def _normalise_item(row: dict) -> dict:
 
     # --- tags ---
     item["tags"] = _parse_tags(row.get("tags", ""))
+
+    # --- contained items ---
+    if item["item_type"] == "container":
+        item["contained_items"] = _parse_contained_items(row.get("contained_items",""))
 
     # --- text ability fields ---
     item["other_abilities"] = str(row.get("other_abilities", "")).strip()

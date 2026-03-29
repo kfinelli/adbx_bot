@@ -421,6 +421,46 @@
       "tags": []
     }
   ],
+  "Casting": [
+    {
+      "attack_status": "",
+      "contained_items": [
+        "pyr_1",
+        "hydr_1",
+        "fulmin_1"
+      ],
+      "description": "",
+      "held_status": "",
+      "is_light": false,
+      "item_id": "apprentice_manual",
+      "item_type": "container",
+      "name": "Apprentice Mage Manual",
+      "other_abilities": "",
+      "price": 10,
+      "purchaseable": true,
+      "rank": "V",
+      "tags": []
+    },
+    {
+      "attack_status": "",
+      "contained_items": [
+        "pyr_1",
+        "zephyr_1",
+        "geo_1"
+      ],
+      "description": "",
+      "held_status": "",
+      "is_light": false,
+      "item_id": "casting_book",
+      "item_type": "container",
+      "name": "Casting Book",
+      "other_abilities": "",
+      "price": 0,
+      "purchaseable": false,
+      "rank": "V",
+      "tags": []
+    }
+  ],
   "Head": [
     {
       "attack_status": "",
@@ -1015,7 +1055,7 @@
     {
       "attack_status": "",
       "charges": 2,
-      "damage": "0",
+      "damage": "1d10",
       "description": "",
       "destroy_on_empty": false,
       "held_status": "",
@@ -1039,7 +1079,7 @@
     {
       "attack_status": "",
       "charges": 3,
-      "damage": "0",
+      "damage": "1d30",
       "description": "",
       "destroy_on_empty": false,
       "held_status": "",
