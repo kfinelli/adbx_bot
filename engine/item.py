@@ -6,13 +6,10 @@ import json
 import warnings
 
 from engine.azure_constants import (
-    BUNDLE_SIZE,
     POWER_LEVEL,
-    BundleData,
     ItemData,
     ItemType,
     RechargePeriod,
-    SortMode,
     Stat,
 )
 
@@ -104,55 +101,6 @@ class Item:
 
     def toJSON(self):
         return json.dumps(self.toDictionary())
-
-# ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
-# LightContainer is used for carrying light items.
-# Contents should be empty in the container prototype, unless you intend for it to be a "refreshable" pack of some sort.
-# NO LIGHT BUNDLES!!!!!! The system could honestly probably handle it, but let's just the headache.
-# ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
-
-class LightContainer(Item):
-    defaultName = "Bundle"
-    defaultDescription = "A collection of light items"
-    ITEM_TYPE = ItemType.LIGHT_CONTAINER.value
-    def __init__(self, item_id, name=defaultName, description=defaultDescription, maxSize = BUNDLE_SIZE):
-        super().__init__(item_id, name, description, isLight=False, purchaseable=False, price=0)
-        self.maxSize = maxSize
-        self.contents = []
-        if type(self) is LightContainer:
-            self.updatePrototype()
-
-    def addItem(self, item):
-        if item.isLight and len(self.contents) < self.maxSize:
-            self.contents.append(item)
-        elif not item.isLight:
-            raise ValueError(
-                f"{item.name} is not a Light Item."
-            )
-        elif len(self.contents) >= self.maxSize:
-            raise ValueError(
-                f"{self.name} cannot hold any more items."
-            )
-    def removeItem(self, item):
-        self.contents.remove(item)
-    def removeItemByIndex(self, index):
-        return self.contents.pop(index)
-    def isFull(self):
-        return len(self.contents) >= self.maxSize
-    def sortContents(self, sortMode):
-        if sortMode is SortMode.ALPHABETICAL:
-            self.contents.sort(key=lambda x: x.name, reverse=True)
-    def toDictionary(self):
-        exportData = super().toDictionary()
-        contents = []
-        for item in self.contents:
-            contents.append(item.toDictionary())
-        exportData.update({
-            ItemData.ITEM_TYPE.value: LightContainer.ITEM_TYPE,
-            BundleData.MAX_SIZE.value: self.maxSize,
-            BundleData.CONTENTS.value: contents,
-        })
-        return exportData
 
 # ><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><
 # This is a helper class purely for managing more specific types of equipment.
@@ -434,18 +382,6 @@ def createItemFromData(itemData):
                 defense    = itemData.get(ItemData.DEFENSE, 0),
                 resistance = itemData.get(ItemData.RESISTANCE, 0),
             )
-
-        case ItemType.LIGHT_CONTAINER:
-            newItem = LightContainer(
-                item_id     = itemData[ItemData.ITEM_ID],
-                name        = itemData[ItemData.NAME],
-                description = itemData.get(ItemData.DESCRIPTION, ""),
-                maxSize     = itemData.get(BundleData.MAX_SIZE, BUNDLE_SIZE),
-            )
-            newItem.contents = [
-                createItemFromData(i) for i in itemData.get(BundleData.CONTENTS, [])
-            ]
-            return newItem
 
         case _:
             warnings.warn(f"Unknown item type: {item_type}", stacklevel=2)

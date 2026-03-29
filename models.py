@@ -12,7 +12,7 @@ Any update here requires a parallel update in serialization.py!
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from uuid import UUID, uuid4
 
@@ -180,7 +180,7 @@ class Character:
     equipped_slots:  dict[str, str | None] = field(default_factory=dict)
 
     # Metadata
-    created_at:      datetime          = field(default_factory=datetime.utcnow)
+    created_at:      datetime          = field(default_factory=lambda: datetime.now(UTC))
     is_pregenerated: bool              = False
 
     @property
@@ -233,13 +233,26 @@ class Character:
 
     @property
     def slots_used(self) -> int:
-        """Slots currently occupied by unequipped items."""
-        total = 0
+        """Slots currently occupied by unequipped items.
+
+        Non-light items cost slot_cost * quantity slots each.
+        Light items (is_light=True) are bundled: all light item quantities are
+        summed across types and divided by BUNDLE_SIZE, rounded up.
+        """
+        from math import ceil
+
+        from engine.azure_constants import BUNDLE_SIZE
+        non_light = 0
+        light_qty = 0
         for inv_item in self.inventory:
-            if not inv_item.equipped:
-                defn = ITEM_REGISTRY.get(inv_item.item_id)
-                total += defn.slot_cost if defn is not None else 1
-        return total
+            if inv_item.equipped:
+                continue
+            defn = ITEM_REGISTRY.get(inv_item.item_id)
+            if defn is not None and defn.isLight:
+                light_qty += inv_item.quantity
+            else:
+                non_light += (defn.slot_cost if defn is not None else 1) * inv_item.quantity
+        return non_light + (ceil(light_qty / BUNDLE_SIZE) if light_qty > 0 else 0)
 
 
 # ---------------------------------------------------------------------------
@@ -441,7 +454,7 @@ class NPC:
 class PlayerTurnSubmission:
     """One player's submitted action for the current turn."""
     character_id:  UUID               = field(default_factory=uuid4)
-    submitted_at:  datetime           = field(default_factory=datetime.utcnow)
+    submitted_at:  datetime           = field(default_factory=lambda: datetime.now(UTC))
     action_text:   str                = ""      # free-form description
     is_latest:     bool               = True    # False if superseded by a resubmission
     # Structured combat action — populated in ROUNDS mode when the player
@@ -462,7 +475,7 @@ class TurnRecord:
     turn_number:    int                           = 1
     mode:           SessionMode                   = SessionMode.EXPLORATION
     status:         TurnStatus                    = TurnStatus.OPEN
-    opened_at:      datetime                      = field(default_factory=datetime.utcnow)
+    opened_at:      datetime                      = field(default_factory=lambda: datetime.now(UTC))
     due_at:         datetime | None            = None
     closed_at:      datetime | None            = None
     resolved_at:    datetime | None            = None
@@ -642,8 +655,8 @@ class GameState:
     default_turn_hours: float                = 24.0  # default turn length in hours
 
     # Metadata
-    created_at:      datetime                = field(default_factory=datetime.utcnow)
-    updated_at:      datetime                = field(default_factory=datetime.utcnow)
+    created_at:      datetime                = field(default_factory=lambda: datetime.now(UTC))
+    updated_at:      datetime                = field(default_factory=lambda: datetime.now(UTC))
 
     # Platform context (opaque — the engine doesn't interpret these)
     platform_channel_id: str | None      = None

@@ -39,10 +39,6 @@ _ARCANE_RANKS   = ("V", "W", "X", "Y", "Z")
 
 #Enums
 
-class BundleData(StrEnum):
-    MAX_SIZE = "maxSize"
-    CONTENTS = "contents"
-
 class ItemData(StrEnum):
     PROTOTYPE = "prototype"
     ITEM_ID = "item_id"
@@ -71,7 +67,6 @@ class ItemData(StrEnum):
     PRICE = "price"
 
 class ItemType(StrEnum):
-    LIGHT_CONTAINER = "light_container"
     ITEM = "item"
     GEAR = "gear"
     WEAPON = "weapon"
@@ -152,9 +147,6 @@ UI_SLOTS: tuple[ItemSlot, ...] = (
 # Only primary slots are included; legacy aliases are item-data tags, not slots.
 DEFAULT_EQUIPPED_SLOTS: dict[str, str | None] = dict.fromkeys(UI_SLOTS)
 
-
-class SortMode(IntEnum):
-    ALPHABETICAL = 0
 
 class Stat(StrEnum):
     PHYSIQUE = 'physique'

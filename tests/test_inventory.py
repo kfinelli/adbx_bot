@@ -3,20 +3,21 @@ test_inventory.py — Tests for inventory slot limits and give_item().
 
 Covers:
   - inventory_size formula: BASE_INVENTORY_SIZE + floor(PHY / POWER_LEVEL)
-  - slots_used excludes equipped items, counts unequipped items
+  - slots_used excludes equipped items, counts unequipped items by slot_cost * quantity
+  - slots_used bundles light items: ceil(total_light_qty / BUNDLE_SIZE)
   - give_item() adds items and stacks non-charged duplicates
   - give_item() rejects when inventory is full
   - give_item() never stacks ChargeWeapons
-  - give_item() bypasses capacity for zero-slot-cost items
+  - give_item() light item bundle capacity enforcement
   - slot_cost defaults to 1 on all item definitions
 """
 
 import pytest
 
 from engine import create_character, equip_item, give_item
-from engine.azure_constants import BASE_INVENTORY_SIZE
+from engine.azure_constants import BASE_INVENTORY_SIZE, BUNDLE_SIZE
 from engine.data_loader import ITEM_REGISTRY
-from engine.item import ChargeWeapon, Gear, Weapon
+from engine.item import ChargeWeapon, Gear, Item, Weapon
 from models import AzureStats, CharacterClass, InventoryItem
 
 # ---------------------------------------------------------------------------
@@ -46,6 +47,16 @@ def _find_gear_id(slot: str):
         if isinstance(defn, Gear) and defn.slot == slot:
             return item_id
     return None
+
+
+@pytest.fixture
+def light_items(monkeypatch):
+    """Register two light items temporarily for bundle tests."""
+    inkwell = Item("test_inkwell", "Inkwell", isLight=True)
+    tinderbox = Item("test_tinderbox", "Tinderbox", isLight=True)
+    monkeypatch.setitem(ITEM_REGISTRY, "test_inkwell", inkwell)
+    monkeypatch.setitem(ITEM_REGISTRY, "test_tinderbox", tinderbox)
+    return "test_inkwell", "test_tinderbox"
 
 
 # ---------------------------------------------------------------------------
@@ -277,8 +288,8 @@ class TestGiveItem:
         defn = ITEM_REGISTRY[cwid]
         assert entry.charges == defn.maxCharges
 
-    def test_give_item_stacks_onto_existing_when_full(self, bare_state):
-        """Stacking onto an existing entry must succeed even when inventory is full."""
+    def test_give_item_stacking_blocked_when_full(self, bare_state):
+        """Stacking onto an existing entry is blocked when inventory is full (each unit costs a slot)."""
         create_character(
             bare_state, name="Full", character_class=CharacterClass.KNIGHT,
             equipment_package="", owner_id="u1",
@@ -299,11 +310,10 @@ class TestGiveItem:
             assert result.ok, result.error
 
         assert char.slots_used == capacity
-        # Stacking onto the first entry must succeed — no new slot consumed.
+        # Adding another copy of an existing item still requires a free slot.
         result = give_item(bare_state, char.character_id, fill_ids[0])
-        assert result.ok, result.error
-        stacked = next(i for i in char.inventory if i.item_id == fill_ids[0])
-        assert stacked.quantity == 2
+        assert not result.ok
+        assert "full" in result.error.lower()
 
     def test_give_item_unknown_character(self, bare_state):
         from uuid import uuid4
@@ -328,3 +338,126 @@ class TestSlotCost:
             assert defn.slot_cost == 1, (
                 f"Item '{item_id}' has unexpected slot_cost={defn.slot_cost}"
             )
+
+
+# ---------------------------------------------------------------------------
+# slots_used quantity multiplier (non-light items)
+# ---------------------------------------------------------------------------
+
+class TestSlotsUsedQuantity:
+    def test_quantity_multiplies_slot_cost(self, bare_state):
+        """3 unequipped copies of the same item = 3 slots."""
+        wid = _find_weapon_id()
+        assert wid is not None
+        create_character(
+            bare_state, name="Laden", character_class=CharacterClass.KNIGHT,
+            equipment_package="", owner_id="u1",
+        )
+        char = _get_char(bare_state)
+        char.inventory.append(InventoryItem(item_id=wid, quantity=3))
+        assert char.slots_used == 3
+
+    def test_two_distinct_items_each_cost_one(self, bare_state):
+        wid = _find_weapon_id()
+        gid = _find_gear_id("head")
+        assert wid and gid
+        create_character(
+            bare_state, name="Laden2", character_class=CharacterClass.KNIGHT,
+            equipment_package="", owner_id="u1",
+        )
+        char = _get_char(bare_state)
+        char.inventory.append(InventoryItem(item_id=wid, quantity=1))
+        char.inventory.append(InventoryItem(item_id=gid, quantity=1))
+        assert char.slots_used == 2
+
+
+# ---------------------------------------------------------------------------
+# Light item bundling
+# ---------------------------------------------------------------------------
+
+class TestLightBundling:
+    def test_one_light_item_costs_one_slot(self, bare_state, light_items):
+        inkwell_id, _ = light_items
+        create_character(
+            bare_state, name="Carrier", character_class=CharacterClass.KNIGHT,
+            equipment_package="", owner_id="u1",
+        )
+        char = _get_char(bare_state)
+        char.inventory.append(InventoryItem(item_id=inkwell_id, quantity=1))
+        assert char.slots_used == 1
+
+    def test_ten_light_items_cost_one_slot(self, bare_state, light_items):
+        inkwell_id, _ = light_items
+        create_character(
+            bare_state, name="Carrier", character_class=CharacterClass.KNIGHT,
+            equipment_package="", owner_id="u1",
+        )
+        char = _get_char(bare_state)
+        char.inventory.append(InventoryItem(item_id=inkwell_id, quantity=BUNDLE_SIZE))
+        assert char.slots_used == 1
+
+    def test_eleven_light_items_cost_two_slots(self, bare_state, light_items):
+        inkwell_id, _ = light_items
+        create_character(
+            bare_state, name="Carrier", character_class=CharacterClass.KNIGHT,
+            equipment_package="", owner_id="u1",
+        )
+        char = _get_char(bare_state)
+        char.inventory.append(InventoryItem(item_id=inkwell_id, quantity=BUNDLE_SIZE + 1))
+        assert char.slots_used == 2
+
+    def test_mixed_light_types_bundle_together(self, bare_state, light_items):
+        """7 inkwells + 4 tinderboxes = 11 light items = 2 slots."""
+        inkwell_id, tinderbox_id = light_items
+        create_character(
+            bare_state, name="Carrier", character_class=CharacterClass.KNIGHT,
+            equipment_package="", owner_id="u1",
+        )
+        char = _get_char(bare_state)
+        char.inventory.append(InventoryItem(item_id=inkwell_id, quantity=7))
+        char.inventory.append(InventoryItem(item_id=tinderbox_id, quantity=4))
+        assert char.slots_used == 2
+
+    def test_give_light_item_fills_bundle_without_new_slot(self, bare_state, light_items):
+        """Adding a light item that stays within the current bundle uses no new slot."""
+        inkwell_id, tinderbox_id = light_items
+        create_character(
+            bare_state, name="Carrier", character_class=CharacterClass.KNIGHT,
+            equipment_package="", owner_id="u1",
+            ability_scores=AzureStats(physique=0, finesse=0, reason=0, savvy=0),
+        )
+        char = _get_char(bare_state)
+        # Fill non-light slots to leave exactly 1 slot free.
+        wid = _find_weapon_id()
+        for _ in range(char.inventory_size - 1):
+            char.inventory.append(InventoryItem(item_id=wid))
+        # Add 9 inkwells (1 slot) — only 1 non-light slot free, total = capacity.
+        char.inventory.append(InventoryItem(item_id=inkwell_id, quantity=9))
+        assert char.slots_used == char.inventory_size
+
+        # Adding the 10th inkwell stays within the same bundle slot.
+        result = give_item(bare_state, char.character_id, inkwell_id)
+        assert result.ok, result.error
+        assert char.slots_used == char.inventory_size
+
+    def test_give_light_item_blocked_when_new_bundle_slot_needed(self, bare_state, light_items):
+        """Adding a light item that overflows to a new bundle slot is blocked when full."""
+        inkwell_id, _ = light_items
+        create_character(
+            bare_state, name="Carrier", character_class=CharacterClass.KNIGHT,
+            equipment_package="", owner_id="u1",
+            ability_scores=AzureStats(physique=0, finesse=0, reason=0, savvy=0),
+        )
+        char = _get_char(bare_state)
+        # Fill non-light slots to leave exactly 1 slot free.
+        wid = _find_weapon_id()
+        for _ in range(char.inventory_size - 1):
+            char.inventory.append(InventoryItem(item_id=wid))
+        # Fill the remaining slot with a full bundle of 10 inkwells.
+        char.inventory.append(InventoryItem(item_id=inkwell_id, quantity=BUNDLE_SIZE))
+        assert char.slots_used == char.inventory_size
+
+        # The 11th inkwell would need a 2nd bundle slot — no room.
+        result = give_item(bare_state, char.character_id, inkwell_id)
+        assert not result.ok
+        assert "full" in result.error.lower()

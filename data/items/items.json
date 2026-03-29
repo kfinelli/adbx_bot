@@ -1329,6 +1329,48 @@
       "purchaseable": true,
       "rank": "",
       "tags": []
+    },
+    {
+      "attack_status": "",
+      "description": "Write on parchment, paper, etc.",
+      "held_status": "",
+      "is_light": true,
+      "item_id": "inkwell_and_pen",
+      "item_type": "item",
+      "name": "Inkwell and Pen",
+      "other_abilities": "",
+      "price": 1,
+      "purchaseable": true,
+      "rank": "",
+      "tags": []
+    },
+    {
+      "attack_status": "",
+      "description": "For starting fires",
+      "held_status": "",
+      "is_light": true,
+      "item_id": "tinderbox",
+      "item_type": "item",
+      "name": "Tinderbox",
+      "other_abilities": "",
+      "price": 1,
+      "purchaseable": true,
+      "rank": "",
+      "tags": []
+    },
+    {
+      "attack_status": "",
+      "description": "Small metal spheres held in a corded leather bag",
+      "held_status": "",
+      "is_light": true,
+      "item_id": "marbles",
+      "item_type": "item",
+      "name": "Bag of Marbles",
+      "other_abilities": "",
+      "price": 5,
+      "purchaseable": true,
+      "rank": "",
+      "tags": []
     }
   ],
   "Weapon": [
@@ -1710,7 +1752,7 @@
       "damage": "1d4",
       "description": "",
       "held_status": "",
-      "is_light": false,
+      "is_light": true,
       "item_id": "torch",
       "item_type": "weapon",
       "name": "Torch",

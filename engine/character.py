@@ -248,14 +248,18 @@ class CharacterManager:
         enforcing the inventory slot limit.
 
         Stacking rules:
+        - Light items (is_light=True) are bundled BUNDLE_SIZE-per-slot across
+          all light item types; the capacity check uses bundle math.
         - ChargeWeapons are never stacked (each has independent charge state);
           a new InventoryItem entry is always created.
-        - All other items are stacked onto an existing unequipped entry if one
-          exists for that item_id; otherwise a new entry is created.
-        - Items with slot_cost == 0 (future light-item bundles) bypass the
-          capacity check — the bundling system manages their slots separately.
+        - All other items stack onto an existing unequipped entry if one
+          exists; each unit consumes slot_cost slots.
         """
+        from math import ceil
+
         from engine import _now
+        from engine.azure_constants import BUNDLE_SIZE
+
         char = state.characters.get(character_id)
         if char is None:
             return _err(state, f"Character {character_id} not found.")
@@ -266,9 +270,35 @@ class CharacterManager:
 
         slot_cost = defn.slot_cost
 
-        if isinstance(defn, ChargeWeapon):
+        if defn.isLight:
+            # Bundle-aware capacity check: all light items share bundle slots.
+            current_light = sum(
+                i.quantity for i in char.inventory
+                if not i.equipped
+                and (d := ITEM_REGISTRY.get(i.item_id)) is not None
+                and d.isLight
+            )
+            current_light_slots = ceil(current_light / BUNDLE_SIZE) if current_light else 0
+            new_light_slots = ceil((current_light + quantity) / BUNDLE_SIZE)
+            non_light_slots = char.slots_used - current_light_slots
+            if non_light_slots + new_light_slots > char.inventory_size:
+                return _err(
+                    state,
+                    f"{char.name}'s inventory is full "
+                    f"({char.slots_used}/{char.inventory_size} slots used).",
+                )
+            existing = next(
+                (i for i in char.inventory if i.item_id == item_id and not i.equipped),
+                None,
+            )
+            if existing is not None:
+                existing.quantity += quantity
+            else:
+                char.inventory.append(InventoryItem(item_id=item_id, quantity=quantity))
+
+        elif isinstance(defn, ChargeWeapon):
             # Never stack charged items — each needs its own charge counter.
-            if slot_cost > 0 and char.slots_used + slot_cost > char.inventory_size:
+            if slot_cost > 0 and char.slots_used + slot_cost * quantity > char.inventory_size:
                 return _err(
                     state,
                     f"{char.name}'s inventory is full "
@@ -279,21 +309,21 @@ class CharacterManager:
                 quantity=quantity,
                 charges=defn.maxCharges,
             ))
+
         else:
+            if slot_cost > 0 and char.slots_used + slot_cost * quantity > char.inventory_size:
+                return _err(
+                    state,
+                    f"{char.name}'s inventory is full "
+                    f"({char.slots_used}/{char.inventory_size} slots used).",
+                )
             existing = next(
                 (i for i in char.inventory if i.item_id == item_id and not i.equipped),
                 None,
             )
             if existing is not None:
-                # Stacking onto an existing entry uses no new slot.
                 existing.quantity += quantity
             else:
-                if slot_cost > 0 and char.slots_used + slot_cost > char.inventory_size:
-                    return _err(
-                        state,
-                        f"{char.name}'s inventory is full "
-                        f"({char.slots_used}/{char.inventory_size} slots used).",
-                    )
                 char.inventory.append(InventoryItem(item_id=item_id, quantity=quantity))
 
         state.updated_at = _now()
