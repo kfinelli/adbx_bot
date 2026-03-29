@@ -248,6 +248,7 @@ class TestGiveItem:
         create_character(
             bare_state, name="Stacker", character_class=CharacterClass.KNIGHT,
             equipment_package="", owner_id="u1",
+            ability_scores=AzureStats(physique=0, finesse=0, reason=0, savvy=0),
         )
         char = _get_char(bare_state)
         give_item(bare_state, char.character_id, wid)
