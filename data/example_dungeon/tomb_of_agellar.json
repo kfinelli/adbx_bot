@@ -48,6 +48,7 @@
             "direction": null,
             "destination_id": null,
             "door_state": "open",
+            "auto_move": false,
             "description": "The tomb\u2019s heavy stone entrance stands open to the plains outside",
             "notes": ""
           },
@@ -55,9 +56,9 @@
             "exit_id": "72e97c9b-3b1a-43cb-b5c9-2dbd696e6b49",
             "label": "Caretaker\u2019s Door",
             "direction": null,
-            "destination_id": null,
+            "destination_id": "31866692-d43c-48ac-99d6-da3facd08fec",
             "door_state": "open",
-	    "auto_move": true,
+            "auto_move": true,
             "description": "A small wooden door set into the right-hand wall",
             "notes": ""
           },
@@ -65,14 +66,16 @@
             "exit_id": "09d87c5f-5e12-4aea-ac31-c394867f7bc1",
             "label": "Secret Passage",
             "direction": null,
-            "destination_id": null,
+            "destination_id": "98f73871-d9f1-4315-81ed-772ff185a4ba",
             "door_state": "secret",
+            "auto_move": false,
             "description": "A concealed opening revealed by twisting the horse\u2019s head",
             "notes": ""
           }
         ],
         "visited": false,
-        "authored": true
+        "authored": true,
+        "exploration_xp": 100
       },
       "31866692-d43c-48ac-99d6-da3facd08fec": {
         "room_id": "31866692-d43c-48ac-99d6-da3facd08fec",
@@ -114,15 +117,16 @@
             "exit_id": "6dd7236d-b29b-4505-b596-0185a2108218",
             "label": "Door to Shrine",
             "direction": null,
-            "destination_id": null,
+            "destination_id": "abbf38d7-ca71-4a00-8903-04d57a43ea5a",
             "door_state": "open",
-	    "auto_move": true,
+            "auto_move": true,
             "description": "The small wooden door leading back to the main hall",
             "notes": ""
           }
         ],
         "visited": false,
-        "authored": true
+        "authored": true,
+        "exploration_xp": 100
       },
       "98f73871-d9f1-4315-81ed-772ff185a4ba": {
         "room_id": "98f73871-d9f1-4315-81ed-772ff185a4ba",
@@ -150,8 +154,9 @@
             "exit_id": "b20d68c2-9513-4453-b54a-2e1dab6b0a26",
             "label": "Stair to Shrine",
             "direction": null,
-            "destination_id": null,
+            "destination_id": "abbf38d7-ca71-4a00-8903-04d57a43ea5a",
             "door_state": "open",
+            "auto_move": true,
             "description": "The narrow staircase ascending to the hidden passage above",
             "notes": ""
           },
@@ -159,14 +164,16 @@
             "exit_id": "0d64336f-6fdd-4428-8a5f-cae3c06132bc",
             "label": "Iron Door",
             "direction": null,
-            "destination_id": null,
-            "door_state": "open",
+            "destination_id": "b7974704-2915-4643-b955-618f5476b387",
+            "door_state": "locked",
+            "auto_move": false,
             "description": "A rune-carved barrier at the left end of the corridor",
             "notes": ""
           }
         ],
         "visited": false,
-        "authored": true
+        "authored": true,
+        "exploration_xp": 100
       },
       "b7974704-2915-4643-b955-618f5476b387": {
         "room_id": "b7974704-2915-4643-b955-618f5476b387",
@@ -194,17 +201,19 @@
             "exit_id": "54bec71b-5361-4f6c-8dc9-38f7903b9b53",
             "label": "Iron Doorway",
             "direction": null,
-            "destination_id": null,
+            "destination_id": "98f73871-d9f1-4315-81ed-772ff185a4ba",
             "door_state": "open",
+            "auto_move": false,
             "description": "The heavy iron entrance back to the trapped hall",
             "notes": ""
           }
         ],
         "visited": false,
-        "authored": true
+        "authored": true,
+        "exploration_xp": 100
       }
     },
-    "entrance_id": "98f73871-d9f1-4315-81ed-772ff185a4ba"
+    "entrance_id": "abbf38d7-ca71-4a00-8903-04d57a43ea5a"
   },
   "npc_roster": {
     "groups": {
@@ -231,7 +240,7 @@
             "damage_dice": "1d6",
             "morale": 7,
             "saving_throw": 15,
-            "xp_value": 0,
+            "hit_dice": 1,
             "status": "active",
             "notes": ""
           },
@@ -254,7 +263,7 @@
             "damage_dice": "1d6",
             "morale": 7,
             "saving_throw": 15,
-            "xp_value": 0,
+            "hit_dice": 1,
             "status": "active",
             "notes": ""
           }
