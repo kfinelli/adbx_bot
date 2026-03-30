@@ -82,6 +82,7 @@ def _char_dict_from_row(row) -> dict:
     If jobs_json is present (new format) it is passed directly; otherwise the
     legacy character_class value is passed so deserialize_character can migrate it.
     """
+    equipped_slots_raw = row["equipped_slots_json"] if "equipped_slots_json" in row.keys() else None # noqa: SIM118 (json, not dict)
     d: dict = {
         "character_id":    row["character_id"],
         "owner_id":        row["owner_id"],
@@ -99,6 +100,7 @@ def _char_dict_from_row(row) -> dict:
         "gold":            row["gold"],
         "created_at":      row["created_at"],
         "is_pregenerated": bool(row["is_pregenerated"]),
+        "equipped_slots":  json.loads(equipped_slots_raw) if equipped_slots_raw else {},
     }
     jobs_json = row["jobs_json"] if "jobs_json" in row else None # noqa: SIM401 (json, not dict)
     if jobs_json:
@@ -166,6 +168,10 @@ class Database:
         if "jobs_json" not in existing:
             self._conn.execute(
                 "ALTER TABLE characters ADD COLUMN jobs_json TEXT"
+            )
+        if "equipped_slots_json" not in existing:
+            self._conn.execute(
+                "ALTER TABLE characters ADD COLUMN equipped_slots_json TEXT"
             )
         self._conn.execute("""
             CREATE TABLE IF NOT EXISTS session_characters (
@@ -274,8 +280,8 @@ class Database:
                 experience, ability_scores_json, hp_max, hp_current,
                 movement_speed, saving_throws_json, status,
                 status_notes, inventory_json, gold,
-                created_at, is_pregenerated, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                created_at, is_pregenerated, updated_at, equipped_slots_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(character_id) DO UPDATE SET
                 owner_id = excluded.owner_id,
                 name = excluded.name,
@@ -293,7 +299,8 @@ class Database:
                 inventory_json = excluded.inventory_json,
                 gold = excluded.gold,
                 is_pregenerated = excluded.is_pregenerated,
-                updated_at = excluded.updated_at
+                updated_at = excluded.updated_at,
+                equipped_slots_json = excluded.equipped_slots_json
             """,
             (
                 char_data["character_id"],
@@ -315,6 +322,7 @@ class Database:
                 char_data["created_at"],
                 1 if char_data["is_pregenerated"] else 0,
                 _now_iso(),
+                json.dumps(char_data["equipped_slots"]),
             ),
         )
         self._conn.commit()

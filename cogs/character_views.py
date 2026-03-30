@@ -62,11 +62,13 @@ def _character_sheet(char, state) -> str:
         for _child in _contained.get(i.item_id, []):
             _cdefn = ITEM_REGISTRY.get(_child.item_id)
             _cname = _cdefn.name if _cdefn else _child.item_id
-            _charges = (
-                f" ({_child.charges}/{_cdefn.maxCharges})"
-                if _child.charges is not None and _cdefn is not None and hasattr(_cdefn, "maxCharges")
-                else ""
-            )
+            if _child.charges is not None and _cdefn is not None and hasattr(_cdefn, "maxCharges"):
+                if _cdefn.maxCharges < 0:
+                    _charges = " (\u221e)"
+                else:
+                    _charges = f" ({_child.charges}/{_cdefn.maxCharges})"
+            else:
+                _charges = ""
             _inv_parts.append(f"    \u2514 {_cname}{_charges}")
     inv_lines = "\n".join(_inv_parts) if _inv_parts else "  (empty)"
 

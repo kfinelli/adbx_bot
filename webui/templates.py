@@ -1485,7 +1485,10 @@ def character_sheet_panel(character: Character) -> str:
             _cname = _cdefn.name if _cdefn else _child.item_id
             _charges_str = ""
             if _child.charges is not None and _cdefn is not None and hasattr(_cdefn, "maxCharges"):
-                _charges_str = f' <span class="muted" style="font-size:0.8rem">({_child.charges}/{_cdefn.maxCharges})</span>'
+                if _cdefn.maxCharges < 0:
+                    _charges_str = ' <span class="muted" style="font-size:0.8rem">(∞)</span>'
+                else:
+                    _charges_str = f' <span class="muted" style="font-size:0.8rem">({_child.charges}/{_cdefn.maxCharges})</span>'
             item_rows += (
                 f'<tr style="opacity:0.7">'
                 f'<td style="padding-left:1.5rem;font-size:0.9rem">'
