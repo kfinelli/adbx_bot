@@ -497,6 +497,26 @@
       "rank": "V",
       "slot": "main_hand",
       "tags": []
+    },
+    {
+      "attack_status": "",
+      "contained_items": [
+        "sal_1",
+        "sal_2",
+        "geo_1"
+      ],
+      "description": "",
+      "held_status": "",
+      "is_light": false,
+      "item_id": "forbidden_initiation",
+      "item_type": "container",
+      "name": "Forbidden Initiate's Tome",
+      "other_abilities": "",
+      "price": 10,
+      "purchaseable": true,
+      "rank": "V",
+      "slot": "main_hand",
+      "tags": []
     }
   ],
   "Head": [
@@ -1332,6 +1352,81 @@
         "White"
       ],
       "type": "Earth"
+    },
+    {
+      "attack_status": "",
+      "charges": 2,
+      "damage": "1d12",
+      "description": "",
+      "destroy_on_empty": false,
+      "held_status": "",
+      "is_light": false,
+      "item_id": "sal_1",
+      "item_type": "charge_weapon",
+      "max_charges": 2,
+      "name": "Salaman-1",
+      "other_abilities": "",
+      "price": 10,
+      "purchaseable": false,
+      "range": 1,
+      "rank": "V",
+      "recharge_period": "encounter",
+      "slot": "main_hand",
+      "stat": "reason",
+      "tags": [
+        "White"
+      ],
+      "type": "Fire"
+    },
+    {
+      "attack_status": "",
+      "charges": 2,
+      "damage": "2d12",
+      "description": "",
+      "destroy_on_empty": false,
+      "held_status": "",
+      "is_light": false,
+      "item_id": "sal_2",
+      "item_type": "charge_weapon",
+      "max_charges": 2,
+      "name": "Salaman-2",
+      "other_abilities": "",
+      "price": 20,
+      "purchaseable": false,
+      "range": 2,
+      "rank": "W",
+      "recharge_period": "day",
+      "slot": "main_hand",
+      "stat": "reason",
+      "tags": [
+        "White"
+      ],
+      "type": "Fire"
+    },
+    {
+      "attack_status": "",
+      "charges": 3,
+      "damage": "3d8",
+      "description": "",
+      "destroy_on_empty": false,
+      "held_status": "",
+      "is_light": false,
+      "item_id": "sal_3",
+      "item_type": "charge_weapon",
+      "max_charges": 3,
+      "name": "Salaman-3",
+      "other_abilities": "",
+      "price": 30,
+      "purchaseable": false,
+      "range": 3,
+      "rank": "X",
+      "recharge_period": "day",
+      "slot": "main_hand",
+      "stat": "reason",
+      "tags": [
+        "White"
+      ],
+      "type": "Fire"
     }
   ],
   "Offhand/Accessory": [
