@@ -47,10 +47,28 @@ def _character_sheet(char, state) -> str:
     ) else ""
     sep = "\u2500" * 32
 
-    inv_lines = "\n".join(
-        f"  {i.quantity}x {i.definition.name}{'  [equipped]' if i.equipped else ''}"
-        for i in char.inventory
-    ) if char.inventory else "  (empty)"
+    # Build a map of container_id → contained InventoryItems for nested display.
+    _contained: dict[str, list] = {}
+    for _i in char.inventory:
+        if _i.container_id:
+            _contained.setdefault(_i.container_id, []).append(_i)
+
+    _inv_parts = []
+    for i in char.inventory:
+        if i.container_id:
+            continue  # rendered under its container below
+        line = f"  {i.quantity}x {i.definition.name}{'  [equipped]' if i.equipped else ''}"
+        _inv_parts.append(line)
+        for _child in _contained.get(i.item_id, []):
+            _cdefn = ITEM_REGISTRY.get(_child.item_id)
+            _cname = _cdefn.name if _cdefn else _child.item_id
+            _charges = (
+                f" ({_child.charges}/{_cdefn.maxCharges})"
+                if _child.charges is not None and _cdefn is not None and hasattr(_cdefn, "maxCharges")
+                else ""
+            )
+            _inv_parts.append(f"    \u2514 {_cname}{_charges}")
+    inv_lines = "\n".join(_inv_parts) if _inv_parts else "  (empty)"
 
     # Equipped slots summary
     slot_lines = []
@@ -115,6 +133,8 @@ class EquipSelectView(discord.ui.View):
         # already flagged as equipped.
         options = []
         for inv in char.inventory:
+            if inv.container_id:
+                continue  # contained spells are not directly equippable
             defn = ITEM_REGISTRY.get(inv.item_id)
             if defn is None or not isinstance(defn, EquipItem):
                 continue

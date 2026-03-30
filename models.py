@@ -131,12 +131,13 @@ AbilityScores = AzureStats
 
 @dataclass
 class InventoryItem:
-    item_id:     str
-    quantity:    int    = 1
-    equipped:    bool   = False
-    broken:      bool   = False
-    charges:     int | None = None
-    notes:       str    = ""
+    item_id:      str
+    quantity:     int    = 1
+    equipped:     bool   = False
+    broken:       bool   = False
+    charges:      int | None = None
+    notes:        str    = ""
+    container_id: str | None = None   # item_id of owning ContainerItem, if any
 
     @property
     def definition(self):
@@ -240,11 +241,19 @@ class Character:
         if definition is None:
             return []
         if isinstance(definition, ContainerItem):
+            container_item_id = inv_item.item_id
             results = []
             for spell_id in definition.contained_item_ids:
                 spell_def = ITEM_REGISTRY.get(spell_id)
-                if spell_def is not None and isinstance(spell_def, Weapon):
-                    results.append((inv_item, spell_def))
+                if spell_def is None or not isinstance(spell_def, Weapon):
+                    continue
+                spell_inv = next(
+                    (i for i in self.inventory
+                     if i.item_id == spell_id and i.container_id == container_item_id),
+                    None,
+                )
+                if spell_inv is not None:
+                    results.append((spell_inv, spell_def))
             return results
         if isinstance(definition, Weapon):
             return [(inv_item, definition)]
@@ -279,6 +288,8 @@ class Character:
         for inv_item in self.inventory:
             if inv_item.equipped:
                 continue
+            if inv_item.container_id is not None:
+                continue  # contained items don't occupy their own inventory slots
             defn = ITEM_REGISTRY.get(inv_item.item_id)
             if defn is not None and defn.isLight:
                 light_qty += inv_item.quantity

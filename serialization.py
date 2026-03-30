@@ -65,12 +65,13 @@ def _enum(v) -> str | None:
 
 def serialize_inventory_item(item: InventoryItem) -> dict:
     return {
-        "item_id":  item.item_id,   # str — no UUID wrapping needed
-        "quantity": item.quantity,
-        "equipped": item.equipped,
-        "broken":   item.broken,
-        "charges":  item.charges,
-        "notes":    item.notes,
+        "item_id":      item.item_id,   # str — no UUID wrapping needed
+        "quantity":     item.quantity,
+        "equipped":     item.equipped,
+        "broken":       item.broken,
+        "charges":      item.charges,
+        "notes":        item.notes,
+        "container_id": item.container_id,
     }
 
 
@@ -368,6 +369,7 @@ def deserialize_inventory_item(d: dict) -> InventoryItem:
         broken=d.get("broken", False),
         charges=d.get("charges"),
         notes=d.get("notes", ""),
+        container_id=d.get("container_id"),
     )
 
 

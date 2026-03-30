@@ -15,10 +15,10 @@ Covers:
 
 import pytest
 
-from engine import create_character, equip_item, unequip_item
+from engine import create_character, equip_item, give_item, remove_item, unequip_item
 from engine.azure_constants import UI_SLOTS, ItemSlot
 from engine.data_loader import ITEM_REGISTRY
-from engine.item import Gear, Weapon
+from engine.item import ChargeWeapon, ContainerItem, Gear, Weapon
 from models import (
     CharacterClass,
     InventoryItem,
@@ -563,3 +563,70 @@ class TestEquipSerialization:
         # All slots should default to None
         for slot in UI_SLOTS:
             assert rest_char.equipped_slots[slot] is None
+
+
+# ---------------------------------------------------------------------------
+# Spellbook / ContainerItem charge tracking
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def state_mage(bare_state):
+    """State with a single Mage character, no inventory."""
+    create_character(
+        bare_state,
+        name="Vera",
+        character_class=CharacterClass.MAGE,
+        equipment_package="",
+        owner_id="user_mage_test",
+    )
+    return bare_state
+
+
+@pytest.fixture
+def spellbook_id():
+    for item_id, defn in ITEM_REGISTRY.items():
+        if isinstance(defn, ContainerItem) and defn.contained_item_ids:
+            return item_id
+    return None
+
+
+class TestSpellbookChargeTracking:
+    def test_give_spellbook_adds_spell_items(self, state_mage, spellbook_id):
+        assert spellbook_id is not None, "No ContainerItem found in ITEM_REGISTRY"
+        char = _get_char(state_mage)
+        give_item(state_mage, char.character_id, spellbook_id)
+
+        book_def = ITEM_REGISTRY[spellbook_id]
+        for spell_id in book_def.contained_item_ids:
+            spell_inv = next(
+                (i for i in char.inventory
+                 if i.item_id == spell_id and i.container_id == spellbook_id),
+                None,
+            )
+            assert spell_inv is not None, f"Spell {spell_id} not added to inventory"
+            spell_def = ITEM_REGISTRY.get(spell_id)
+            if isinstance(spell_def, ChargeWeapon):
+                assert spell_inv.charges == spell_def.maxCharges
+
+    def test_remove_spellbook_removes_spell_items(self, state_mage, spellbook_id):
+        assert spellbook_id is not None, "No ContainerItem found in ITEM_REGISTRY"
+        char = _get_char(state_mage)
+        give_item(state_mage, char.character_id, spellbook_id)
+
+        book_def = ITEM_REGISTRY[spellbook_id]
+        # Verify spells are present before removal
+        for spell_id in book_def.contained_item_ids:
+            assert any(
+                i.item_id == spell_id and i.container_id == spellbook_id
+                for i in char.inventory
+            )
+
+        remove_item(state_mage, char.character_id, spellbook_id)
+
+        # Container and all its spell items should be gone
+        assert not any(i.item_id == spellbook_id for i in char.inventory)
+        for spell_id in book_def.contained_item_ids:
+            assert not any(
+                i.item_id == spell_id and i.container_id == spellbook_id
+                for i in char.inventory
+            )

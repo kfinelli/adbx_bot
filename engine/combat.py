@@ -51,7 +51,7 @@ from uuid import UUID
 
 from engine.azure_constants import POWER_LEVEL
 from engine.azure_helpers import get_stat_modifier
-from engine.item import ChargeWeapon, ContainerItem
+from engine.item import ChargeWeapon
 from models import (
     NPC,
     ActiveCondition,
@@ -485,7 +485,7 @@ def _hook_melee_attack(
         weapons = actor_char.equipped_weapons()
         stat_name = "physique"
         if weapons:
-            container_inv, weapon_def = weapons[0]
+            weapon_inv, weapon_def = weapons[0]
             # Override dice with weapon's damage expression if it's set.
             weapon_damage = getattr(weapon_def, "damage", None)
             if weapon_damage and weapon_damage != "0":
@@ -493,15 +493,9 @@ def _hook_melee_attack(
             weapon_stat = getattr(weapon_def, "stat", None)
             if weapon_stat:
                 stat_name = weapon_stat
-            # Consume a charge for standalone ChargeWeapons.
-            # Spells from a container (spellbook) are not tracked here — they use
-            # the shared ITEM_REGISTRY definition, so per-character charge depletion
-            # is not supported for contained spells yet.  All current spellbook
-            # spells are infinite-charge, so this is not a problem in practice.
-            # TODO: add per-character charge tracking for finite-charge contained
-            # spells when needed (e.g. via contained_charges on the spellbook InventoryItem).
-            if isinstance(weapon_def, ChargeWeapon) and not isinstance(container_inv.definition, ContainerItem):
-                current = container_inv.charges if container_inv.charges is not None else -1
+            # Consume a charge for ChargeWeapons (standalone or contained in a spellbook).
+            if isinstance(weapon_def, ChargeWeapon):
+                current = weapon_inv.charges if weapon_inv.charges is not None else -1
                 if current == 0:
                     log.append(
                         f"{actor_name} tries to use {weapon_def.name} "
@@ -509,7 +503,7 @@ def _hook_melee_attack(
                     )
                     return
                 if current > 0:
-                    container_inv.charges = current - 1
+                    weapon_inv.charges = current - 1
         str_mod      = _effective_stat_mod(state, actor_id, stat_name)
         attack_bonus = 0
     elif actor_npc:
