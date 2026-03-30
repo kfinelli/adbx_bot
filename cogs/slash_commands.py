@@ -138,9 +138,13 @@ class SessionCog(commands.Cog):
             await ack_err(interaction, result.error)
             return
         await ack_done(interaction)
-        await update_status(interaction.channel, state)
-        if result.notify_dm:
+        if result.auto_resolved:
+            from discord_tasks import dispatch_turn_resolved
+            await dispatch_turn_resolved(interaction.channel, state, result.message)
+        elif result.notify_dm:
             await notify_dm_of_turn_close(interaction.channel, state, turn_number)
+        else:
+            await update_status(interaction.channel, state)
 
     # ------------------------------------------------------------------
     # /say

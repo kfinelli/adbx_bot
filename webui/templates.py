@@ -880,10 +880,12 @@ def room_panel(
     for i, ex in enumerate(room.exits, 1):
         eid = str(ex.exit_id)
         dest_name = ""
+        dest_visited = False
         if ex.destination_id and state.dungeon:
             dest_room = state.dungeon.rooms.get(ex.destination_id)
             if dest_room:
                 dest_name = f" \u2192 {dest_room.name}"
+                dest_visited = dest_room.visited
         exit_base = f"{base_url}&edit={eid}"
         if edit_id == eid:
             # Build destination options for all dungeon rooms
@@ -910,6 +912,12 @@ def room_panel(
       <select name="destination_id" style="width:100%">{dest_options}</select>
       <label>Description</label>
       <textarea name="description" rows="2">{ex.description}</textarea>
+      <div style="margin-top:0.5rem">
+        <label style="display:inline-flex;align-items:center;gap:0.4rem;cursor:pointer">
+          <input type="checkbox" name="auto_move" value="1" {"checked" if ex.auto_move else ""}>
+          auto-move (skip DM approval on /abscond)
+        </label>
+      </div>
       <div class="row" style="margin-top:0.5rem">
         <button type="submit">Save</button>
         <a href="{base_url}" style="align-self:center;font-size:0.85rem;color:#888">cancel</a>
@@ -922,9 +930,11 @@ def room_panel(
                 f'<option value="{d.value}" {"selected" if d == ex.door_state else ""}>{d.value}</option>'
                 for d in DoorState
             )
+            auto_badge = ' <span style="font-size:0.75rem;color:#4caf50;font-weight:600">[auto]</span>' if ex.auto_move else ""
+            explored_badge = ' <span style="font-size:0.75rem;color:#888">[explored]</span>' if dest_visited else ""
             exits_html += f"""
 <tr>
-  <td><strong>{i}. {ex.label.capitalize()}</strong>{dest_name}<br>
+  <td><strong>{i}. {ex.label.capitalize()}</strong>{dest_name}{auto_badge}{explored_badge}<br>
       <span class="muted">{ex.description}</span></td>
   <td style="white-space:nowrap">
     <form style="display:inline" hx-post="/session/{channel_id}/exit/{eid}/setstate"

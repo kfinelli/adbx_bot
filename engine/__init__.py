@@ -242,10 +242,10 @@ def close_turn(state: GameState):
     return tm.close_turn(state)
 
 
-def resolve_turn(state: GameState, resolution: str):
+def resolve_turn(state: GameState, resolution: str, free_move: bool = False):
     """Resolve a turn."""
     tm = TurnManager()
-    return tm.resolve_turn(state, resolution)
+    return tm.resolve_turn(state, resolution, free_move=free_move)
 
 
 def set_turn_number(state: GameState, turn_number: int):
@@ -335,13 +335,14 @@ def update_exit(
     door_state,
     destination_id=None,
     notes: str = "",
+    auto_move: bool = False,
     room_id=None,
 ):
     """Update an exit."""
     rm = RoomManager()
     return rm.update_exit(
         state, exit_id, label, description, door_state,
-        destination_id, notes, room_id,
+        destination_id, notes, auto_move, room_id,
     )
 
 
@@ -471,6 +472,17 @@ def abscond(
     if exit_.door_state in (DoorState.LOCKED, DoorState.STUCK):
         return _err(state, f"The {exit_.label} exit is {exit_.door_state.value} and cannot be used.")
 
+    # Determine auto-move and free-move conditions.
+    # free_move: destination already explored → no turn cost.
+    # auto_move: either the exit flag is set OR the destination is explored → skip DM approval.
+    dest_room = (
+        state.dungeon.rooms.get(exit_.destination_id)
+        if exit_.destination_id and state.dungeon
+        else None
+    )
+    is_free_move = dest_room is not None and dest_room.visited
+    is_auto_move = exit_.auto_move or is_free_move
+
     if state.current_turn is None:
         open_turn(state)
 
@@ -489,7 +501,25 @@ def abscond(
         is_latest=True,
     ))
 
-    # Close turn — ready for DM resolution
+    if is_auto_move:
+        # Resolve immediately — no DM input needed.
+        # Capture whether this is a first visit before moving (for XP note).
+        xp_note = ""
+        if dest_room and not dest_room.visited:
+            xp = dest_room.exploration_xp or DEFAULT_ROOM_XP
+            xp_note = f" Party gained {xp} XP for exploring."
+        # Move the party first so the room is marked visited before the snapshot.
+        if exit_.destination_id:
+            move_party_to_room(state, exit_.destination_id)
+        dest_name = dest_room.name if dest_room else exit_.label
+        resolution = f"[Auto] {leader_name} {action}. Party arrives at {dest_name}.{xp_note}"
+        result = resolve_turn(state, resolution, free_move=is_free_move)
+        if result.ok:
+            open_turn(state)
+            result.auto_resolved = True
+        return result
+
+    # Otherwise: close turn and wait for DM resolution.
     state.current_turn.status = TurnStatus.CLOSED
     state.current_turn.closed_at = _now()
     state.updated_at = _now()
@@ -601,7 +631,14 @@ def render_status(state: GameState) -> str:
         if room.exits:
             lines.append("Exits:")
             for i, ex in enumerate(room.exits, 1):
-                lines.append(f"  {i}. {ex.label.capitalize()}: {ex.description} [{ex.door_state.value}]")
+                explored = (
+                    state.dungeon is not None
+                    and ex.destination_id is not None
+                    and (dest := state.dungeon.rooms.get(ex.destination_id)) is not None
+                    and dest.visited
+                )
+                flag_str = " (explored)" if explored else ""
+                lines.append(f"  {i}. {ex.label.capitalize()}: {ex.description} [{ex.door_state.value}]{flag_str}")
     else:
         lines.append("Room: (none)")
 

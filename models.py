@@ -310,6 +310,7 @@ class Exit:
     direction:       ExitDirection | None = None
     destination_id:  UUID | None = None          # None if room not yet authored
     door_state:      DoorState      = DoorState.OPEN
+    auto_move:       bool           = False         # skip DM approval on /abscond
     description:     str            = ""            # "A wooden door reinforced with iron bars"
     notes:           str            = ""            # DM-facing notes (traps, keys, etc.)
 

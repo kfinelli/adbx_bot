@@ -749,6 +749,7 @@ async def route_exit_update(
     door_state: Annotated[str, Form()],
     destination_id: Annotated[str, Form()] = "",
     notes: Annotated[str, Form()] = "",
+    auto_move: Annotated[str, Form()] = "",
     view_room_id: Annotated[str, Form()] = "",
 ):
     state = store.get_session(channel_id)
@@ -760,7 +761,7 @@ async def route_exit_update(
         return _respond(channel_id, error=f"Unknown door state: {door_state}", view_room_id=view_room_id)
     rid = _parse_uuid(view_room_id)
     dest = _parse_uuid(destination_id)
-    result = update_exit(state, UUID(exit_id), label, description, ds, destination_id=dest, notes=notes, room_id=rid)
+    result = update_exit(state, UUID(exit_id), label, description, ds, destination_id=dest, notes=notes, auto_move=bool(auto_move), room_id=rid)
     if not result.ok:
         return _respond(channel_id, error=result.error, view_room_id=view_room_id)
     await save_session_async(state)

@@ -1,0 +1,269 @@
+{
+  "format": "adbx-dungeon",
+  "version": 3,
+  "dungeon": {
+    "dungeon_id": "853d088e-22be-4f65-a255-70f1378598b9",
+    "name": "The Tomb of Agellar",
+    "description": "",
+    "rooms": {
+      "abbf38d7-ca71-4a00-8903-04d57a43ea5a": {
+        "room_id": "abbf38d7-ca71-4a00-8903-04d57a43ea5a",
+        "name": "The Shrine",
+        "description": "A  wide, dusty hall honors the fallen knight Agellar, its monument standing vigil as a faint breeze drifts toward the ever-open entrance.",
+        "notes": "",
+        "features": [
+          {
+            "feature_id": "51f0c0a6-d27f-4746-8564-19b37e69ed3e",
+            "name": "Monument of Agellar",
+            "description": "A stone statue depicting a rearing horse and richly clad rider with an imperial inscription at its base",
+            "state": "head-rotated",
+            "notes": ""
+          },
+          {
+            "feature_id": "a8ba3d1b-1b43-4ed9-ab18-96a602e26620",
+            "name": "Water Troughs",
+            "description": "Long stone channels of gently cycling spring water line both sides of the hall",
+            "state": "potable",
+            "notes": ""
+          },
+          {
+            "feature_id": "e6f202e5-1969-4e61-9206-33f0e6e6efe9",
+            "name": "Dusty Floor",
+            "description": "A thick layer of dust constantly disturbed by a faint current of air",
+            "state": "partially brush-swept",
+            "notes": ""
+          },
+          {
+            "feature_id": "bd9e0c72-a806-4a6c-b97a-be55ff2ddba4",
+            "name": "Pile of torches",
+            "description": "A divinely-provisioned pile of illumination devices, complete with one tinderbox",
+            "state": "4 torches, 1 tinderbox",
+            "notes": ""
+          }
+        ],
+        "exits": [
+          {
+            "exit_id": "d364d2e3-f433-4b22-8c08-4a2f04acb082",
+            "label": "Exterior Door",
+            "direction": null,
+            "destination_id": null,
+            "door_state": "open",
+            "description": "The tomb\u2019s heavy stone entrance stands open to the plains outside",
+            "notes": ""
+          },
+          {
+            "exit_id": "72e97c9b-3b1a-43cb-b5c9-2dbd696e6b49",
+            "label": "Caretaker\u2019s Door",
+            "direction": null,
+            "destination_id": null,
+            "door_state": "open",
+	    "auto_move": true,
+            "description": "A small wooden door set into the right-hand wall",
+            "notes": ""
+          },
+          {
+            "exit_id": "09d87c5f-5e12-4aea-ac31-c394867f7bc1",
+            "label": "Secret Passage",
+            "direction": null,
+            "destination_id": null,
+            "door_state": "secret",
+            "description": "A concealed opening revealed by twisting the horse\u2019s head",
+            "notes": ""
+          }
+        ],
+        "visited": false,
+        "authored": true
+      },
+      "31866692-d43c-48ac-99d6-da3facd08fec": {
+        "room_id": "31866692-d43c-48ac-99d6-da3facd08fec",
+        "name": "The Caretaker\u2019s Office",
+        "description": "A cramped, dust-choked chamber filled with rotting furnishings, long abandoned by the living.",
+        "notes": "",
+        "features": [
+          {
+            "feature_id": "0b638521-290d-463c-ae88-2947d15317f3",
+            "name": "Rotted Furnishings",
+            "description": "Decaying desks, chairs, and shelves once used by the tomb\u2019s caretakers",
+            "state": "rotting",
+            "notes": ""
+          },
+          {
+            "feature_id": "41e014e7-6461-4d4a-a278-b549244e3fdf",
+            "name": "Empty Storage",
+            "description": "Cabinets and containers stripped of anything valuable long ago",
+            "state": "empty",
+            "notes": ""
+          },
+          {
+            "feature_id": "d71f007e-e5a4-4a2c-a514-1dbaca1b6626",
+            "name": "Dust-Laden Air",
+            "description": "Heavy layers of undisturbed dust coating nearly every surface",
+            "state": "intact",
+            "notes": ""
+          },
+          {
+            "feature_id": "ba6b9738-e002-41b2-b183-3749890071e9",
+            "name": "Doorway View",
+            "description": "The office doorway offers a clear line of sight back into the shrine and the plains outside",
+            "state": "unobstructed",
+            "notes": ""
+          }
+        ],
+        "exits": [
+          {
+            "exit_id": "6dd7236d-b29b-4505-b596-0185a2108218",
+            "label": "Door to Shrine",
+            "direction": null,
+            "destination_id": null,
+            "door_state": "open",
+	    "auto_move": true,
+            "description": "The small wooden door leading back to the main hall",
+            "notes": ""
+          }
+        ],
+        "visited": false,
+        "authored": true
+      },
+      "98f73871-d9f1-4315-81ed-772ff185a4ba": {
+        "room_id": "98f73871-d9f1-4315-81ed-772ff185a4ba",
+        "name": "The Hall of Death",
+        "description": "A narrow stair descends into darkness, ending at a narrow corridor and a rune-carved iron door heavy with menace.",
+        "notes": "",
+        "features": [
+          {
+            "feature_id": "bdf07378-0df8-464f-83c7-7d40b6067796",
+            "name": "Corridor",
+            "description": "A corridor branching off to the left and right at the foot of the stairs",
+            "state": "trapped",
+            "notes": ""
+          },
+          {
+            "feature_id": "6e447c3d-5612-4fc0-9613-32b7f8874a12",
+            "name": "Lever Mechanism",
+            "description": "A sturdy lever at the far right end of the corridor",
+            "state": "pulled",
+            "notes": ""
+          }
+        ],
+        "exits": [
+          {
+            "exit_id": "b20d68c2-9513-4453-b54a-2e1dab6b0a26",
+            "label": "Stair to Shrine",
+            "direction": null,
+            "destination_id": null,
+            "door_state": "open",
+            "description": "The narrow staircase ascending to the hidden passage above",
+            "notes": ""
+          },
+          {
+            "exit_id": "0d64336f-6fdd-4428-8a5f-cae3c06132bc",
+            "label": "Iron Door",
+            "direction": null,
+            "destination_id": null,
+            "door_state": "open",
+            "description": "A rune-carved barrier at the left end of the corridor",
+            "notes": ""
+          }
+        ],
+        "visited": false,
+        "authored": true
+      },
+      "b7974704-2915-4643-b955-618f5476b387": {
+        "room_id": "b7974704-2915-4643-b955-618f5476b387",
+        "name": "Burial Chamber",
+        "description": "A treasure-strewn vault dominated by an immense sarcophagus, where the truth of Agellar\u2019s legend awaits.",
+        "notes": "",
+        "features": [
+          {
+            "feature_id": "c2a498ab-dad8-4096-af16-2adf670e8785",
+            "name": "Central Sarcophagus",
+            "description": "An enormous stone coffin resting at the chamber\u2019s heart",
+            "state": "closed",
+            "notes": ""
+          },
+          {
+            "feature_id": "0c629099-72eb-403c-b724-4ecda611506e",
+            "name": "Funerary Treasure",
+            "description": "Scattered coins, jewels, and jewelry offerings left to honor the fallen",
+            "state": "scattered",
+            "notes": ""
+          }
+        ],
+        "exits": [
+          {
+            "exit_id": "54bec71b-5361-4f6c-8dc9-38f7903b9b53",
+            "label": "Iron Doorway",
+            "direction": null,
+            "destination_id": null,
+            "door_state": "open",
+            "description": "The heavy iron entrance back to the trapped hall",
+            "notes": ""
+          }
+        ],
+        "visited": false,
+        "authored": true
+      }
+    },
+    "entrance_id": "98f73871-d9f1-4315-81ed-772ff185a4ba"
+  },
+  "npc_roster": {
+    "groups": {
+      "bb7ff6be-f5cb-41a0-b451-6a39029c3328": {
+        "group_id": "bb7ff6be-f5cb-41a0-b451-6a39029c3328",
+        "name": null,
+        "npcs": [
+          {
+            "npc_id": "630d4b74-0a1c-4efc-9d8f-8a45adc3dbad",
+            "name": "Gob 1",
+            "description": "",
+            "hp_max": 40,
+            "hp_current": 40,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "1d6",
+            "morale": 7,
+            "saving_throw": 15,
+            "xp_value": 0,
+            "status": "active",
+            "notes": ""
+          },
+          {
+            "npc_id": "de93e657-bb9b-46f1-a345-d0cf3b04fa94",
+            "name": "Gob 2",
+            "description": "another gob",
+            "hp_max": 55,
+            "hp_current": 55,
+            "defense": 1,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "1d6",
+            "morale": 7,
+            "saving_throw": 15,
+            "xp_value": 0,
+            "status": "active",
+            "notes": ""
+          }
+        ],
+        "possible_rooms": [],
+        "movement_logic": "stationary",
+        "current_room_id": "98f73871-d9f1-4315-81ed-772ff185a4ba",
+        "patrol_route": []
+      }
+    }
+  }
+}

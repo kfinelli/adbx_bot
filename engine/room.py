@@ -170,6 +170,7 @@ class RoomManager:
         door_state,
         destination_id = None,
         notes:          str = "",
+        auto_move:      bool = False,
         room_id = None,
     ):
         """Update an exit in a room."""
@@ -186,6 +187,7 @@ class RoomManager:
         ex.door_state     = door_state
         ex.destination_id = destination_id
         ex.notes          = notes
+        ex.auto_move      = auto_move
         state.updated_at  = _now()
         return _ok(state, f"Exit updated: {ex.label}.")
 

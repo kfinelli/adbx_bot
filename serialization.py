@@ -144,6 +144,7 @@ def serialize_exit(e: Exit) -> dict:
         "direction":      _enum(e.direction),
         "destination_id": _uuid(e.destination_id),
         "door_state":     _enum(e.door_state),
+        "auto_move":      e.auto_move,
         "description":    e.description,
         "notes":          e.notes,
     }
@@ -441,6 +442,7 @@ def deserialize_exit(d: dict) -> Exit:
         direction=ExitDirection(d["direction"]) if d["direction"] else None,
         destination_id=_load_uuid(d["destination_id"]),
         door_state=DoorState(d["door_state"]),
+        auto_move=d.get("auto_move", False),
         description=d["description"],
         notes=d["notes"],
     )

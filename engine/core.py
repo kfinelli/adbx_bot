@@ -191,11 +191,16 @@ class TurnManager:
         self,
         state:      GameState,
         resolution: str,
+        free_move:  bool = False,
     ):
         """
         DM resolves the current turn with a narrative description.
         Snapshots state, moves turn to history, advances turn counter,
         and ticks down the active light source.
+
+        free_move=True skips the turn counter increment and light tick
+        (used when the party moves to a previously-explored room at no cost).
+        The TurnRecord is still appended to history.
         """
         if state.current_turn is None:
             return _err(state, "No current turn to resolve.")
@@ -218,10 +223,12 @@ class TurnManager:
         state.say_log = []
         state.oracle_counter = 0
 
-        # Advance turn counter and tick light source (exploration mode only)
-        state.turn_number += 1
-        if state.mode == SessionMode.EXPLORATION:
-            _tick_light(state)
+        # Advance turn counter and tick light source (exploration mode only).
+        # free_move bypasses both — movement to an explored room is free.
+        if not free_move:
+            state.turn_number += 1
+            if state.mode == SessionMode.EXPLORATION:
+                _tick_light(state)
 
         state.updated_at = _now()
         return _ok(state, resolution)

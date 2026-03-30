@@ -1221,9 +1221,13 @@ class _AbscondModal(discord.ui.Modal, title="Abscond"):
             await interaction.response.send_message(f"{result.error}", ephemeral=True)
             return
         await interaction.response.send_message("Moving out.", ephemeral=True)
-        await update_status(interaction.channel, state)
-        if result.notify_dm:
+        if result.auto_resolved:
+            from discord_tasks import dispatch_turn_resolved
+            await dispatch_turn_resolved(interaction.channel, state, result.message)
+        elif result.notify_dm:
             await notify_dm_of_turn_close(interaction.channel, state, turn_number)
+        else:
+            await update_status(interaction.channel, state)
 
 
 class _SayEmoteModal(discord.ui.Modal):
