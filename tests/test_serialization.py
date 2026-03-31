@@ -20,8 +20,10 @@ from models import (
     CharacterStatus,
     DoorState,
     Dungeon,
+    EncounterEntry,
     Exit,
     GameState,
+    NPCGroup,
     NPCRoster,
     Room,
     RoomFeature,
@@ -174,6 +176,76 @@ class TestStateRoundTrip:
         names = {c.name for c in restored.characters.values()}
         assert "Aldric" in names
         assert "Mira" in names
+
+    def test_last_encounter_check_turn_preserved(self, bare_state):
+        bare_state.last_encounter_check_turn = 12
+        restored = _roundtrip(bare_state)
+        assert restored.last_encounter_check_turn == 12
+
+    def test_last_encounter_check_turn_defaults_to_zero(self, bare_state):
+        """Legacy state blobs without this key should load cleanly."""
+        import json
+        from serialization import serialize_state
+        blob = json.loads(serialize_state(bare_state))
+        del blob["last_encounter_check_turn"]
+        restored = deserialize_state(json.dumps(blob))
+        assert restored.last_encounter_check_turn == 0
+
+    def test_room_encounter_modifier_preserved(self, bare_state):
+        dungeon = Dungeon(name="Keep")
+        room = Room(name="Vault", random_encounter_modifier=2.0)
+        dungeon.rooms[room.room_id] = room
+        bare_state.dungeon = dungeon
+        restored = _roundtrip(bare_state)
+        r_room = list(restored.dungeon.rooms.values())[0]
+        assert r_room.random_encounter_modifier == 2.0
+
+    def test_room_encounter_modifier_defaults_to_one(self, bare_state):
+        """Rooms serialized before this field existed load with modifier 1.0."""
+        import json
+        dungeon = Dungeon(name="Keep")
+        room = Room(name="Old Room")
+        dungeon.rooms[room.room_id] = room
+        bare_state.dungeon = dungeon
+        blob = json.loads(serialize_state(bare_state))
+        for r in blob["dungeon"]["rooms"].values():
+            del r["random_encounter_modifier"]
+        restored = deserialize_state(json.dumps(blob))
+        r_room = list(restored.dungeon.rooms.values())[0]
+        assert r_room.random_encounter_modifier == 1.0
+
+    def test_encounter_roster_roundtrips(self, bare_state):
+        npc = NPC(name="Wraith", hp_max=20, hp_current=20)
+        group = NPCGroup(name="Wraith Pack", npcs=[npc])
+        entry = EncounterEntry(npc_group=group, weight=3)
+        dungeon = Dungeon(
+            name="Keep",
+            random_encounter_interval=4,
+            random_encounter_roll="1d8",
+            random_encounter_roster=[entry],
+        )
+        bare_state.dungeon = dungeon
+        restored = _roundtrip(bare_state)
+        assert restored.dungeon.random_encounter_interval == 4
+        assert restored.dungeon.random_encounter_roll == "1d8"
+        assert len(restored.dungeon.random_encounter_roster) == 1
+        r_entry = restored.dungeon.random_encounter_roster[0]
+        assert r_entry.weight == 3
+        assert r_entry.npc_group.name == "Wraith Pack"
+        assert r_entry.npc_group.npcs[0].name == "Wraith"
+
+    def test_empty_encounter_roster_defaults_on_legacy_dungeon(self, bare_state):
+        """Dungeons without encounter fields load with safe defaults."""
+        import json
+        dungeon = Dungeon(name="Keep")
+        bare_state.dungeon = dungeon
+        blob = json.loads(serialize_state(bare_state))
+        for key in ("random_encounter_interval", "random_encounter_roll", "random_encounter_roster"):
+            blob["dungeon"].pop(key, None)
+        restored = deserialize_state(json.dumps(blob))
+        assert restored.dungeon.random_encounter_interval == 6
+        assert restored.dungeon.random_encounter_roll == "1d6"
+        assert restored.dungeon.random_encounter_roster == []
 
 
 # ---------------------------------------------------------------------------
