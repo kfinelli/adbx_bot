@@ -44,6 +44,7 @@ from .dice import (
     roll_stats,
     roll_sum,
 )
+from .encounter import check_random_encounter
 from .helpers import _err, _find_npc_in_roster, _now, _ok, _resolve_room, _snapshot
 from .light import LightManager, _tick_light
 from .npc import NPCManager
@@ -765,4 +766,5 @@ __all__ = [
     "award_xp",
     "check_level_up",
     "distribute_xp",
+    "check_random_encounter",
 ]

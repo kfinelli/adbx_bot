@@ -37,6 +37,7 @@ logging.basicConfig(
 # Quieten noisy third-party loggers
 logging.getLogger("discord").setLevel(logging.WARNING)
 logging.getLogger("uvicorn").setLevel(logging.WARNING)
+logging.getLogger("python_multipart").setLevel(logging.WARNING)
 
 log = logging.getLogger(__name__)
 

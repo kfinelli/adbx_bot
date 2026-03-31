@@ -344,6 +344,17 @@ class Room:
     authored:      bool               = True   # False = placeholder node in graph
     exploration_xp: int               = 0      # XP per character on first visit (0 = use DEFAULT_ROOM_XP)
 
+    # Encounter modifier — multiplies the global random encounter threshold.
+    # 0.0 = safe room (no encounters). 2.0 = double the encounter chance.
+    random_encounter_modifier: float  = 1.0
+
+
+@dataclass
+class EncounterEntry:
+    """A weighted entry in a dungeon's random encounter roster."""
+    npc_group: NPCGroup
+    weight:    int = 1
+
 
 @dataclass
 class Dungeon:
@@ -357,6 +368,11 @@ class Dungeon:
     description:  str                   = ""
     rooms:        dict[UUID, Room]      = field(default_factory=dict)
     entrance_id:  UUID | None        = None   # starting room
+
+    # Random encounter system
+    random_encounter_interval: int                  = 6      # turns between checks
+    random_encounter_roll:     str                  = "1d6"  # dice expression
+    random_encounter_roster:   list[EncounterEntry] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -679,6 +695,7 @@ class GameState:
     mode:            SessionMode             = SessionMode.PRE_START
     turn_number:     int                     = 1
     rounds_started_at_turn: int | None    = None  # exploration turn when combat began
+    last_encounter_check_turn: int           = 0   # tracks random encounter timer
     current_turn:    TurnRecord | None    = None
     turn_history:    list[TurnRecord]        = field(default_factory=list)
 

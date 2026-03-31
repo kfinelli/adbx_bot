@@ -30,6 +30,7 @@ from models import (
     CombatBattlefield,
     DoorState,
     Dungeon,
+    EncounterEntry,
     Exit,
     ExitDirection,
     GameState,
@@ -161,6 +162,7 @@ def serialize_room(r: Room) -> dict:
         "visited":        r.visited,
         "authored":       r.authored,
         "exploration_xp": r.exploration_xp,
+        "random_encounter_modifier": r.random_encounter_modifier,
     }
 
 
@@ -171,6 +173,12 @@ def serialize_dungeon(d: Dungeon) -> dict:
         "description": d.description,
         "rooms":       {str(k): serialize_room(v) for k, v in d.rooms.items()},
         "entrance_id": _uuid(d.entrance_id),
+        "random_encounter_interval": d.random_encounter_interval,
+        "random_encounter_roll":     d.random_encounter_roll,
+        "random_encounter_roster": [
+            {"npc_group": serialize_npc_group(e.npc_group), "weight": e.weight}
+            for e in d.random_encounter_roster
+        ],
     }
 
 
@@ -337,6 +345,7 @@ def serialize_state(state: GameState, include_characters: bool = True) -> str:
         "session_active":       state.session_active,
         "battlefield":          serialize_battlefield(state.battlefield) if state.battlefield else None,
         "rounds_started_at_turn": state.rounds_started_at_turn,
+        "last_encounter_check_turn": state.last_encounter_check_turn,
         "default_turn_hours":   state.default_turn_hours,
         "created_at":           _dt(state.created_at),
         "updated_at":           _dt(state.updated_at),
@@ -459,6 +468,7 @@ def deserialize_room(d: dict) -> Room:
         visited=d["visited"],
         authored=d["authored"],
         exploration_xp=d.get("exploration_xp", 0),
+        random_encounter_modifier=d.get("random_encounter_modifier", 1.0),
     )
 
 
@@ -470,6 +480,15 @@ def deserialize_dungeon(d: dict) -> Dungeon:
         description=d["description"],
         rooms=rooms,
         entrance_id=_load_uuid(d["entrance_id"]),
+        random_encounter_interval=d.get("random_encounter_interval", 6),
+        random_encounter_roll=d.get("random_encounter_roll", "1d6"),
+        random_encounter_roster=[
+            EncounterEntry(
+                npc_group=deserialize_npc_group(e["npc_group"]),
+                weight=e.get("weight", 1),
+            )
+            for e in d.get("random_encounter_roster", [])
+        ],
     )
 
 
@@ -639,6 +658,7 @@ def deserialize_state(json_str: str, characters: dict | None = None) -> GameStat
             if d.get("battlefield") else None
         ),
         rounds_started_at_turn=d.get("rounds_started_at_turn", None),
+        last_encounter_check_turn=d.get("last_encounter_check_turn", 0),
         default_turn_hours=d.get("default_turn_hours", 24.0),
         created_at=_load_dt(d["created_at"]),
         updated_at=_load_dt(d["updated_at"]),

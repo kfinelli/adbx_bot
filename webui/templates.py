@@ -330,6 +330,21 @@ def turn_panel(state: GameState, edit_id: str = "") -> str:
         edit_link = f'<a href="/session/{channel_id}?edit=turn_number" title="Edit turn number" style="font-size:0.8rem;color:#666;margin-left:0.4rem">✎</a>'
         heading = f'<div class="section-header"><h3>Turn {state.turn_number}{edit_link} &mdash; {mode}</h3>{status_tag}</div>'
 
+    # Random encounter progress bar (DM-only, hidden from players)
+    encounter_bar_html = ""
+    if state.dungeon and state.dungeon.random_encounter_roster:
+        interval = state.dungeon.random_encounter_interval
+        turns_since = min(state.turn_number - state.last_encounter_check_turn, interval)
+        pct = int((turns_since / interval) * 100) if interval > 0 else 100
+        fill_color = "#c9a84c" if pct < 100 else "#f44336"
+        encounter_bar_html = (
+            f'<div class="muted" style="margin-bottom:0.5rem;font-size:0.82rem">'
+            f'Random Encounter: {turns_since}/{interval} turns'
+            f'<div style="background:#0f3460;border-radius:3px;height:8px;overflow:hidden;margin-top:3px">'
+            f'<div style="background:{fill_color};width:{pct}%;height:100%;border-radius:3px"></div>'
+            f'</div></div>'
+        )
+
     # Submissions table
     subs_html = ""
     if turn and state.party:
@@ -416,6 +431,7 @@ def turn_panel(state: GameState, edit_id: str = "") -> str:
 <div class="card">
   {heading}
   {due_str}
+  {encounter_bar_html}
   {subs_html}
   {resolve_html}
   {timer_html}

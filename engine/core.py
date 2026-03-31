@@ -229,6 +229,10 @@ class TurnManager:
             state.turn_number += 1
             if state.mode == SessionMode.EXPLORATION:
                 _tick_light(state)
+                from .encounter import check_random_encounter
+                enc = check_random_encounter(state)
+                if enc is not None:
+                    resolution = resolution + "\n" + enc.message
 
         state.updated_at = _now()
         return _ok(state, resolution)
@@ -241,6 +245,11 @@ class TurnManager:
         if state.current_turn:
             state.current_turn.turn_number = turn_number
         state.updated_at = _now()
+        if state.dungeon and state.dungeon.random_encounter_roster and state.mode == SessionMode.EXPLORATION:
+            from .encounter import check_random_encounter
+            enc = check_random_encounter(state)
+            if enc is not None:
+                return _ok(state, f"Turn number set to {turn_number}. {enc.message}")
         return _ok(state, f"Turn number set to {turn_number}.")
 
     def unsubmit_turn(

@@ -75,7 +75,8 @@
         ],
         "visited": false,
         "authored": true,
-        "exploration_xp": 100
+        "exploration_xp": 100,
+        "random_encounter_modifier": 1.0
       },
       "31866692-d43c-48ac-99d6-da3facd08fec": {
         "room_id": "31866692-d43c-48ac-99d6-da3facd08fec",
@@ -126,7 +127,8 @@
         ],
         "visited": false,
         "authored": true,
-        "exploration_xp": 100
+        "exploration_xp": 100,
+        "random_encounter_modifier": 0.0
       },
       "98f73871-d9f1-4315-81ed-772ff185a4ba": {
         "room_id": "98f73871-d9f1-4315-81ed-772ff185a4ba",
@@ -173,7 +175,8 @@
         ],
         "visited": false,
         "authored": true,
-        "exploration_xp": 100
+        "exploration_xp": 100,
+        "random_encounter_modifier": 1.0
       },
       "b7974704-2915-4643-b955-618f5476b387": {
         "room_id": "b7974704-2915-4643-b955-618f5476b387",
@@ -210,10 +213,95 @@
         ],
         "visited": false,
         "authored": true,
-        "exploration_xp": 100
+        "exploration_xp": 100,
+        "random_encounter_modifier": 1.0
       }
     },
-    "entrance_id": "abbf38d7-ca71-4a00-8903-04d57a43ea5a"
+    "entrance_id": "abbf38d7-ca71-4a00-8903-04d57a43ea5a",
+    "random_encounter_interval": 4,
+    "random_encounter_roll": "1d6",
+    "random_encounter_roster": [
+	    {
+		    "weight": 3,
+		    "npc_group": {
+			    "group_id": "a1b2c3d4-0001-0001-0001-000000000001",
+			    "name": "Wandering Skeletons",
+			    "npcs": [
+				    {
+					    "npc_id": "a1b2c3d4-0002-0002-0002-000000000001",
+					    "name": "Skeleton 1",
+					    "description": "A clatter of old bones.",
+					    "hp_max": 6,
+					    "hp_current": 6,
+					    "defense": 1,
+					    "resistance": 0,
+					    "ability_scores": {"physique": 0, "finesse": 0, "reason": 0, "savvy": 0},
+					    "movement_speed": 90,
+					    "attack_bonus": 0,
+					    "damage_dice": "1d6",
+					    "morale": 12,
+					    "saving_throw": 16,
+					    "hit_dice": 1,
+					    "status": "active",
+					    "notes": ""
+				    },
+				    {
+					    "npc_id": "a1b2c3d4-0002-0002-0002-000000000002",
+					    "name": "Skeleton 2",
+					    "description": "A clatter of old bones.",
+					    "hp_max": 6,
+					    "hp_current": 6,
+					    "defense": 1,
+					    "resistance": 0,
+					    "ability_scores": {"physique": 0, "finesse": 0, "reason": 0, "savvy": 0},
+					    "movement_speed": 90,
+					    "attack_bonus": 0,
+					    "damage_dice": "1d6",
+					    "morale": 12,
+					    "saving_throw": 16,
+					    "hit_dice": 1,
+					    "status": "active",
+					    "notes": ""
+				    }
+			    ],
+			    "possible_rooms": [],
+			    "movement_logic": "stationary",
+			    "current_room_id": null,
+			    "patrol_route": []
+		    }
+	    },
+	    {
+		    "weight": 1,
+		    "npc_group": {
+			    "group_id": "b2c3d4e5-0001-0001-0001-000000000001",
+			    "name": "Tomb Ghoul",
+			    "npcs": [
+				    {
+					    "npc_id": "b2c3d4e5-0002-0002-0002-000000000001",
+					    "name": "Ghoul",
+					    "description": "A gaunt, ravenous undead with clawed hands.",
+					    "hp_max": 15,
+					    "hp_current": 15,
+					    "defense": 2,
+					    "resistance": 0,
+					    "ability_scores": {"physique": 2, "finesse": 1, "reason": 0, "savvy": 0},
+					    "movement_speed": 90,
+					    "attack_bonus": 1,
+					    "damage_dice": "1d8",
+					    "morale": 9,
+					    "saving_throw": 14,
+					    "hit_dice": 2,
+					    "status": "active",
+					    "notes": ""
+				    }
+			    ],
+			    "possible_rooms": [],
+			    "movement_logic": "stationary",
+			    "current_room_id": null,
+			    "patrol_route": []
+		    }
+	    }
+    ]
   },
   "npc_roster": {
     "groups": {
@@ -271,6 +359,62 @@
         "possible_rooms": [],
         "movement_logic": "stationary",
         "current_room_id": "98f73871-d9f1-4315-81ed-772ff185a4ba",
+        "patrol_route": []
+      },
+      "407926fe-f245-463b-8bb8-067f491f6fb6": {
+        "group_id": "407926fe-f245-463b-8bb8-067f491f6fb6",
+        "name": null,
+        "npcs": [
+          {
+            "npc_id": "6208a226-9449-49fc-a3bb-c7b204d8bf5f",
+            "name": "Goblin 1",
+            "description": "",
+            "hp_max": 40,
+            "hp_current": 40,
+            "defense": 1,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "1d6",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 1,
+            "status": "active",
+            "notes": ""
+          },
+          {
+            "npc_id": "56f45c69-0642-4e0b-a12d-72c94a634c32",
+            "name": "Goblin 2",
+            "description": "",
+            "hp_max": 30,
+            "hp_current": 30,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "1d6",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 1,
+            "status": "active",
+            "notes": ""
+          }
+        ],
+        "possible_rooms": [],
+        "movement_logic": "stationary",
+        "current_room_id": "abbf38d7-ca71-4a00-8903-04d57a43ea5a",
         "patrol_route": []
       }
     }
