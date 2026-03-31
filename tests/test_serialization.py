@@ -185,6 +185,7 @@ class TestStateRoundTrip:
     def test_last_encounter_check_turn_defaults_to_zero(self, bare_state):
         """Legacy state blobs without this key should load cleanly."""
         import json
+
         from serialization import serialize_state
         blob = json.loads(serialize_state(bare_state))
         del blob["last_encounter_check_turn"]

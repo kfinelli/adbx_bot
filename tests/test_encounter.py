@@ -5,21 +5,16 @@ Tests cover check_random_encounter() directly, so all cases are deterministic.
 random.randint is patched where the roll outcome matters.
 """
 
-import copy
 from unittest.mock import patch
-
-import pytest
 
 from engine.encounter import check_random_encounter
 from models import (
+    NPC,
     Dungeon,
     EncounterEntry,
-    NPC,
     NPCGroup,
     Room,
-    SessionMode,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
