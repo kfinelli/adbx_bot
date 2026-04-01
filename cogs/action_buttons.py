@@ -922,15 +922,31 @@ class TargetSelectView(discord.ui.View):
             return
 
         target_id = UUID(interaction.data["values"][0])
+        partial = CombatAction(action_id=self.action_id, target_id=target_id)
 
-        if self.then_destination:
-            # Chain: target chosen — now collect destination
-            partial = CombatAction(action_id=self.action_id, target_id=target_id)
-            current_band = (
-                state.battlefield.combatants[self.char_id].range_band
-                if state.battlefield and self.char_id in state.battlefield.combatants
-                else None
+        current_band = (
+            state.battlefield.combatants[self.char_id].range_band
+            if state.battlefield and self.char_id in state.battlefield.combatants
+            else None
+        )
+
+        owner_char_obj = state.characters.get(self.char_id)
+        weapons = owner_char_obj.equipped_weapons() if owner_char_obj else []
+
+        if len(weapons) > 1:
+            view = WeaponPickerView(
+                char_id=self.char_id,
+                channel_id=self.channel_id,
+                weapons=weapons,
+                partial=partial,
+                then_destination=self.then_destination,
+                current_band=current_band,
             )
+            await interaction.response.edit_message(
+                content=f"**{owner_char.name}** — select a weapon:",
+                view=view,
+            )
+        elif self.then_destination:
             view = DestinationSelectView(
                 action_id=self.action_id,
                 char_id=self.char_id,
@@ -943,8 +959,91 @@ class TargetSelectView(discord.ui.View):
                 view=view,
             )
         else:
-            action = CombatAction(action_id=self.action_id, target_id=target_id)
-            await _submit_combat_action(interaction, self.char_id, self.channel_id, action)
+            await _submit_combat_action(interaction, self.char_id, self.channel_id, partial)
+
+
+# ---------------------------------------------------------------------------
+# Combat: WeaponPickerView  (transient ephemeral — timeout=180)
+# ---------------------------------------------------------------------------
+
+
+class WeaponPickerView(discord.ui.View):
+    """
+    Optional third-step ephemeral view shown when a character has multiple
+    weapons available (e.g. a spellcaster with a spellbook containing several
+    spells).  Skipped transparently when only one weapon is equipped.
+
+    partial          : CombatAction already populated with action_id + target_id.
+    then_destination : if True, chains into DestinationSelectView after pick.
+    current_band     : player's current RangeBand, forwarded to DestinationSelectView.
+    """
+
+    def __init__(
+        self,
+        char_id:          UUID,
+        channel_id:       str,
+        weapons:          list,
+        partial:          CombatAction,
+        then_destination: bool,
+        current_band,
+    ):
+        super().__init__(timeout=180)
+        self.char_id          = char_id
+        self.channel_id       = channel_id
+        self.partial          = partial
+        self.then_destination = then_destination
+        self.current_band     = current_band
+
+        options = []
+        for inv_item, weapon_def in weapons[:25]:
+            if inv_item.charges is not None:
+                max_c = getattr(weapon_def, "maxCharges", -1)
+                desc = "∞" if max_c < 0 else f"{inv_item.charges}/{max_c} charges"
+            else:
+                dmg = getattr(weapon_def, "damage", None)
+                desc = dmg if dmg else ""
+            options.append(discord.SelectOption(
+                label=weapon_def.name,
+                value=inv_item.item_id,
+                description=desc,
+            ))
+
+        select = discord.ui.Select(
+            placeholder="Choose a weapon…",
+            options=options,
+            custom_id=f"weapon_select:{partial.action_id}:{char_id}",
+        )
+        select.callback = self._on_select
+        self.add_item(select)
+
+    async def _on_select(self, interaction: discord.Interaction) -> None:
+        state, char = await _check_combat_turn(interaction)
+        if state is None:
+            return
+
+        owner_char = _find_character(state, str(interaction.user.id))
+        if owner_char is None or owner_char.character_id != self.char_id:
+            await interaction.response.edit_message(
+                content="This panel doesn't belong to your character.", view=None
+            )
+            return
+
+        self.partial.weapon_id = interaction.data["values"][0]
+
+        if self.then_destination:
+            view = DestinationSelectView(
+                action_id=self.partial.action_id,
+                char_id=self.char_id,
+                channel_id=self.channel_id,
+                current_band=self.current_band,
+                partial_action=self.partial,
+            )
+            await interaction.response.edit_message(
+                content=f"**{owner_char.name}** — select destination:",
+                view=view,
+            )
+        else:
+            await _submit_combat_action(interaction, self.char_id, self.channel_id, self.partial)
 
 
 # ---------------------------------------------------------------------------
@@ -1023,6 +1122,7 @@ class DestinationSelectView(discord.ui.View):
                 target_id=self.partial_action.target_id,
                 destination=destination,
                 free_text=self.partial_action.free_text,
+                weapon_id=self.partial_action.weapon_id,
             )
         else:
             action = CombatAction(action_id=self.action_id, destination=destination)

@@ -1301,6 +1301,141 @@ class TestParameterizedHooks:
 
 
 # ---------------------------------------------------------------------------
+# CombatAction: weapon_id serialization + weapon selection
+# ---------------------------------------------------------------------------
+
+
+class TestWeaponIdSelection:
+    """Tests for weapon_id field on CombatAction and its use in attack resolution."""
+
+    def test_weapon_id_round_trips(self):
+        """weapon_id survives to_dict / from_dict serialization."""
+        action = CombatAction(action_id="attack", weapon_id="pyr_1")
+        restored = CombatAction.from_dict(action.to_dict())
+        assert restored.weapon_id == "pyr_1"
+
+    def test_weapon_id_none_round_trips(self):
+        """weapon_id=None is preserved through serialization."""
+        action = CombatAction(action_id="attack")
+        restored = CombatAction.from_dict(action.to_dict())
+        assert restored.weapon_id is None
+
+    def _state_with_spellbook_char_and_npc(self):
+        """Set up combat state with a mage holding a spellbook (multiple weapons)."""
+        from engine import create_character, equip_item, give_item
+        from engine.azure_constants import ItemSlot
+        from engine.character import CharacterClass
+        from engine.data_loader import ITEM_REGISTRY
+        from engine.item import ChargeWeapon, ContainerItem
+
+        state = _make_state_with_npc()
+
+        # Find a ContainerItem with at least 2 weapon-type contained items.
+        spellbook_id = None
+        spell_ids = []
+        for item_id, defn in ITEM_REGISTRY.items():
+            if isinstance(defn, ContainerItem) and len(defn.contained_item_ids) >= 2:
+                candidates = [
+                    s for s in defn.contained_item_ids
+                    if isinstance(ITEM_REGISTRY.get(s), ChargeWeapon)
+                ]
+                if len(candidates) >= 2:
+                    spellbook_id = item_id
+                    spell_ids = candidates
+                    break
+
+        assert spellbook_id is not None, "No ContainerItem with 2+ ChargeWeapon spells found"
+
+        # Create a mage character and give/equip the spellbook.
+        create_character(
+            state,
+            name="Vera",
+            character_class=CharacterClass.MAGE,
+            equipment_package="",
+            owner_id="user_weapon_test",
+        )
+        char = list(state.characters.values())[-1]
+        give_item(state, char.character_id, spellbook_id)
+        equip_item(state, char.character_id, spellbook_id, slot=ItemSlot.MAIN_HAND)
+
+        enter_rounds(state)
+
+        char_id = char.character_id
+        npc = state.npcs_in_current_room[0]
+        state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
+        state.battlefield.combatants[npc.npc_id].range_band = RangeBand.ENGAGE
+        npc.hp_current = 100
+        npc.hp_max = 100
+        npc.defense = 0
+        npc.resistance = 0
+
+        return state, char_id, npc, spell_ids
+
+    def test_weapon_id_selects_specific_spell(self):
+        """When weapon_id is set, that spell's stats/charges are used, not weapons[0]."""
+        from engine.combat import _dispatch_hook
+        from engine.data_loader import ITEM_REGISTRY
+        from engine.item import ChargeWeapon
+
+        state, char_id, npc, spell_ids = self._state_with_spellbook_char_and_npc()
+        char = state.characters[char_id]
+
+        # Pick the second spell to ensure we're not just defaulting to [0].
+        target_spell_id = spell_ids[1]
+
+        # Record charges before attack.
+        spell_inv_before = next(
+            i for i in char.inventory if i.item_id == target_spell_id
+        )
+
+        for _ in range(20):  # retry to get a hit
+            state2, char_id2, npc2, _ = self._state_with_spellbook_char_and_npc()
+            char2 = state2.characters[char_id2]
+            npc2.resistance = 0
+            action2 = CombatAction(
+                action_id="attack",
+                target_id=npc2.npc_id,
+                weapon_id=target_spell_id,
+            )
+            log2: list[str] = []
+            _dispatch_hook({"tag": "melee_attack", "dice": "1d6"}, state2, char_id2, action2, log2)
+            if any("hits" in e for e in log2):
+                # Confirm the second spell's charges decremented.
+                spell_inv2 = next(
+                    i for i in char2.inventory if i.item_id == target_spell_id
+                )
+                spell_def = ITEM_REGISTRY[target_spell_id]
+                if isinstance(spell_def, ChargeWeapon) and spell_def.maxCharges > 0:
+                    assert spell_inv2.charges == spell_def.maxCharges - 1
+                break
+
+    def test_weapon_id_none_defaults_to_first_weapon(self):
+        """Without weapon_id, the first weapon in equipped_weapons() is used."""
+        from engine.combat import _dispatch_hook
+        from engine.data_loader import ITEM_REGISTRY
+        from engine.item import ChargeWeapon
+
+        state, char_id, npc, spell_ids = self._state_with_spellbook_char_and_npc()
+        first_spell_id = spell_ids[0]
+
+        for _ in range(20):
+            state2, char_id2, npc2, _ = self._state_with_spellbook_char_and_npc()
+            char2 = state2.characters[char_id2]
+            npc2.resistance = 0
+            action2 = CombatAction(action_id="attack", target_id=npc2.npc_id)
+            log2: list[str] = []
+            _dispatch_hook({"tag": "melee_attack", "dice": "1d6"}, state2, char_id2, action2, log2)
+            if any("hits" in e for e in log2):
+                first_inv = next(
+                    (i for i in char2.inventory if i.item_id == first_spell_id), None
+                )
+                spell_def = ITEM_REGISTRY.get(first_spell_id)
+                if first_inv and isinstance(spell_def, ChargeWeapon) and spell_def.maxCharges > 0:
+                    assert first_inv.charges == spell_def.maxCharges - 1
+                break
+
+
+# ---------------------------------------------------------------------------
 # data_loader: hook object validation
 # ---------------------------------------------------------------------------
 

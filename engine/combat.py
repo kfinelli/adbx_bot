@@ -121,6 +121,7 @@ class CombatAction:
     target_id:   UUID | None      = None
     destination: RangeBand | None = None
     free_text:   str              = ""
+    weapon_id:   str | None       = None
 
     @property
     def is_affect(self) -> bool:
@@ -132,6 +133,7 @@ class CombatAction:
             "target_id":   str(self.target_id) if self.target_id else None,
             "destination": self.destination.value if self.destination else None,
             "free_text":   self.free_text,
+            "weapon_id":   self.weapon_id,
         }
 
     @classmethod
@@ -143,6 +145,7 @@ class CombatAction:
             target_id=UUID(tid_raw) if tid_raw else None,
             destination=RangeBand(dest_raw) if dest_raw else None,
             free_text=d.get("free_text", ""),
+            weapon_id=d.get("weapon_id"),
         )
 
 
@@ -483,11 +486,17 @@ def _hook_weapon_attack(
     actor_npc  = _find_npc(state, actor_id)
     targets_stat = "defense"
     if actor_char:
-        # Use the first equipped weapon's damage/stat if one is available.
+        # Use the equipped weapon matching weapon_id, or fall back to the first.
         weapons = actor_char.equipped_weapons()
         stat_name = "physique"
         if weapons:
-            weapon_inv, weapon_def = weapons[0]
+            if action and action.weapon_id:
+                weapon_inv, weapon_def = next(
+                    ((inv, defn) for inv, defn in weapons if inv.item_id == action.weapon_id),
+                    weapons[0],
+                )
+            else:
+                weapon_inv, weapon_def = weapons[0]
             # Override dice with weapon's damage expression if it's set.
             weapon_damage = getattr(weapon_def, "damage", None)
             if weapon_damage and weapon_damage != "0":
