@@ -21,6 +21,8 @@ class SessionManager:
             return _err(state, "No characters have arrived yet.")
         state.mode = SessionMode.EXPLORATION
         state.session_active = True
+        if state.current_room_id and state.dungeon and state.current_room_id in state.dungeon.rooms:
+            state.dungeon.rooms[state.current_room_id].visited = True
         state.updated_at = _now()
 
         # Open first turn
@@ -115,7 +117,7 @@ class SessionManager:
         if npc_roster is not None:
             state.npc_roster = npc_roster
         # Point current_room_id at the entrance so the web UI has something
-        # to show, but leave visited=False until the party actually enters.
+        # to show; visited is marked True when the session starts.
         if dungeon.entrance_id and dungeon.entrance_id in dungeon.rooms:
             state.current_room_id = dungeon.entrance_id
         state.updated_at = _now()
