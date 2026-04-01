@@ -74,10 +74,12 @@ _SLOT_MAP = {
 }
 
 _STAT_MAP = {
-    "physique": "physique",
-    "finesse":  "finesse",
-    "reason":   "reason",
-    "savvy":    "savvy",
+    "physique":   "physique",
+    "finesse":    "finesse",
+    "reason":     "reason",
+    "savvy":      "savvy",
+    "defense":    "defense",
+    "resistance": "resistance",
 }
 
 
@@ -187,6 +189,7 @@ def _normalise_item(row: dict) -> dict:
     if item["item_type"] in ("weapon", "charge_weapon"):
         item["type"]   = str(row.get("type", "")).strip()
         item["stat"]   = _STAT_MAP.get(str(row.get("stat", "")).strip().lower(), "physique")
+        item["targets_stat"]   = _STAT_MAP.get(str(row.get("targets_stat", "")).strip().lower(), "defense")
         item["damage"] = str(row.get("damage", "0")).strip() or "0"
         item["range"]  = _int_or_zero(row.get("range", 0))
         # Slot for weapons: canonical underscore form, default main_hand.

@@ -34,10 +34,9 @@ async def dispatch_level_up(bot: discord.Client, character, results: list[LevelU
         return
     lines = [f"**{character.name} reached Level {results[-1].new_level}!**"]
     for r in results:
-        hp_display = r.hp_gained / POWER_LEVEL
-        lines.append(f"HP +{hp_display:.0f}")
+        lines.append(f"HP +{r.hp_gained}")
         for stat, val in r.stat_changes.items():
-            lines.append(f"{stat.upper()} +{val / POWER_LEVEL:.2f}")
+            lines.append(f"{stat.upper()} +{val}")
     try:
         user = await bot.fetch_user(int(character.owner_id))
         await user.send("\n".join(lines))

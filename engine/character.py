@@ -71,7 +71,7 @@ class CharacterManager:
         scores = ability_scores if ability_scores is not None else roll_stat_block()
         rules  = CREATION_RULES[character_class]
 
-        hp_max    = rules.hitDie   * POWER_LEVEL
+        hp_max    = max(rules.hitDie   * POWER_LEVEL + scores.physique, 100) # Minimum level 1 hit points
         base_save = rules.baseSave * POWER_LEVEL
 
         job_key = character_class.name.lower()  # e.g. "knight"

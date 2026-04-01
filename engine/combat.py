@@ -527,7 +527,11 @@ def _hook_melee_attack(
         log.append(f"{actor_name} attacks {target_name} — misses! (rolled {roll} vs AC {target_ac})")
         return
 
-    damage = max(1, roll_dice_expr(dice)["total"] + str_mod)
+    base_roll = roll_dice_expr(dice)["total"]
+    is_crit = random.randint(1, 10) == 1
+    crit_bonus = roll_dice_expr(dice)["total"] if is_crit else 0
+    min_damage = max(1, str_mod)
+    damage = max(min_damage, base_roll + crit_bonus + str_mod)
     if target_char:
         damage = max(damage - target_char.defense, 0)
         target_char.hp_current = max(0, target_char.hp_current - damage)
@@ -537,8 +541,9 @@ def _hook_melee_attack(
         target_npc.hp_current = max(0, target_npc.hp_current - damage)
         hp_str = f"{target_npc.hp_current}/{target_npc.hp_max}"
 
+    crit_tag = " [CRIT!]" if is_crit else ""
     log.append(
-        f"{actor_name} attacks {target_name} — hits! (rolled {roll} vs Dodge {target_ac}) "
+        f"{actor_name} attacks {target_name} — hits!{crit_tag} (rolled {roll} vs Dodge {target_ac}) "
         f"Deals {damage} damage. [{target_name}: {hp_str}]"
     )
 
@@ -664,6 +669,8 @@ def _hook_deal_damage(
     actor_npc  = _find_npc(state, actor_id)
 
     if actor_char:
+        mitigation = actor_char.defense if damage_type == "physical" else actor_char.resistance
+        damage = max(damage - mitigation, 0)
         actor_char.hp_current = max(0, actor_char.hp_current - damage)
         hp_str = f"{actor_char.hp_current}/{actor_char.hp_max}"
         if actor_char.hp_current <= 0:
@@ -673,6 +680,8 @@ def _hook_deal_damage(
             log.append(f"{actor_name} takes {damage} {damage_type} damage and falls!")
             return
     elif actor_npc:
+        mitigation = actor_npc.defense if damage_type == "physical" else actor_npc.resistance
+        damage = max(damage - mitigation, 0)
         actor_npc.hp_current = max(0, actor_npc.hp_current - damage)
         hp_str = f"{actor_npc.hp_current}/{actor_npc.hp_max}"
         if actor_npc.hp_current <= 0:

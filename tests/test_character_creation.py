@@ -40,12 +40,14 @@ class TestCreateCharacter:
         assert "empty" in result.error.lower()
 
     def test_hp_scaled_by_power_level(self, bare_state):
-        """HP at level 1 = hit_die * POWER_LEVEL (full HP, JRPG-style)."""
-        result = create_character(bare_state, "Aldric", CharacterClass.KNIGHT, "")
+        """HP at level 1 = hit_die * POWER_LEVEL + physique."""
+        scores = AzureStats(physique=200, finesse=100, reason=50, savvy=0)
+        result = create_character(bare_state, "Aldric", CharacterClass.KNIGHT, "",
+                                  ability_scores=scores)
         assert result.ok
         char = list(bare_state.characters.values())[0]
-        # Knight hit_die = 12 → hp_max = 12 * 100 = 1200
-        assert char.hp_max == 12 * POWER_LEVEL
+        # Knight hit_die = 12 → hp_max = 12 * 100 + 200 = 1400
+        assert char.hp_max == 12 * POWER_LEVEL + 200
         assert char.hp_current == char.hp_max
 
     def test_hp_minimum_one(self, bare_state):

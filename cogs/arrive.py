@@ -36,16 +36,11 @@ log = logging.getLogger(__name__)
 
 def _fmt_stats(stats: dict) -> str:
     """Format rolled Azure stats for display in a DM message."""
-    def _fmt(val: int) -> str:
-        # Display scaled integer as a decimal, e.g. 250 → "+2.50"
-        fval = val / POWER_LEVEL
-        return f"{fval:+.2f}"
-
     return (
-        f"**PHY** {_fmt(stats['physique'])}   "
-        f"**FNS** {_fmt(stats['finesse'])}\n"
-        f"**RSN** {_fmt(stats['reason'])}   "
-        f"**SVY** {_fmt(stats['savvy'])}"
+        f"**PHY** {stats['physique']:+d}   "
+        f"**FNS** {stats['finesse']:+d}\n"
+        f"**RSN** {stats['reason']:+d}   "
+        f"**SVY** {stats['savvy']:+d}"
     )
 
 
