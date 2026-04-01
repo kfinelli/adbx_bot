@@ -158,11 +158,12 @@ class EquipItem(Item):
 
 class Weapon(EquipItem):
     ITEM_TYPE = ItemType.WEAPON.value
-    def __init__(self, item_id, name, rank, weaponType, stat, damage, range=0, slot="main_hand", tags=None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight=False, purchaseable=False, price=0):
+    def __init__(self, item_id, name, rank, weaponType, stat, damage, range=0, slot="main_hand", targetsStat="defense", tags=None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight=False, purchaseable=False, price=0):
         super().__init__(item_id, name, rank, tags, otherAbilities, heldStatus, attackStatus, description, isLight, purchaseable, price)
         self.slot = slot or "main_hand"
         self.type = weaponType
         self.stat = stat
+        self.targets_stat = targetsStat
         # Store damage as a dice expression string (e.g. "1d8", "2d6+4").
         # Range remains a plain integer.
         self.damage = str(damage).strip() if damage not in (None, '', []) else "0"
@@ -194,14 +195,15 @@ class Weapon(EquipItem):
             ItemData.STAT.value: self.stat,
             ItemData.DAMAGE.value: self.damage,
             ItemData.RANGE.value: self.range,
+            ItemData.TARGETS_STAT.value: self.targets_stat,
             ItemData.PROTOTYPE.value: self.prototype,
         })
         return exportData
 
 class ChargeWeapon(Weapon):
     ITEM_TYPE = ItemType.CHARGE_WEAPON.value
-    def __init__(self, item_id, name, rank, weaponType, stat, damage, range=0, slot="main_hand", maxCharges=1, destroyOnEmpty=False, tags=None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight=False, purchaseable=False, price=0, rechargePeriod=None):
-        super().__init__(item_id, name, rank, weaponType, stat, damage, range, slot, tags, otherAbilities, heldStatus, attackStatus, description, isLight, purchaseable, price)
+    def __init__(self, item_id, name, rank, weaponType, stat, damage, range=0, slot="main_hand", targetsStat="defense", maxCharges=1, destroyOnEmpty=False, tags=None, otherAbilities=None, heldStatus=None, attackStatus=None, description="", isLight=False, purchaseable=False, price=0, rechargePeriod=None):
+        super().__init__(item_id, name, rank, weaponType, stat, damage, range, slot, targetsStat, tags, otherAbilities, heldStatus, attackStatus, description, isLight, purchaseable, price)
         if rechargePeriod is not None:
             # recharge period supplied directly (e.g. loaded from normalised JSON)
             self.rechargePeriod = rechargePeriod
@@ -404,6 +406,7 @@ def createItemFromData(itemData):
         "damage": itemData.get(ItemData.DAMAGE, 0),
         "range": itemData.get(ItemData.RANGE, 0),
         "slot": itemData.get(ItemData.SLOT, "main_hand"),
+        "targetsStat": itemData.get(ItemData.TARGETS_STAT, "defense"),
     }
 
     match item_type:

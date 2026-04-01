@@ -66,6 +66,7 @@ class ItemData(StrEnum):
     PURCHASEABLE = "purchaseable"
     PRICE = "price"
     CONTAINED_ITEMS = "contained_items"
+    TARGETS_STAT = "targets_stat"
 
 class ItemType(StrEnum):
     ITEM = "item"

@@ -453,7 +453,7 @@ def _dispatch_hook(
 # See CONTRIBUTING.md for a step-by-step guide to adding a new hook.
 # ---------------------------------------------------------------------------
 
-def _hook_melee_attack(
+def _hook_weapon_attack(
     state:    GameState,
     actor_id: UUID,
     action:   CombatAction | None,
@@ -461,13 +461,14 @@ def _hook_melee_attack(
     params:   dict,
 ) -> None:
     """
-    Roll a melee attack against the target's FNS, on a hit deal damage
+    Roll a weapon attack against the target's FNS, on a hit deal damage.
+    Mitigation is routed via the weapon's targets_stat field ("defense" or "resistance").
 
     params:
       dice  (str, default "1d6") — damage dice expression, e.g. "1d8", "2d6"
 
     Attack roll: 1d(10 x POWER_LEVEL) vs target FNS (roll >= FNS to hit)
-    Damage:      roll `dice` + PHY, subtract target DEF
+    Damage:      roll `dice` + weapon stat, subtract target DEF or RST
     """
     if action is None or action.target_id is None:
         log.append("[melee_attack: no target specified]")
@@ -480,6 +481,7 @@ def _hook_melee_attack(
 
     actor_char = state.characters.get(actor_id)
     actor_npc  = _find_npc(state, actor_id)
+    targets_stat = "defense"
     if actor_char:
         # Use the first equipped weapon's damage/stat if one is available.
         weapons = actor_char.equipped_weapons()
@@ -493,6 +495,7 @@ def _hook_melee_attack(
             weapon_stat = getattr(weapon_def, "stat", None)
             if weapon_stat:
                 stat_name = weapon_stat
+            targets_stat = getattr(weapon_def, "targets_stat", "defense")
             # Consume a charge for ChargeWeapons (standalone or contained in a spellbook).
             if isinstance(weapon_def, ChargeWeapon):
                 current = weapon_inv.charges if weapon_inv.charges is not None else -1
@@ -533,17 +536,20 @@ def _hook_melee_attack(
     min_damage = max(1, str_mod)
     damage = max(min_damage, base_roll + crit_bonus + str_mod)
     if target_char:
-        damage = max(damage - target_char.defense, 0)
+        mitigation = target_char.resistance if targets_stat == "resistance" else target_char.defense
+        damage = max(damage - mitigation, 0)
         target_char.hp_current = max(0, target_char.hp_current - damage)
         hp_str = f"{target_char.hp_current}/{target_char.hp_max}"
     else:
-        damage = max(damage - target_npc.defense, 0)
+        mitigation = target_npc.resistance if targets_stat == "resistance" else target_npc.defense
+        damage = max(damage - mitigation, 0)
         target_npc.hp_current = max(0, target_npc.hp_current - damage)
         hp_str = f"{target_npc.hp_current}/{target_npc.hp_max}"
 
     crit_tag = " [CRIT!]" if is_crit else ""
+    magic_tag = " [magical]" if targets_stat == "resistance" else ""
     log.append(
-        f"{actor_name} attacks {target_name} — hits!{crit_tag} (rolled {roll} vs Dodge {target_ac}) "
+        f"{actor_name} attacks {target_name} — hits!{crit_tag}{magic_tag} (rolled {roll} vs Dodge {target_ac}) "
         f"Deals {damage} damage. [{target_name}: {hp_str}]"
     )
 
@@ -797,7 +803,7 @@ def _hook_block_movement(
 #
 _HOOK_DISPATCH: dict[str, object] = {
     # Attack
-    "melee_attack":    _hook_melee_attack,
+    "melee_attack":    _hook_weapon_attack,
     "check_death":     _hook_check_death,
     # Movement
     "move_to_band":    _hook_move_to_band,

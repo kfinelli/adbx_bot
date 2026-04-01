@@ -345,6 +345,89 @@ class TestAutoResolveRound:
 
 
 # ---------------------------------------------------------------------------
+# targets_stat routing (defense vs resistance)
+# ---------------------------------------------------------------------------
+
+class TestTargetsStatRouting:
+
+    def _setup_combat_with_weapon(self, targets_stat: str):
+        """Return (state, char_id, npc_id) with a weapon whose targets_stat is set."""
+        from engine.item import Weapon
+        from engine import add_npc, register_room
+        from models import Room, InventoryItem
+
+        state = GameState(platform_channel_id="ch", dm_user_id="dm")
+        state.party = Party(name="P")
+        create_character(state, "Hero", CharacterClass.KNIGHT, "", owner_id="u1")
+        start_session(state)
+
+        room = Room(name="Hall", description="")
+        register_room(state, room)
+        state.current_room_id = room.room_id
+
+        npc = NPC(name="Target", hp_current=500, hp_max=500, defense=50, resistance=50,
+                  damage_dice="1d6")
+        add_npc(state, npc)
+
+        # Equip a synthetic weapon with the requested targets_stat
+        char = list(state.characters.values())[0]
+        weapon = Weapon("test_weapon", "Test Weapon", "C", "Sword", "physique", "1d4",
+                        targetsStat=targets_stat)
+        inv_item = InventoryItem(item_id="test_weapon")
+        char.inventory.append(inv_item)
+        char.equipped_slots["main_hand"] = "test_weapon"
+
+        from engine.data_loader import ITEM_REGISTRY
+        ITEM_REGISTRY["test_weapon"] = weapon
+
+        enter_rounds(state)
+        open_turn(state)
+        return state, list(state.characters.keys())[0], npc.npc_id
+
+    def test_physical_weapon_uses_defense(self):
+        state, char_id, npc_id = self._setup_combat_with_weapon("defense")
+        npc = state.npcs_in_current_room[0]
+        original_resistance = npc.resistance  # 50
+
+        state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
+        state.battlefield.combatants[npc_id].range_band  = RangeBand.ENGAGE
+
+        from models import PlayerTurnSubmission
+        from engine.combat import CombatAction
+        action = CombatAction(action_id="attack", target_id=npc_id)
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id, action_text="Attack",
+            is_latest=True, combat_action=action.to_dict(),
+        )]
+
+        auto_resolve_round(state)
+        # Resistance must be unchanged — defense was used for mitigation
+        assert npc.resistance == original_resistance
+
+    def test_magical_weapon_uses_resistance(self):
+        state, char_id, npc_id = self._setup_combat_with_weapon("resistance")
+        npc = state.npcs_in_current_room[0]
+        # Give target high defense, zero resistance so we can detect which was used
+        npc.defense = 9999
+        npc.resistance = 0
+
+        state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
+        state.battlefield.combatants[npc_id].range_band  = RangeBand.ENGAGE
+
+        from models import PlayerTurnSubmission
+        from engine.combat import CombatAction
+        action = CombatAction(action_id="attack", target_id=npc_id)
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id, action_text="Attack",
+            is_latest=True, combat_action=action.to_dict(),
+        )]
+
+        auto_resolve_round(state)
+        # With defense=9999, physical would deal 0 damage; resistance=0 means full damage lands
+        assert npc.hp_current < npc.hp_max, "magical weapon should bypass defense and deal damage"
+
+
+# ---------------------------------------------------------------------------
 # Auto-resolution trigger via submit_turn
 # ---------------------------------------------------------------------------
 
