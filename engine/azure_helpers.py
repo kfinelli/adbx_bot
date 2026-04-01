@@ -1,6 +1,5 @@
 import json
 import math
-import random
 
 from engine.azure_constants import (
     _CLASSES_DIR,
@@ -13,19 +12,6 @@ from engine.azure_constants import (
     StatPriority,
 )
 from engine.jobs import Job, Skill
-
-
-# ---------------------------------------------------------------------------
-# cant use dice.py because of circular import
-# ---------------------------------------------------------------------------
-def d(x):
-    """Roll a single die with x sides.  Returns 0 if x < 1."""
-    x = int(x)
-    if x == 0:
-        return 0
-    if x < 1:
-        return random.randint(x, -1)
-    return random.randint(1, x)
 
 # ---------------------------------------------------------------------------
 # Stat helpers added for engine integration

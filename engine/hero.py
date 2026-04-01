@@ -9,7 +9,8 @@ from engine.azure_constants import (
     Stat,
     StatusType,
 )
-from engine.azure_helpers import d, getJobFromID
+from engine.azure_helpers import getJobFromID
+from engine.dice import d
 
 """
 Character Sheet & Generation

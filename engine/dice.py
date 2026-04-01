@@ -6,7 +6,6 @@ import random
 import re
 
 from engine.azure_constants import POWER_LEVEL
-from models import AzureStats
 
 
 def print_dice_results(results):
@@ -82,8 +81,9 @@ def roll_azure_stat() -> int:
     return d(die) + d(die) - penalty
 
 
-def roll_stat_block() -> AzureStats:
+def roll_stat_block():
     """Roll all four Azure stats and return an AzureStats instance."""
+    from models import AzureStats
     return AzureStats(
         physique=roll_azure_stat(),
         finesse=roll_azure_stat(),
