@@ -21,7 +21,6 @@ from discord import app_commands
 from discord.ext import commands
 
 from engine import create_character, give_item, roll_stats
-from engine.azure_constants import POWER_LEVEL
 from engine.data_loader import ITEM_REGISTRY
 from engine.item import ChargeWeapon, Gear, Item, Weapon
 from models import CharacterClass, SessionMode

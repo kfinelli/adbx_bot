@@ -352,9 +352,9 @@ class TestTargetsStatRouting:
 
     def _setup_combat_with_weapon(self, targets_stat: str):
         """Return (state, char_id, npc_id) with a weapon whose targets_stat is set."""
-        from engine.item import Weapon
         from engine import add_npc, register_room
-        from models import Room, InventoryItem
+        from engine.item import Weapon
+        from models import InventoryItem, Room
 
         state = GameState(platform_channel_id="ch", dm_user_id="dm")
         state.party = Party(name="P")
@@ -392,8 +392,8 @@ class TestTargetsStatRouting:
         state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
         state.battlefield.combatants[npc_id].range_band  = RangeBand.ENGAGE
 
-        from models import PlayerTurnSubmission
         from engine.combat import CombatAction
+        from models import PlayerTurnSubmission
         action = CombatAction(action_id="attack", target_id=npc_id)
         state.current_turn.submissions = [PlayerTurnSubmission(
             character_id=char_id, action_text="Attack",
@@ -414,8 +414,8 @@ class TestTargetsStatRouting:
         state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
         state.battlefield.combatants[npc_id].range_band  = RangeBand.ENGAGE
 
-        from models import PlayerTurnSubmission
         from engine.combat import CombatAction
+        from models import PlayerTurnSubmission
         action = CombatAction(action_id="attack", target_id=npc_id)
         state.current_turn.submissions = [PlayerTurnSubmission(
             character_id=char_id, action_text="Attack",

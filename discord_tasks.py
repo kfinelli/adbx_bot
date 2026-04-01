@@ -21,7 +21,6 @@ import contextlib
 
 import discord
 
-from engine.azure_constants import POWER_LEVEL
 from models import GameState, LevelUpResult, Oracle
 
 # ---------------------------------------------------------------------------
