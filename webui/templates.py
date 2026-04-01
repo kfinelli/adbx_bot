@@ -1490,7 +1490,6 @@ def character_sheet_panel(character: Character) -> str:
         item_name = defn.name if defn else inv_item.item_id
         qty_str = f'<span class="muted"> ×{inv_item.quantity}</span>' if inv_item.quantity > 1 else ""
         equip_str = ' <span class="tag tag-open" style="font-size:0.7rem;padding:1px 5px">equip</span>' if inv_item.equipped else ""
-        disabled = 'disabled title="Unequip before removing"' if inv_item.equipped else ""
         item_rows += (
             f'<tr>'
             f'<td>{item_name}{qty_str}{equip_str}</td>'
@@ -1498,7 +1497,7 @@ def character_sheet_panel(character: Character) -> str:
             f'<form method="post" action="/characters/{cid_str}/removeitem" style="margin:0">'
             f'<input type="hidden" name="item_id" value="{inv_item.item_id}">'
             f'<input type="hidden" name="quantity" value="{inv_item.quantity}">'
-            f'<button class="btn-sm btn-danger" type="submit" {disabled}>✕</button>'
+            f'<button class="btn-sm btn-danger" type="submit">✕</button>'
             f'</form>'
             f'</td>'
             f'</tr>'
