@@ -1384,7 +1384,7 @@ class TestWeaponIdSelection:
         target_spell_id = spell_ids[1]
 
         # Record charges before attack.
-        spell_inv_before = next(
+        next(
             i for i in char.inventory if i.item_id == target_spell_id
         )
 
