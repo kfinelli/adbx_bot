@@ -450,7 +450,8 @@ def abscond(
     - Clears all existing turn submissions and replaces them with a
       single movement submission, then closes the turn so the DM
       sees it as ready to resolve.
-    - Does NOT resolve the turn — DM still uses /dm_resolve.
+    - Does NOT resolve the turn unless passing through an automove exit or
+      moving to a previously-explored room
     """
     if state.party is None:
         return _err(state, "No active party.")
@@ -476,13 +477,15 @@ def abscond(
     # Determine auto-move and free-move conditions.
     # free_move: destination already explored → no turn cost.
     # auto_move: either the exit flag is set OR the destination is explored → skip DM approval.
+    #            block auto move if there are any active NPCs present in the room
     dest_room = (
         state.dungeon.rooms.get(exit_.destination_id)
         if exit_.destination_id and state.dungeon
         else None
     )
+    npcs_present = any(npc.status == "active" for npc in state.npcs_in_current_room)
     is_free_move = dest_room is not None and dest_room.visited
-    is_auto_move = exit_.auto_move or is_free_move
+    is_auto_move = (exit_.auto_move or is_free_move) and not npcs_present
 
     if state.current_turn is None:
         open_turn(state)
