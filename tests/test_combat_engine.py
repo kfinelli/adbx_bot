@@ -178,6 +178,20 @@ class TestInitializeBattlefield:
         exit_rounds(state)
         assert state.battlefield is None
 
+    def test_exit_rounds_expires_round_conditions_keeps_permanent(self):
+        from models import ActiveCondition
+        state = _make_state_with_npc()
+        char = list(state.characters.values())[0]
+        char.active_conditions = [
+            ActiveCondition(condition_id="poisoned", duration_rounds=2),   # round-scoped
+            ActiveCondition(condition_id="strengthened", duration_rounds=None),  # permanent
+        ]
+        enter_rounds(state)
+        exit_rounds(state)
+        remaining = [c.condition_id for c in char.active_conditions]
+        assert "poisoned" not in remaining
+        assert "strengthened" in remaining
+
     def test_dead_char_excluded(self):
         state = _make_state_with_npc()
         char = list(state.characters.values())[0]
@@ -564,12 +578,14 @@ class TestApplyCondition:
         assert not result.ok
         assert "Unknown condition" in result.error
 
-    def test_apply_outside_rounds_fails(self):
+    def test_apply_outside_rounds_succeeds(self):
+        # Conditions now live on the character, so they can be applied outside combat.
         state = _make_state_with_npc()
-        # Don't enter rounds — no battlefield
         char_id = list(state.characters.keys())[0]
         result = apply_condition(state, char_id, "poisoned", duration=3)
-        assert not result.ok
+        assert result.ok
+        char = state.characters[char_id]
+        assert any(c.condition_id == "poisoned" for c in char.active_conditions)
 
     def test_apply_to_unknown_combatant_fails(self):
         state = _make_state_with_npc()
@@ -597,8 +613,8 @@ class TestApplyCondition:
 
         result = apply_condition(state, char_id, "slowed", duration=2)
         assert result.ok
-        cs = state.battlefield.combatants[char_id]
-        assert any(c.condition_id == "slowed" for c in cs.active_conditions)
+        char = state.characters[char_id]
+        assert any(c.condition_id == "slowed" for c in char.active_conditions)
         del CONDITION_REGISTRY["slowed"]
 
     def test_reapply_refreshes_duration(self):
@@ -613,8 +629,8 @@ class TestApplyCondition:
 
         apply_condition(state, char_id, "burning", duration=1)
         apply_condition(state, char_id, "burning", duration=5)
-        cs = state.battlefield.combatants[char_id]
-        conds = [c for c in cs.active_conditions if c.condition_id == "burning"]
+        char = state.characters[char_id]
+        conds = [c for c in char.active_conditions if c.condition_id == "burning"]
         assert len(conds) == 1
         assert conds[0].duration_rounds == 5
         del CONDITION_REGISTRY["burning"]
@@ -630,33 +646,33 @@ class TestTickConditions:
         state = _make_state_with_npc()
         enter_rounds(state)
         char_id = list(state.characters.keys())[0]
-        cs = state.battlefield.combatants[char_id]
-        cs.active_conditions = [ActiveCondition(condition_id="x", duration_rounds=3)]
+        char = state.characters[char_id]
+        char.active_conditions = [ActiveCondition(condition_id="x", duration_rounds=3)]
 
         _tick_conditions(state, [])
-        assert cs.active_conditions[0].duration_rounds == 2
+        assert char.active_conditions[0].duration_rounds == 2
 
     def test_condition_expires_at_zero(self):
         state = _make_state_with_npc()
         enter_rounds(state)
         char_id = list(state.characters.keys())[0]
-        cs = state.battlefield.combatants[char_id]
-        cs.active_conditions = [ActiveCondition(condition_id="x", duration_rounds=1)]
+        char = state.characters[char_id]
+        char.active_conditions = [ActiveCondition(condition_id="x", duration_rounds=1)]
 
         log: list[str] = []
         _tick_conditions(state, log)
-        assert cs.active_conditions == []
+        assert char.active_conditions == []
 
     def test_permanent_condition_never_expires(self):
         state = _make_state_with_npc()
         enter_rounds(state)
         char_id = list(state.characters.keys())[0]
-        cs = state.battlefield.combatants[char_id]
-        cs.active_conditions = [ActiveCondition(condition_id="x", duration_rounds=None)]
+        char = state.characters[char_id]
+        char.active_conditions = [ActiveCondition(condition_id="x", duration_rounds=None)]
 
         for _ in range(10):
             _tick_conditions(state, [])
-        assert len(cs.active_conditions) == 1
+        assert len(char.active_conditions) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -847,8 +863,8 @@ class TestConditions:
         state, char_id, _ = self._state_in_rounds()
         result = apply_condition(state, char_id, "poisoned", duration=3)
         assert result.ok
-        cs = state.battlefield.combatants[char_id]
-        assert any(c.condition_id == "poisoned" for c in cs.active_conditions)
+        char = state.characters[char_id]
+        assert any(c.condition_id == "poisoned" for c in char.active_conditions)
 
     def test_apply_condition_message_contains_label(self):
         state, char_id, _ = self._state_in_rounds()
@@ -894,8 +910,8 @@ class TestConditions:
         from engine.combat import _tick_conditions
         _tick_conditions(state, [])   # round 1 — duration becomes 1
         _tick_conditions(state, [])   # round 2 — expires
-        cs = state.battlefield.combatants[char_id]
-        assert not any(c.condition_id == "poisoned" for c in cs.active_conditions)
+        char = state.characters[char_id]
+        assert not any(c.condition_id == "poisoned" for c in char.active_conditions)
 
     # ------------------------------------------------------------------
     # Stunned — skip_action for one round
@@ -1089,9 +1105,7 @@ class TestPoisonAction:
         )]
         result = auto_resolve_round(state)
         assert result.ok
-        npc_cs = state.battlefield.combatants.get(npc.npc_id)
-        assert npc_cs is not None
-        assert any(c.condition_id == "poisoned" for c in npc_cs.active_conditions)
+        assert any(c.condition_id == "poisoned" for c in npc.active_conditions)
 
     def test_poison_works_at_any_range(self):
         """Thief at FAR_MINUS, guard at FAR_PLUS — should still apply."""
@@ -1118,9 +1132,7 @@ class TestPoisonAction:
             is_latest=True, combat_action=action.to_dict(),
         )]
         auto_resolve_round(state)
-        npc_cs = state.battlefield.combatants.get(npc.npc_id)
-        assert npc_cs is not None
-        cond = next(c for c in npc_cs.active_conditions if c.condition_id == "poisoned")
+        cond = next(c for c in npc.active_conditions if c.condition_id == "poisoned")
         assert cond.duration_rounds == 2   # started at 3, ticked once
         assert npc.hp_current < 20         # took poison damage this round
 
@@ -1276,9 +1288,8 @@ class TestParameterizedHooks:
             {"tag": "apply_condition", "condition": "stunned", "duration": 2},
             state, char_id, action, log,
         )
-        npc_cs = state.battlefield.combatants[npc.npc_id]
-        assert any(c.condition_id == "stunned" for c in npc_cs.active_conditions)
-        stunned = next(c for c in npc_cs.active_conditions if c.condition_id == "stunned")
+        assert any(c.condition_id == "stunned" for c in npc.active_conditions)
+        stunned = next(c for c in npc.active_conditions if c.condition_id == "stunned")
         assert stunned.duration_rounds == 2
 
     def test_apply_condition_hook_missing_condition_param_logs_error(self):

@@ -606,8 +606,12 @@ def _combat_subpanel(
 
     # --- Active conditions with remove buttons
     from engine.data_loader import CONDITION_REGISTRY
+    cid_uuid_for_cond = UUID(combatant_id) if not isinstance(combatant_id, UUID) else combatant_id
+    _cond_char = state.characters.get(cid_uuid_for_cond)
+    _cond_npc  = next((n for g in state.npc_roster.groups.values() for n in g.npcs if n.npc_id == cid_uuid_for_cond), None)
+    _cond_owner = _cond_char if _cond_char else _cond_npc
     cond_chips = ""
-    for cond in cs.active_conditions:
+    for cond in (_cond_owner.active_conditions if _cond_owner else []):
         cond_def = CONDITION_REGISTRY.get(cond.condition_id)
         label = cond_def.label if cond_def else cond.condition_id
         dur = f" {cond.duration_rounds}r" if cond.duration_rounds is not None else " ∞"

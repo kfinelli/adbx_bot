@@ -20,7 +20,7 @@ from uuid import UUID, uuid4
 # CharacterClass is generated in azure_engine.py from job JSON files.
 # Import it here so the rest of the codebase can import from models as before.
 from engine.azure_engine import CharacterClass
-from engine.data_loader import ITEM_REGISTRY
+from engine.data_loader import CONDITION_REGISTRY, ITEM_REGISTRY
 from engine.item import ContainerItem, Gear, Weapon
 
 log = logging.getLogger(__name__)
@@ -183,13 +183,15 @@ class Character:
     # correct slot keys for the active ruleset when creating a character.
     equipped_slots:  dict[str, str | None] = field(default_factory=dict)
 
+    active_conditions: list[ActiveCondition] = field(default_factory=list)
+
     # Metadata
     created_at:      datetime          = field(default_factory=lambda: datetime.now(UTC))
     is_pregenerated: bool              = False
 
     @property
     def defense(self) -> int:
-        """Sum DEF from all equipped Gear items."""
+        """Sum DEF from equipped Gear items plus active condition modifiers, floored at 0."""
         total = 0
         for item_id in self.equipped_slots.values():
             if item_id is None:
@@ -197,11 +199,16 @@ class Character:
             definition = ITEM_REGISTRY.get(item_id)
             if isinstance(definition, Gear):
                 total += definition.defense
-        return total
+        total += sum(
+            CONDITION_REGISTRY[c.condition_id].stat_modifiers.get("defense", 0)
+            for c in self.active_conditions
+            if c.condition_id in CONDITION_REGISTRY
+        )
+        return max(0, total)
 
     @property
     def resistance(self) -> int:
-        """Sum RST from all equipped Gear items."""
+        """Sum RST from equipped Gear items plus active condition modifiers, floored at 0."""
         total = 0
         for item_id in self.equipped_slots.values():
             if item_id is None:
@@ -209,7 +216,12 @@ class Character:
             definition = ITEM_REGISTRY.get(item_id)
             if isinstance(definition, Gear):
                 total += definition.resistance
-        return total
+        total += sum(
+            CONDITION_REGISTRY[c.condition_id].stat_modifiers.get("resistance", 0)
+            for c in self.active_conditions
+            if c.condition_id in CONDITION_REGISTRY
+        )
+        return max(0, total)
 
     def equipped_weapon(self) -> InventoryItem | None:
         """
@@ -502,8 +514,9 @@ class NPC:
     morale:         int               = 7           # B/X morale score
     saving_throw:   int               = 15          # single value for simplicity
     hit_dice:       int               = 1           # used to compute XP on kill (hit_dice * 100)
-    status:         str               = "active"    # free-form: active/dead/fled/charmed/etc.
-    notes:          str               = ""          # DM-facing
+    status:            str               = "active"    # free-form: active/dead/fled/charmed/etc.
+    notes:             str               = ""          # DM-facing
+    active_conditions: list[ActiveCondition] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -638,7 +651,6 @@ class CombatantState:
     range_band:        RangeBand               = RangeBand.FAR_MINUS
     initiative:        int                     = 0
     acted_this_round:  bool                    = False
-    active_conditions: list[ActiveCondition]   = field(default_factory=list)
     skip_action:       bool                    = False
     movement_blocked:  bool                    = False
     used_move:         bool                    = False

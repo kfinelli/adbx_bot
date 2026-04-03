@@ -924,12 +924,14 @@ async def route_combatant_removecondition(
         cid = UUID(combatant_id)
     except ValueError as e:
         return _respond(channel_id, error=str(e), view_room_id=view_room_id)
-    cs = state.battlefield.combatants.get(cid)
-    if cs is None:
-        return _respond(channel_id, error="Combatant not on battlefield.", view_room_id=view_room_id)
-    before = len(cs.active_conditions)
-    cs.active_conditions = [c for c in cs.active_conditions if c.condition_id != condition_id]
-    if len(cs.active_conditions) == before:
+    char      = state.characters.get(cid)
+    npc       = next((n for g in state.npc_roster.groups.values() for n in g.npcs if n.npc_id == cid), None)
+    combatant = char if char else npc
+    if combatant is None:
+        return _respond(channel_id, error="Combatant not found.", view_room_id=view_room_id)
+    before = len(combatant.active_conditions)
+    combatant.active_conditions = [c for c in combatant.active_conditions if c.condition_id != condition_id]
+    if len(combatant.active_conditions) == before:
         return _respond(channel_id, error=f"Condition '{condition_id}' not found.", view_room_id=view_room_id)
     await save_session_async(state)
     return _respond(channel_id, view_room_id=view_room_id)

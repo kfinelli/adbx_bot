@@ -777,15 +777,13 @@ def _build_class_action_view(char, state, channel_id: str) -> discord.ui.View:
 
     # Add any condition-granted actions
     if state.battlefield:
-        cs = state.battlefield.combatants.get(char.character_id)
-        if cs:
-            from engine import CONDITION_REGISTRY
-            for cond in cs.active_conditions:
-                cond_def = CONDITION_REGISTRY.get(cond.condition_id)
-                if cond_def:
-                    for granted in cond_def.grants_actions:
-                        if granted not in action_ids:
-                            action_ids.append(granted)
+        from engine import CONDITION_REGISTRY
+        for cond in char.active_conditions:
+            cond_def = CONDITION_REGISTRY.get(cond.condition_id)
+            if cond_def:
+                for granted in cond_def.grants_actions:
+                    if granted not in action_ids:
+                        action_ids.append(granted)
 
     return ClassActionView(
         action_ids=action_ids,

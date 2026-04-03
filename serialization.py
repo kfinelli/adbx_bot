@@ -122,9 +122,10 @@ def serialize_character(c: Character) -> dict:
         "status_notes":    c.status_notes,
         "inventory":       [serialize_inventory_item(i) for i in c.inventory],
         "gold":            c.gold,
-        "equipped_slots":  c.equipped_slots,  # dict[str, str|None] — no special encoding needed
-        "created_at":      _dt(c.created_at),
-        "is_pregenerated": c.is_pregenerated,
+        "equipped_slots":   c.equipped_slots,  # dict[str, str|None] — no special encoding needed
+        "created_at":       _dt(c.created_at),
+        "is_pregenerated":  c.is_pregenerated,
+        "active_conditions": [serialize_active_condition(cond) for cond in c.active_conditions],
     }
 
 
@@ -223,8 +224,9 @@ def serialize_npc(n: NPC) -> dict:
         "morale":         n.morale,
         "saving_throw":   n.saving_throw,
         "hit_dice":       n.hit_dice,
-        "status":         n.status,
-        "notes":          n.notes,
+        "status":            n.status,
+        "notes":             n.notes,
+        "active_conditions": [serialize_active_condition(cond) for cond in n.active_conditions],
     }
 
 
@@ -280,7 +282,6 @@ def serialize_combatant_state(cs: CombatantState) -> dict:
         "range_band":        _enum(cs.range_band),
         "initiative":        cs.initiative,
         "acted_this_round":  cs.acted_this_round,
-        "active_conditions": [serialize_active_condition(c) for c in cs.active_conditions],
     }
 
 
@@ -431,6 +432,7 @@ def deserialize_character(d: dict) -> Character:
         equipped_slots=merged_slots,
         created_at=_load_dt(d["created_at"]),
         is_pregenerated=d["is_pregenerated"],
+        active_conditions=[deserialize_active_condition(c) for c in d.get("active_conditions", [])],
     )
 
 
@@ -510,6 +512,7 @@ def deserialize_npc(d: dict) -> NPC:
         hit_dice=d.get("hit_dice", 1),
         status=d["status"],
         notes=d["notes"],
+        active_conditions=[deserialize_active_condition(c) for c in d.get("active_conditions", [])],
     )
 
 
@@ -568,9 +571,6 @@ def deserialize_combatant_state(d: dict) -> CombatantState:
         range_band=RangeBand(d["range_band"]),
         initiative=d.get("initiative", 0),
         acted_this_round=d.get("acted_this_round", False),
-        active_conditions=[
-            deserialize_active_condition(c) for c in d.get("active_conditions", [])
-        ],
     )
 
 

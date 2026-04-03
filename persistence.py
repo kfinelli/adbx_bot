@@ -101,6 +101,9 @@ def _char_dict_from_row(row) -> dict:
         "created_at":      row["created_at"],
         "is_pregenerated": bool(row["is_pregenerated"]),
         "equipped_slots":  json.loads(equipped_slots_raw) if equipped_slots_raw else {},
+        "active_conditions": json.loads(row["active_conditions_json"])
+            if "active_conditions_json" in row.keys() and row["active_conditions_json"]  # noqa: SIM118
+            else [],
     }
     jobs_json = row["jobs_json"] if "jobs_json" in row else None # noqa: SIM401 (json, not dict)
     if jobs_json:
@@ -172,6 +175,10 @@ class Database:
         if "equipped_slots_json" not in existing:
             self._conn.execute(
                 "ALTER TABLE characters ADD COLUMN equipped_slots_json TEXT"
+            )
+        if "active_conditions_json" not in existing:
+            self._conn.execute(
+                "ALTER TABLE characters ADD COLUMN active_conditions_json TEXT"
             )
         self._conn.execute("""
             CREATE TABLE IF NOT EXISTS session_characters (
@@ -280,8 +287,9 @@ class Database:
                 experience, ability_scores_json, hp_max, hp_current,
                 movement_speed, saving_throws_json, status,
                 status_notes, inventory_json, gold,
-                created_at, is_pregenerated, updated_at, equipped_slots_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                created_at, is_pregenerated, updated_at, equipped_slots_json,
+                active_conditions_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(character_id) DO UPDATE SET
                 owner_id = excluded.owner_id,
                 name = excluded.name,
@@ -300,7 +308,8 @@ class Database:
                 gold = excluded.gold,
                 is_pregenerated = excluded.is_pregenerated,
                 updated_at = excluded.updated_at,
-                equipped_slots_json = excluded.equipped_slots_json
+                equipped_slots_json = excluded.equipped_slots_json,
+                active_conditions_json = excluded.active_conditions_json
             """,
             (
                 char_data["character_id"],
@@ -323,6 +332,7 @@ class Database:
                 1 if char_data["is_pregenerated"] else 0,
                 _now_iso(),
                 json.dumps(char_data["equipped_slots"]),
+                json.dumps(char_data["active_conditions"]),
             ),
         )
         self._conn.commit()
