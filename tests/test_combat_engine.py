@@ -1546,3 +1546,127 @@ class TestHookObjectValidation:
                 raise AssertionError("Should have raised")
             except ValueError as e:
                 assert "tag" in str(e).lower()
+
+
+# ---------------------------------------------------------------------------
+# instant_move
+# ---------------------------------------------------------------------------
+
+class TestInstantMove:
+    """Tests for engine.instant_move — immediate movement outside the turn queue."""
+
+    def _make_combat_state(self):
+        """Single-character combat state at FAR_MINUS (default starting position)."""
+        from engine import add_npc, register_room
+        from models import Room
+        state = GameState(platform_channel_id="ch", dm_user_id="dm")
+        state.party = Party(name="P")
+        create_character(state, "Aldric", CharacterClass.KNIGHT, "Pack A", owner_id="u1")
+        start_session(state)
+        room = Room(name="Hall", description="Stone hall.")
+        register_room(state, room)
+        state.current_room_id = room.room_id
+        add_npc(state, NPC(name="Goblin", hp_current=5, hp_max=5, defense=0, damage_dice="1d6"))
+        enter_rounds(state)
+        initialize_battlefield(state)
+        open_turn(state)
+        return state
+
+    def _char_id(self, state):
+        return next(iter(state.characters))
+
+    def test_instant_move_updates_range_band(self):
+        from engine import instant_move
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+        cs = state.battlefield.combatants[char_id]
+        assert cs.range_band == RangeBand.FAR_MINUS
+
+        result = instant_move(state, char_id, RangeBand.CLOSE_MINUS)
+        assert result.ok
+        assert cs.range_band == RangeBand.CLOSE_MINUS
+
+    def test_instant_move_sets_used_move_flag(self):
+        from engine import instant_move
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+        cs = state.battlefield.combatants[char_id]
+        assert cs.used_move is False
+
+        instant_move(state, char_id, RangeBand.CLOSE_MINUS)
+        assert cs.used_move is True
+
+    def test_instant_move_blocked_on_second_call(self):
+        from engine import instant_move
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+
+        r1 = instant_move(state, char_id, RangeBand.CLOSE_MINUS)
+        assert r1.ok
+        r2 = instant_move(state, char_id, RangeBand.ENGAGE)
+        assert not r2.ok
+        assert "already moved" in r2.error.lower()
+
+    def test_instant_move_appends_to_round_log(self):
+        from engine import instant_move
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+        prev_log_len = len(state.battlefield.round_log)
+
+        instant_move(state, char_id, RangeBand.CLOSE_MINUS)
+        assert len(state.battlefield.round_log) > prev_log_len
+
+    def test_instant_move_blocked_by_entangled_condition(self):
+        from engine import instant_move
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+        apply_condition(state, char_id, "entangled", duration=2)
+
+        result = instant_move(state, char_id, RangeBand.CLOSE_MINUS)
+        # move_to_band fires on_move hooks which set movement_blocked;
+        # the position should not change (but instant_move still returns ok=True)
+        assert result.ok
+        cs = state.battlefield.combatants[char_id]
+        assert cs.range_band == RangeBand.FAR_MINUS
+
+    def test_used_move_reset_after_auto_resolve_round(self):
+        from engine import instant_move
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+
+        instant_move(state, char_id, RangeBand.CLOSE_MINUS)
+        cs = state.battlefield.combatants[char_id]
+        assert cs.used_move is True
+
+        submit_turn(state, char_id, "hold", combat_action={
+            "action_id": "affect", "target_id": None, "destination": None,
+            "free_text": "hold", "weapon_id": None,
+        })
+        auto_resolve_round(state)
+        assert cs.used_move is False
+
+    def test_used_oracle_reset_after_auto_resolve_round(self):
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+        cs = state.battlefield.combatants[char_id]
+
+        cs.used_oracle = True
+
+        submit_turn(state, char_id, "hold", combat_action={
+            "action_id": "affect", "target_id": None, "destination": None,
+            "free_text": "hold", "weapon_id": None,
+        })
+        auto_resolve_round(state)
+        assert cs.used_oracle is False
+
+    def test_instant_move_fails_outside_combat(self):
+        from engine import instant_move
+        state = GameState(platform_channel_id="ch", dm_user_id="dm")
+        state.party = Party(name="P")
+        create_character(state, "Aldric", CharacterClass.KNIGHT, "Pack A", owner_id="u1")
+        start_session(state)
+        fake_id = next(iter(state.characters))
+
+        result = instant_move(state, fake_id, RangeBand.ENGAGE)
+        assert not result.ok
+        assert "not in combat" in result.error.lower()

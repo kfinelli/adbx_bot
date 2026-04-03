@@ -64,6 +64,7 @@ from engine import (
     emote,
     enter_rounds,
     exit_rounds,
+    instant_move,
     open_turn,
     say,
     submit_turn,
@@ -622,11 +623,42 @@ class CombatActionView(discord.ui.View):
         )
 
     @discord.ui.button(
+        label="Move", style=discord.ButtonStyle.primary,
+        custom_id="combat:move", row=0,
+    )
+    async def move_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        """Instant move — resolves immediately outside the round queue."""
+        state, char = await _check_combat_turn(interaction)
+        if state is None:
+            return
+
+        cs = state.battlefield.combatants.get(char.character_id) if state.battlefield else None
+        if cs is not None and cs.used_move:
+            await interaction.response.send_message(
+                "You've already moved this round.", ephemeral=True
+            )
+            return
+
+        current_band = cs.range_band if cs is not None else None
+        view = DestinationSelectView(
+            action_id="move",
+            char_id=char.character_id,
+            channel_id=self.channel_id,
+            current_band=current_band,
+            instant_resolve=True,
+        )
+        await interaction.response.send_message(
+            f"**{char.name}** — choose where to move:",
+            view=view,
+            ephemeral=True,
+        )
+
+    @discord.ui.button(
         label="Oracle", style=discord.ButtonStyle.primary,
         custom_id="combat:oracle", row=0,
     )
     async def oracle_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        """Oracle works the same in combat as in exploration."""
+        """Oracle works the same in combat as in exploration, but is limited to 1 use per round."""
         channel_id = str(interaction.channel_id)
         state = get_session(channel_id)
         if state is None:
@@ -643,7 +675,17 @@ class CombatActionView(discord.ui.View):
                 "You don't have a character in this session.", ephemeral=True
             )
             return
-        await interaction.response.send_modal(_OracleModal(channel_id=channel_id))
+        # Check oracle use limit in ROUNDS mode
+        if state.mode == SessionMode.ROUNDS and state.battlefield:
+            cs = state.battlefield.combatants.get(char.character_id)
+            if cs is not None and cs.used_oracle:
+                await interaction.response.send_message(
+                    "You've already used Oracle this round.", ephemeral=True
+                )
+                return
+        await interaction.response.send_modal(
+            _OracleModal(channel_id=channel_id, char_id=char.character_id)
+        )
 
     @discord.ui.button(
         label="Strife ↩", style=discord.ButtonStyle.secondary,
@@ -1071,18 +1113,20 @@ class DestinationSelectView(discord.ui.View):
 
     def __init__(
         self,
-        action_id:      str,
-        char_id:        UUID,
-        channel_id:     str,
-        current_band:   RangeBand | None,
-        partial_action: CombatAction | None = None,
+        action_id:       str,
+        char_id:         UUID,
+        channel_id:      str,
+        current_band:    RangeBand | None,
+        partial_action:  CombatAction | None = None,
+        instant_resolve: bool = False,
     ):
         super().__init__(timeout=180)
-        self.action_id      = action_id
-        self.char_id        = char_id
-        self.channel_id     = channel_id
-        self.current_band   = current_band
-        self.partial_action = partial_action  # carries target_id for chained flows
+        self.action_id       = action_id
+        self.char_id         = char_id
+        self.channel_id      = channel_id
+        self.current_band    = current_band
+        self.partial_action  = partial_action   # carries target_id for chained flows
+        self.instant_resolve = instant_resolve  # True for the top-level Move button
 
         options = [
             discord.SelectOption(
@@ -1114,6 +1158,22 @@ class DestinationSelectView(discord.ui.View):
             return
 
         destination = RangeBand(interaction.data["values"][0])
+
+        if self.instant_resolve:
+            # Top-level Move button: resolve immediately without entering the turn queue.
+            state = get_session(self.channel_id)
+            result = instant_move(state, self.char_id, destination)
+            if not result.ok:
+                await interaction.response.edit_message(
+                    content=result.error, view=None
+                )
+                return
+            await save_session_async(state)
+            await interaction.response.edit_message(
+                content=f"Moved to **{destination.value.replace('_', ' ')}**.", view=None
+            )
+            await update_status(interaction.channel, state)
+            return
 
         if self.partial_action is not None:
             # Chained flow: merge destination into the partial action
@@ -1367,9 +1427,10 @@ class _SayEmoteModal(discord.ui.Modal):
 
 
 class _OracleModal(discord.ui.Modal):
-    def __init__(self, *, channel_id: str) -> None:
+    def __init__(self, *, channel_id: str, char_id: UUID | None = None) -> None:
         super().__init__(title="Oracle")
         self.channel_id = channel_id
+        self.char_id    = char_id
         self.question = discord.ui.TextInput(
             label="Question or brief interaction",
             placeholder=(
@@ -1397,6 +1458,11 @@ class _OracleModal(discord.ui.Modal):
             await interaction.response.send_message(f"{result.error}", ephemeral=True)
             return
         oracle = result.data
+        # Mark oracle used for this round (ROUNDS mode only)
+        if self.char_id is not None and state.battlefield:
+            cs = state.battlefield.combatants.get(self.char_id)
+            if cs is not None:
+                cs.used_oracle = True
         await interaction.response.send_message("Oracle submitted.", ephemeral=True)
         msg = await post_oracle_question(interaction.channel, oracle)
         oracle.message_id = msg.id

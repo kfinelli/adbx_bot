@@ -21,7 +21,13 @@ from models import DoorState, GameState, PlayerTurnSubmission, SessionMode, Turn
 
 # Import managers and utilities from submodules
 from .character import CharacterManager
-from .combat import CombatAction, apply_condition, auto_resolve_round, initialize_battlefield
+from .combat import (
+    CombatAction,
+    apply_condition,
+    auto_resolve_round,
+    initialize_battlefield,
+    instant_move,
+)
 from .core import TurnManager
 from .data_loader import (
     ACTION_REGISTRY,
@@ -689,6 +695,7 @@ __all__ = [
     "initialize_battlefield",
     "auto_resolve_round",
     "apply_condition",
+    "instant_move",
     # Data registries (read-only, loaded from data/ at startup)
     "ACTION_REGISTRY",
     "CONDITION_REGISTRY",

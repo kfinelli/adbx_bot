@@ -223,6 +223,34 @@ def apply_condition(
 
 
 # ---------------------------------------------------------------------------
+# instant_move
+# ---------------------------------------------------------------------------
+
+def instant_move(state: GameState, char_id: UUID, destination: RangeBand) -> object:  # EngineResult
+    """
+    Resolve a player's Move action immediately, outside the round submission
+    queue.  The range_band update is visible to subsequent Act submissions this
+    round.  Appends a narrative line to battlefield.round_log.
+    """
+    if state.battlefield is None:
+        return _err(state, "Not in combat.")
+    cs = state.battlefield.combatants.get(char_id)
+    if cs is None:
+        return _err(state, "Not in combat.")
+    if cs.used_move:
+        return _err(state, "You've already moved this round.")
+
+    action = CombatAction(action_id="move", destination=destination)
+    log: list[str] = []
+    _hook_move_to_band(state, char_id, action, log, {})
+
+    cs.used_move = True
+    state.battlefield.round_log.extend(log)
+    state.updated_at = _now()
+    return _ok(state, "\n".join(log) if log else "Move resolved.")
+
+
+# ---------------------------------------------------------------------------
 # auto_resolve_round
 # ---------------------------------------------------------------------------
 
@@ -299,6 +327,8 @@ def auto_resolve_round(state: GameState) -> object:  # EngineResult
         cs.acted_this_round = False
         cs.skip_action      = False
         cs.movement_blocked = False
+        cs.used_move        = False
+        cs.used_oracle      = False
 
     # --- 7. Build narrative
     narrative   = "\n".join(log) if log else "The round passes without incident."

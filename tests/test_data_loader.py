@@ -139,7 +139,7 @@ class TestProductionDataFiles:
         assert j.primary_stat == "PHY"
         assert j.max_level == 5
         assert "attack" in j.combat_actions
-        assert "move"   in j.combat_actions
+        assert "move"   not in j.combat_actions  # Move is a top-level button, not an Act action
         assert "affect" in j.combat_actions
 
     def test_job_thief_values(self):

@@ -641,6 +641,8 @@ class CombatantState:
     active_conditions: list[ActiveCondition]   = field(default_factory=list)
     skip_action:       bool                    = False
     movement_blocked:  bool                    = False
+    used_move:         bool                    = False
+    used_oracle:       bool                    = False
 
 
 @dataclass
