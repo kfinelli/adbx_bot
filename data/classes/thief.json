@@ -8,5 +8,5 @@
   "primary_stat": "FNS",
   "max_level": 5,
   "description": "",
-  "combat_actions": ["attack", "charge", "poison", "affect"]
+  "combat_actions": ["attack", "charge", "poison", "affect", "abscond"]
 }

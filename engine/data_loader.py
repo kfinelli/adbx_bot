@@ -136,6 +136,7 @@ class ConditionDef:
     hooks:          dict[str, HookEntry] = field(default_factory=dict)
     stat_modifiers: dict[str, int]       = field(default_factory=dict)
     grants_actions: list[str]            = field(default_factory=list)
+    stackable:      bool                 = False
 
 
 @dataclass
@@ -242,7 +243,7 @@ _SKILL_REQUIRED = {
 }
 
 _VALID_BUTTON_STYLES  = {"primary", "secondary", "danger", "success"}
-_VALID_ACTION_TYPES   = {"attack", "move", "affect"}
+_VALID_ACTION_TYPES   = {"attack", "move", "affect", "combat"}
 _VALID_DURATION_TYPES = {"rounds", "permanent"}
 _VALID_HOOK_NAMES     = {
     "on_turn_start", "on_turn_end", "on_attack", "on_hit",
@@ -398,6 +399,7 @@ def _load_condition(path: Path) -> ConditionDef:
         hooks=hooks,
         stat_modifiers=dict(data.get("stat_modifiers", {})),
         grants_actions=list(data.get("grants_actions", [])),
+        stackable=bool(data.get("stackable", False)),
     )
 
 

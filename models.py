@@ -200,7 +200,7 @@ class Character:
             if isinstance(definition, Gear):
                 total += definition.defense
         total += sum(
-            CONDITION_REGISTRY[c.condition_id].stat_modifiers.get("defense", 0)
+            CONDITION_REGISTRY[c.condition_id].stat_modifiers.get("defense", 0) * c.stacks
             for c in self.active_conditions
             if c.condition_id in CONDITION_REGISTRY
         )
@@ -217,7 +217,7 @@ class Character:
             if isinstance(definition, Gear):
                 total += definition.resistance
         total += sum(
-            CONDITION_REGISTRY[c.condition_id].stat_modifiers.get("resistance", 0)
+            CONDITION_REGISTRY[c.condition_id].stat_modifiers.get("resistance", 0) * c.stacks
             for c in self.active_conditions
             if c.condition_id in CONDITION_REGISTRY
         )
@@ -628,9 +628,10 @@ class ActiveCondition:
     until explicitly removed).  source_id is the combatant that applied it,
     if any (used for some condition-removal rules).
     """
-    condition_id:    str            = ""
-    duration_rounds: int | None  = None
+    condition_id:    str         = ""
+    duration_rounds: int | None = None
     source_id:       UUID | None = None
+    stacks:          int         = 1
 
 
 @dataclass
@@ -668,8 +669,9 @@ class CombatBattlefield:
     round_log accumulates a plain-text narrative for each auto-resolved
     action within the current round.
     """
-    combatants: dict[UUID, CombatantState]  = field(default_factory=dict)
-    round_log:  list[str]                   = field(default_factory=list)
+    combatants:        dict[UUID, CombatantState] = field(default_factory=dict)
+    round_log:         list[str]                  = field(default_factory=list)
+    abscond_succeeded: bool                       = False
 
 
 @dataclass

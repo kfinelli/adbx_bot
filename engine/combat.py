@@ -210,6 +210,19 @@ def apply_condition(
     if combatant is None:
         return _err(state, f"Combatant {target_id} not found.")
 
+    cond_def    = CONDITION_REGISTRY[condition_id]
+    target_name = _combatant_name(state, target_id)
+
+    # Stackable conditions accumulate stacks rather than being replaced.
+    if cond_def.stackable:
+        existing = next(
+            (c for c in combatant.active_conditions if c.condition_id == condition_id), None
+        )
+        if existing is not None:
+            existing.stacks += 1
+            state.updated_at = _now()
+            return _ok(state, f"{target_name} is now {cond_def.label} ×{existing.stacks}.")
+
     combatant.active_conditions = [
         c for c in combatant.active_conditions if c.condition_id != condition_id
     ]
@@ -218,9 +231,6 @@ def apply_condition(
         duration_rounds=duration,
         source_id=source_id,
     ))
-
-    cond_def    = CONDITION_REGISTRY[condition_id]
-    target_name = _combatant_name(state, target_id)
     state.updated_at = _now()
     return _ok(state, f"{target_name} is now {cond_def.label}.")
 
@@ -337,6 +347,12 @@ def auto_resolve_round(state: GameState) -> object:  # EngineResult
     narrative   = "\n".join(log) if log else "The round passes without incident."
     bf.round_log = log[:]
     state.updated_at = _now()
+
+    # If Abscond succeeded this round, exit combat now (after all actions resolved).
+    if bf.abscond_succeeded:
+        from engine.session import SessionManager  # local import avoids circular dep
+        SessionManager().exit_rounds(state)
+
     return _ok(state, narrative)
 
 
@@ -420,7 +436,7 @@ def _effective_stat_mod(state: GameState, actor_id: UUID, stat: str) -> int:
     base_mod = get_stat_modifier(base_val)
 
     bonus = sum(
-        CONDITION_REGISTRY[c.condition_id].stat_modifiers.get(stat, 0)
+        CONDITION_REGISTRY[c.condition_id].stat_modifiers.get(stat, 0) * c.stacks
         for c in actor_char.active_conditions
         if c.condition_id in CONDITION_REGISTRY
     )
@@ -439,7 +455,7 @@ def _effective_defense(state: GameState, combatant_id: UUID) -> int:
     if npc is None:
         return 0
     base = npc.defense + sum(
-        CONDITION_REGISTRY[c.condition_id].stat_modifiers.get("defense", 0)
+        CONDITION_REGISTRY[c.condition_id].stat_modifiers.get("defense", 0) * c.stacks
         for c in npc.active_conditions
         if c.condition_id in CONDITION_REGISTRY
     )
@@ -458,7 +474,7 @@ def _effective_resistance(state: GameState, combatant_id: UUID) -> int:
     if npc is None:
         return 0
     base = npc.resistance + sum(
-        CONDITION_REGISTRY[c.condition_id].stat_modifiers.get("resistance", 0)
+        CONDITION_REGISTRY[c.condition_id].stat_modifiers.get("resistance", 0) * c.stacks
         for c in npc.active_conditions
         if c.condition_id in CONDITION_REGISTRY
     )
@@ -476,7 +492,7 @@ def _effective_finesse(state: GameState, combatant_id: UUID) -> int:
     combatant = char if char else npc
     if combatant:
         base += sum(
-            CONDITION_REGISTRY[c.condition_id].stat_modifiers.get("finesse", 0)
+            CONDITION_REGISTRY[c.condition_id].stat_modifiers.get("finesse", 0) * c.stacks
             for c in combatant.active_conditions
             if c.condition_id in CONDITION_REGISTRY
         )
@@ -895,6 +911,80 @@ def _hook_block_movement(
         log.append(f"{_combatant_name(state, actor_id)} is entangled and cannot move!")
 
 
+def _hook_abscond_roll(
+    state:    GameState,
+    actor_id: UUID,
+    action:   CombatAction | None,
+    log:      list[str],
+    params:   dict,
+) -> None:
+    """
+    Flee attempt: 1d1000 + Finesse vs 500 + highest enemy Finesse.
+    Difficulty reduced by the actor's accumulated 'abscond_bonus' condition modifier.
+    Enemies at ENGAGE range block escape entirely.
+    Applies the stacking 'absconding' condition to all player combatants on every
+    attempt (win or lose), so each subsequent try gets easier.
+    Sets bf.abscond_succeeded = True on success; auto_resolve_round calls exit_rounds.
+
+    params: (none)
+    """
+    bf = state.battlefield
+    if bf is None:
+        return
+
+    actor_name = _combatant_name(state, actor_id)
+
+    # Positional block: any enemy at ENGAGE prevents escape
+    for cid, cs in bf.combatants.items():
+        if not cs.is_player and cs.range_band == RangeBand.ENGAGE:
+            npc = _find_npc(state, cid)
+            blocker = npc.name if npc else "An enemy"
+            log.append(f"{actor_name} tries to flee but {blocker} is blocking the way!")
+            return
+
+    # Roll
+    roll    = random.randint(1, 1000)
+    finesse = _effective_finesse(state, actor_id)
+    total   = roll + finesse
+
+    # Threshold: 500 + highest enemy Finesse − accumulated abscond_bonus
+    enemy_finesse = max(
+        (npc.ability_scores.finesse
+         for cid2, cs2 in bf.combatants.items()
+         if not cs2.is_player
+         for npc in [_find_npc(state, cid2)]
+         if npc is not None),
+        default=0,
+    )
+    actor_char = state.characters.get(actor_id)
+    bonus = 0
+    if actor_char:
+        bonus = sum(
+            CONDITION_REGISTRY[c.condition_id].stat_modifiers.get("abscond_bonus", 0) * c.stacks
+            for c in actor_char.active_conditions
+            if c.condition_id in CONDITION_REGISTRY
+        )
+    threshold = max(0, 500 + enemy_finesse - bonus)
+
+    # Apply stacking absconding condition to all allies (before logging outcome)
+    for cid3, cs3 in bf.combatants.items():
+        if cs3.is_player:
+            apply_condition(state, cid3, "absconding", duration=999)
+
+    # Outcome
+    if total >= threshold:
+        log.append(
+            f"{actor_name} rolls {roll} + {finesse} = **{total}** vs {threshold} — "
+            f"the party flees!"
+        )
+        bf.abscond_succeeded = True
+    else:
+        log.append(
+            f"{actor_name} rolls {roll} + {finesse} = {total} vs {threshold} — "
+            f"failed to abscond."
+        )
+
+
 # ---------------------------------------------------------------------------
 # Hook registry
 # ---------------------------------------------------------------------------
@@ -917,6 +1007,8 @@ _HOOK_DISPATCH: dict[str, object] = {
     "apply_condition": _hook_apply_condition,
     "deal_damage":     _hook_deal_damage,
     "skip_action":     _hook_skip_action,
+    # Flee
+    "abscond_roll":    _hook_abscond_roll,
 }
 
 

@@ -1,0 +1,11 @@
+{
+  "action_id": "abscond",
+  "label": "Abscond",
+  "button_style": "secondary",
+  "action_type": "combat",
+  "description": "Attempt to flee combat. Roll 1d1000 + Finesse vs 500 + highest enemy Finesse. Each prior attempt this combat eases the roll.",
+  "requires_target": false,
+  "requires_destination": false,
+  "range_requirement": [],
+  "effect_tags": ["abscond_roll"]
+}

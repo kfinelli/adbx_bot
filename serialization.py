@@ -272,6 +272,7 @@ def serialize_active_condition(c: ActiveCondition) -> dict:
         "condition_id":    c.condition_id,
         "duration_rounds": c.duration_rounds,
         "source_id":       _uuid(c.source_id),
+        "stacks":          c.stacks,
     }
 
 
@@ -561,6 +562,7 @@ def deserialize_active_condition(d: dict) -> ActiveCondition:
         condition_id=d["condition_id"],
         duration_rounds=d.get("duration_rounds"),
         source_id=_load_uuid(d.get("source_id")),
+        stacks=d.get("stacks", 1),
     )
 
 

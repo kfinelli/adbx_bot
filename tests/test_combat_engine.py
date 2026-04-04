@@ -1681,3 +1681,186 @@ class TestInstantMove:
         result = instant_move(state, fake_id, RangeBand.ENGAGE)
         assert not result.ok
         assert "not in combat" in result.error.lower()
+
+
+# ---------------------------------------------------------------------------
+# TestAbscondRoll
+# ---------------------------------------------------------------------------
+
+class TestAbscondRoll:
+    """Tests for _hook_abscond_roll and stacking absconding condition."""
+
+    def _make_combat_state(self):
+        """One player vs one NPC at FAR_PLUS (default), player at FAR_MINUS."""
+        from engine import add_npc, register_room
+        from models import Room
+        state = GameState(platform_channel_id="ch", dm_user_id="dm")
+        state.party = Party(name="P")
+        create_character(state, "Aldric", CharacterClass.KNIGHT, "Pack A", owner_id="u1")
+        start_session(state)
+        room = Room(name="Hall", description="Stone hall.")
+        register_room(state, room)
+        state.current_room_id = room.room_id
+        add_npc(state, NPC(name="Goblin", hp_current=5, hp_max=5, defense=0, damage_dice="1d6"))
+        enter_rounds(state)
+        open_turn(state)
+        return state
+
+    def _char_id(self, state):
+        return next(iter(state.characters.keys()))
+
+    def _npc(self, state):
+        for g in state.npc_roster.groups.values():
+            for n in g.npcs:
+                return n
+
+    def test_blocked_by_enemy_at_engage(self):
+        """Enemy at ENGAGE prevents Abscond regardless of roll."""
+        from unittest.mock import patch
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+        npc = self._npc(state)
+
+        # Move enemy to ENGAGE
+        cs_npc = state.battlefield.combatants[npc.npc_id]
+        cs_npc.range_band = RangeBand.ENGAGE
+
+        with patch("engine.combat.random.randint", return_value=1000):
+            submit_turn(state, char_id, "Abscond", combat_action={
+                "action_id": "abscond", "target_id": None, "destination": None,
+                "free_text": None, "weapon_id": None,
+            })
+            auto_resolve_round(state)
+
+        # Combat should NOT have ended
+        assert state.battlefield is not None
+        assert not state.battlefield.abscond_succeeded
+
+    def test_low_roll_fails(self):
+        """Roll of 1 + low finesse should not meet threshold."""
+        from unittest.mock import patch
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+
+        with patch("engine.combat.random.randint", return_value=1):
+            submit_turn(state, char_id, "Abscond", combat_action={
+                "action_id": "abscond", "target_id": None, "destination": None,
+                "free_text": None, "weapon_id": None,
+            })
+            auto_resolve_round(state)
+
+        # State should still be ROUNDS (auto_resolve_round did not exit)
+        from models import SessionMode
+        assert state.mode == SessionMode.ROUNDS
+
+    def test_high_roll_succeeds_and_exits_combat(self):
+        """Roll of 1000 should always beat threshold; combat ends afterward."""
+        from unittest.mock import patch
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+
+        with patch("engine.combat.random.randint", return_value=1000):
+            submit_turn(state, char_id, "Abscond", combat_action={
+                "action_id": "abscond", "target_id": None, "destination": None,
+                "free_text": None, "weapon_id": None,
+            })
+            auto_resolve_round(state)
+
+        from models import SessionMode
+        assert state.mode == SessionMode.EXPLORATION
+        assert state.battlefield is None
+
+    def test_condition_applied_on_failure(self):
+        """absconding condition is applied to all allies even on a failed roll."""
+        from unittest.mock import patch
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+
+        with patch("engine.combat.random.randint", return_value=1):
+            submit_turn(state, char_id, "Abscond", combat_action={
+                "action_id": "abscond", "target_id": None, "destination": None,
+                "free_text": None, "weapon_id": None,
+            })
+            auto_resolve_round(state)
+
+        char = state.characters[char_id]
+        assert any(c.condition_id == "absconding" for c in char.active_conditions)
+
+    def test_condition_stacks_on_second_attempt(self):
+        """A second Abscond attempt gives stacks == 2 on the absconding condition."""
+        from unittest.mock import patch
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+
+        for _ in range(2):
+            open_turn(state)
+            with patch("engine.combat.random.randint", return_value=1):
+                submit_turn(state, char_id, "Abscond", combat_action={
+                    "action_id": "abscond", "target_id": None, "destination": None,
+                    "free_text": None, "weapon_id": None,
+                })
+                auto_resolve_round(state)
+
+        char = state.characters[char_id]
+        cond = next(c for c in char.active_conditions if c.condition_id == "absconding")
+        assert cond.stacks == 2
+
+    def test_stackable_condition_increments_stacks(self):
+        """apply_condition on a stackable condition increments stacks, not replaces."""
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+
+        apply_condition(state, char_id, "absconding", duration=3)
+        apply_condition(state, char_id, "absconding", duration=3)
+
+        char = state.characters[char_id]
+        conds = [c for c in char.active_conditions if c.condition_id == "absconding"]
+        assert len(conds) == 1
+        assert conds[0].stacks == 2
+
+    def test_non_stackable_condition_still_replaces(self):
+        """Non-stackable conditions continue to replace (duration refresh)."""
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+
+        apply_condition(state, char_id, "poisoned", duration=1)
+        apply_condition(state, char_id, "poisoned", duration=5)
+
+        char = state.characters[char_id]
+        conds = [c for c in char.active_conditions if c.condition_id == "poisoned"]
+        assert len(conds) == 1
+        assert conds[0].duration_rounds == 5
+        assert conds[0].stacks == 1
+
+    def test_stacks_multiply_stat_bonus(self):
+        """absconding at stacks=2 gives 2× the abscond_bonus modifier."""
+        from engine.data_loader import CONDITION_REGISTRY
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+
+        apply_condition(state, char_id, "absconding", duration=99)
+        apply_condition(state, char_id, "absconding", duration=99)
+
+        char = state.characters[char_id]
+        cond = next(c for c in char.active_conditions if c.condition_id == "absconding")
+        assert cond.stacks == 2
+
+        bonus_per_stack = CONDITION_REGISTRY["absconding"].stat_modifiers["abscond_bonus"]
+        total_bonus = bonus_per_stack * cond.stacks
+        assert total_bonus == bonus_per_stack * 2
+
+    def test_stacks_round_trip_serialization(self):
+        """stacks field survives serialize_active_condition / deserialize_active_condition."""
+        from serialization import deserialize_active_condition, serialize_active_condition
+        cond = ActiveCondition(condition_id="absconding", duration_rounds=3, stacks=4)
+        d = serialize_active_condition(cond)
+        assert d["stacks"] == 4
+        reloaded = deserialize_active_condition(d)
+        assert reloaded.stacks == 4
+
+    def test_stacks_defaults_to_one_on_old_saves(self):
+        """Old serialized dicts without 'stacks' key deserialize to stacks=1."""
+        from serialization import deserialize_active_condition
+        old_data = {"condition_id": "poisoned", "duration_rounds": 2, "source_id": None}
+        cond = deserialize_active_condition(old_data)
+        assert cond.stacks == 1

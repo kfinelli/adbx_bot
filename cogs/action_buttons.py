@@ -687,42 +687,6 @@ class CombatActionView(discord.ui.View):
             _OracleModal(channel_id=channel_id, char_id=char.character_id)
         )
 
-    @discord.ui.button(
-        label="Strife ↩", style=discord.ButtonStyle.secondary,
-        custom_id="combat:strife_end", row=0,
-    )
-    async def end_strife_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        """End combat — DM or party leader only."""
-        channel_id = str(interaction.channel_id)
-        state = get_session(channel_id)
-        if state is None:
-            await interaction.response.send_message(
-                "No active session in this channel.", ephemeral=True
-            )
-            return
-        user_id = str(interaction.user.id)
-        char = _find_character(state, user_id)
-        is_dm = state.dm_user_id == user_id
-        is_leader = (
-            char is not None
-            and state.party is not None
-            and state.party.leader_id == char.character_id
-        )
-        if not (is_dm or is_leader):
-            await interaction.response.send_message(
-                "Only the DM or party leader can end combat.", ephemeral=True
-            )
-            return
-        result = exit_rounds(state)
-        if not result.ok:
-            await interaction.response.send_message(f"{result.error}", ephemeral=True)
-            return
-        if state.current_turn is None or state.current_turn.status != TurnStatus.OPEN:
-            open_turn(state)
-        narrative = "Combat ended — returning to exploration."
-        await interaction.response.send_message(narrative, ephemeral=True)
-        await repost_status(interaction.channel, state, narrative=narrative)
-
     # row 1 ----------------------------------------------------------------
 
     @discord.ui.button(

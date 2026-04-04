@@ -9,5 +9,5 @@
   "primary_stat": "RSN",
   "max_level": 5,
   "description": "",
-  "combat_actions": ["attack", "charge", "affect"]
+  "combat_actions": ["attack", "charge", "affect", "abscond"]
 }
