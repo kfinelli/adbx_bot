@@ -1,0 +1,9 @@
+{
+  "condition_id": "abdication-immunity",
+  "label": "Abdication Immunity",
+  "duration_type": "rounds",
+  "stackable": false,
+  "hooks": {},
+  "stat_modifiers": {},
+  "grants_actions": []
+}

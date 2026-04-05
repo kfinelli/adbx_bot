@@ -11,7 +11,7 @@ import discord
 
 from engine import equip_item, unequip_item
 from engine.azure_constants import UI_SLOTS, ItemSlot
-from engine.data_loader import ITEM_REGISTRY
+from engine.data_loader import CONDITION_REGISTRY, ITEM_REGISTRY
 from engine.item import EquipItem
 from store import save_session_async
 
@@ -83,7 +83,12 @@ def _character_sheet(char, state) -> str:
             item_name = "(empty)"
         slot_lines.append(f"  {_SLOT_LABELS[slot]}: {item_name}")
 
-    st = char.saving_throws
+    save_cond_bonus = sum(
+        CONDITION_REGISTRY[c.condition_id].stat_modifiers.get("save", 0) * c.stacks
+        for c in char.active_conditions
+        if c.condition_id in CONDITION_REGISTRY
+    )
+    save_base = char.saving_throws.get("save", 0) + save_cond_bonus
     sheet_lines = [
         sep,
         f"{char.name}  \u2014  {char.character_class.value} Level {char.level}{leader_note}",
@@ -94,14 +99,8 @@ def _character_sheet(char, state) -> str:
         f"RSN {a.reason:+d}   SVY {a.savvy:+d}",
         sep,
         "Saves:",
-        "  PHY: {}   FNS: {}".format(
-            st.get("save", 0) + a.physique,
-            st.get("save", 0) + a.finesse,
-        ),
-        "  RSN: {}   SVY: {}".format(
-            st.get("save", 0) + a.reason,
-            st.get("save", 0) + a.savvy,
-        ),
+        f"  PHY: {save_base + a.physique}   FNS: {save_base + a.finesse}",
+        f"  RSN: {save_base + a.reason}   SVY: {save_base + a.savvy}",
         sep,
         "Equipped:",
         *slot_lines,

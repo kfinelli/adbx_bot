@@ -641,8 +641,9 @@ def _hook_weapon_attack(
     base_roll = roll_dice_expr(dice)["total"]
     is_crit = random.randint(1, 10) == 1
     crit_bonus = roll_dice_expr(dice)["total"] if is_crit else 0
-    min_damage = max(1, str_mod)
-    damage = max(min_damage, base_roll + crit_bonus + str_mod)
+    stat_bonus = str_mod if params.get("add_stat_bonus") and actor_char else 0
+    min_damage = 1
+    damage = max(min_damage, base_roll + crit_bonus + stat_bonus)
     mitigation = (
         _effective_resistance(state, target_id)
         if targets_stat == "resistance"
@@ -843,22 +844,26 @@ def _hook_apply_condition(
     params:   dict,
 ) -> None:
     """
-    Apply a condition to action.target_id.
+    Apply a condition to action.target_id, or to actor_id if params["target"] == "self".
 
     params:
       condition  (str, required) — condition_id to apply
       duration   (int, default 3) — duration in rounds; omit for permanent
+      target     (str, optional) — "self" to apply to the actor instead of action.target_id
     """
     condition_id = params.get("condition")
     if not condition_id:
         log.append("[apply_condition: 'condition' param is required]")
         return
 
-    if action is None or action.target_id is None:
-        log.append(f"[apply_condition({condition_id}): no target specified]")
-        return
+    if params.get("target") == "self":
+        target_id = actor_id
+    else:
+        if action is None or action.target_id is None:
+            log.append(f"[apply_condition({condition_id}): no target specified]")
+            return
+        target_id = action.target_id
 
-    target_id   = action.target_id
     actor_name  = _combatant_name(state, actor_id)
     target_name = _combatant_name(state, target_id)
 
@@ -872,7 +877,10 @@ def _hook_apply_condition(
 
     cond_def = CONDITION_REGISTRY.get(condition_id)
     label    = cond_def.label if cond_def else condition_id
-    log.append(f"{actor_name} applies {label} to {target_name}! ({duration} rounds)")
+    if target_id == actor_id:
+        log.append(f"{actor_name} is now {label}! ({duration} rounds)")
+    else:
+        log.append(f"{actor_name} applies {label} to {target_name}! ({duration} rounds)")
 
 
 def _hook_skip_action(

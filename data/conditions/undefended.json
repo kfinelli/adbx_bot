@@ -1,0 +1,9 @@
+{
+  "condition_id": "undefended",
+  "label": "Undefended",
+  "duration_type": "rounds",
+  "stackable": false,
+  "hooks": {},
+  "stat_modifiers": {"defense": -9999},
+  "grants_actions": []
+}

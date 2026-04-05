@@ -1,0 +1,9 @@
+{
+  "condition_id": "abjuring",
+  "label": "Abjuring",
+  "duration_type": "rounds",
+  "stackable": false,
+  "hooks": {},
+  "stat_modifiers": {"defense": 200, "finesse": 200, "save": 100},
+  "grants_actions": []
+}

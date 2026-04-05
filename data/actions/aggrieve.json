@@ -1,0 +1,14 @@
+{
+  "action_id": "aggrieve",
+  "label": "Aggrieve",
+  "button_style": "danger",
+  "action_type": "attack",
+  "description": "Make a melee attack against a target in range.",
+  "requires_target": true,
+  "requires_destination": false,
+  "range_requirement": ["engage", "close_minus", "close_plus"],
+  "effect_tags": [
+    {"tag": "melee_attack", "dice": "1d6"},
+    "check_death"
+  ]
+}

@@ -138,9 +138,9 @@ class TestProductionDataFiles:
         assert j.base_save == 4
         assert j.primary_stat == "PHY"
         assert j.max_level == 5
-        assert "attack" in j.combat_actions
-        assert "move"   not in j.combat_actions  # Move is a top-level button, not an Act action
-        assert "affect" in j.combat_actions
+        assert "aggrieve" in j.combat_actions
+        assert "move"     not in j.combat_actions  # Move is a top-level button, not an Act action
+        assert "affect"   in j.combat_actions
 
     def test_job_thief_values(self):
         j = CLASS_DEFINITIONS["THIEF"]
@@ -149,7 +149,7 @@ class TestProductionDataFiles:
         assert j.weapon_rank == "D"
         assert j.base_save == 2
         assert j.primary_stat == "FNS"
-        assert "poison" in j.combat_actions
+        assert "assail" in j.combat_actions
 
     def test_job_mage_values(self):
         j = CLASS_DEFINITIONS["MAGE"]
@@ -163,9 +163,23 @@ class TestProductionDataFiles:
         assert j.display_name == "Dilettante"
         assert j.primary_stat == "SVY"
 
-    def test_condition_registry_has_four_conditions(self):
-        for cid in ("poisoned", "stunned", "strengthened", "entangled"):
+    def test_condition_registry_has_expected_conditions(self):
+        for cid in (
+            "poisoned", "stunned", "strengthened", "entangled", "absconding",
+            "abdication-immunity", "undefended", "abjuring",
+        ):
             assert cid in CONDITION_REGISTRY
+
+    def test_all_classes_have_a_actions(self):
+        expected = {"advance", "abdicate", "aggrieve", "assail", "abjure", "abscond", "affect"}
+        for key, job_def in CLASS_DEFINITIONS.items():
+            assert expected == set(job_def.combat_actions), (
+                f"Class {key} has wrong combat_actions: {job_def.combat_actions}"
+            )
+
+    def test_new_actions_exist_in_registry(self):
+        for action_id in ("aggrieve", "advance", "abdicate", "assail", "abjure"):
+            assert action_id in ACTION_REGISTRY, f"Missing action: {action_id}"
 
     def test_all_job_combat_actions_exist_in_registry(self):
         """Every action ID referenced by any job must exist in ACTION_REGISTRY."""
