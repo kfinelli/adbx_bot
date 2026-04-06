@@ -291,8 +291,8 @@ def auto_resolve_round(state: GameState) -> object:  # EngineResult
     if state.current_turn is None:
         return _err(state, "No current turn to resolve.")
 
-    log: list[str] = []
     bf  = state.battlefield
+    log: list[str] = list(bf.round_log)  # carry forward instant_move entries from this round
 
     # --- 1. Player actions
     player_actions: dict[UUID, CombatAction] = {}
