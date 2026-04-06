@@ -6,7 +6,7 @@
   "description": "Move to a range band and immediately attack a target there.",
   "requires_target": true,
   "requires_destination": true,
-  "range_requirement": [],
+  "range_requirement": null,
   "effect_tags": [
     "move_to_band",
     {"tag": "melee_attack", "dice": "1d6"},

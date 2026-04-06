@@ -80,6 +80,11 @@ _BAND_ORDER: list[RangeBand] = [
 _BAND_INDEX: dict[RangeBand, int] = {b: i for i, b in enumerate(_BAND_ORDER)}
 
 
+def _band_distance(a: RangeBand, b: RangeBand) -> int:
+    """Absolute number of band steps between two range bands."""
+    return abs(_BAND_INDEX[a] - _BAND_INDEX[b])
+
+
 def _adjacent_bands(band: RangeBand) -> list[RangeBand]:
     """Return the bands directly adjacent (one step either side) to band."""
     idx = _BAND_INDEX[band]
@@ -372,14 +377,18 @@ def _execute_action(
         log.append(f"[Unknown action '{action.action_id}' — skipped]")
         return
 
-    if action_def.range_requirement:
-        cs = state.battlefield.combatants.get(actor_id)
-        if cs and cs.range_band.value not in action_def.range_requirement:
-            log.append(
-                f"{_combatant_name(state, actor_id)} cannot use {action_def.label} "
-                f"from {cs.range_band.value}."
-            )
-            return
+    if isinstance(action_def.range_requirement, int):
+        actor_cs  = state.battlefield.combatants.get(actor_id)
+        target_cs = state.battlefield.combatants.get(action.target_id) if action.target_id else None
+        if actor_cs and target_cs:
+            dist = _band_distance(actor_cs.range_band, target_cs.range_band)
+            if dist > action_def.range_requirement:
+                log.append(
+                    f"{_combatant_name(state, actor_id)} cannot use {action_def.label} "
+                    f"from {actor_cs.range_band.value} — target is {dist} band(s) away "
+                    f"(max {action_def.range_requirement})."
+                )
+                return
 
     for hook_entry in action_def.effect_tags:
         _dispatch_hook(hook_entry, state, actor_id, action, log)
@@ -395,8 +404,6 @@ def _npc_decide(
     cs:     CombatantState,
 ) -> CombatAction | None:
     """Simple NPC AI: move toward players if far; attack lowest-HP player if in range."""
-    attack_def = ACTION_REGISTRY.get("attack")
-
     living_players = [
         (cid, pcs) for cid, pcs in state.battlefield.combatants.items()
         if pcs.is_player and _is_alive(state, cid)
@@ -404,12 +411,11 @@ def _npc_decide(
     if not living_players:
         return None
 
-    if attack_def and (
-        not attack_def.range_requirement
-        or cs.range_band.value in attack_def.range_requirement
-    ):
-        target_id = _lowest_hp_player(state, living_players)
-        if target_id:
+    _NPC_WEAPON_RANGE = 0
+    target_id = _lowest_hp_player(state, living_players)
+    if target_id:
+        target_cs = state.battlefield.combatants.get(target_id)
+        if target_cs and _band_distance(cs.range_band, target_cs.range_band) <= _NPC_WEAPON_RANGE:
             return CombatAction(action_id="attack", target_id=target_id)
 
     destination = _step_toward(cs.range_band, RangeBand.ENGAGE)
@@ -582,6 +588,32 @@ def _hook_weapon_attack(
     target_id   = action.target_id
     actor_name  = _combatant_name(state, actor_id)
     target_name = _combatant_name(state, target_id)
+
+    # Range check: determine weapon range then compare to band distance
+    actor_cs  = state.battlefield.combatants.get(actor_id)
+    target_cs = state.battlefield.combatants.get(target_id)
+    if actor_cs and target_cs:
+        weapon_range = 0  # default: melee (also used for NPCs without equipped weapons)
+        maybe_char = state.characters.get(actor_id)
+        if maybe_char:
+            weapons = maybe_char.equipped_weapons()
+            if weapons:
+                _, w_def = weapons[0]
+                if action.weapon_id:
+                    w_pair = next(
+                        ((i, d) for i, d in weapons if i.item_id == action.weapon_id),
+                        None,
+                    )
+                    if w_pair:
+                        _, w_def = w_pair
+                weapon_range = getattr(w_def, "range", 0)
+        dist = _band_distance(actor_cs.range_band, target_cs.range_band)
+        if dist > weapon_range:
+            log.append(
+                f"{actor_name} cannot reach {target_name} "
+                f"— {dist} band(s) away, weapon range is {weapon_range}."
+            )
+            return
 
     actor_char = state.characters.get(actor_id)
     actor_npc  = _find_npc(state, actor_id)

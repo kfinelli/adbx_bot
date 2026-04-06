@@ -6,7 +6,7 @@
   "description": "Enter a defensive stance. Gain +200 Defense, +200 Dodge, and +100 to all saves until next round.",
   "requires_target": false,
   "requires_destination": false,
-  "range_requirement": [],
+  "range_requirement": null,
   "effect_tags": [
     {"tag": "apply_condition", "condition": "abjuring", "duration": 1, "target": "self"}
   ]

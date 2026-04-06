@@ -60,7 +60,7 @@ _VALID_ACTION = {
     "description":          "Melee attack.",
     "requires_target":      True,
     "requires_destination": False,
-    "range_requirement":    ["engage"],
+    "range_requirement":    "weapon",
     "effect_tags":          [{"tag": "melee_attack", "dice": "1d6"}],
 }
 

@@ -700,6 +700,9 @@ class TestNPCDecide:
         npc = state.npcs_in_current_room[0]
         cs = state.battlefield.combatants[npc.npc_id]
         cs.range_band = RangeBand.ENGAGE
+        # Place player at ENGAGE too so distance == 0 (within NPC melee range)
+        char_id = next(iter(state.characters))
+        state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
 
         action = _npc_decide(state, npc.npc_id, cs)
         assert action is not None
@@ -1086,7 +1089,7 @@ class TestPoisonAction:
 
     def test_poison_has_no_range_requirement(self):
         from engine import ACTION_REGISTRY
-        assert ACTION_REGISTRY["poison"].range_requirement == []
+        assert ACTION_REGISTRY["poison"].range_requirement is None
 
     def test_poison_requires_target(self):
         from engine import ACTION_REGISTRY
@@ -1788,15 +1791,23 @@ class TestAbscondRoll:
         from unittest.mock import patch
         state = self._make_combat_state()
         char_id = self._char_id(state)
+        npc = self._npc(state)
+        # Player must act before NPC so the NPC hasn't moved to ENGAGE yet when
+        # the second abscond fires. (NPC has melee range 0 and moves toward ENGAGE
+        # each round it can't attack — if it reaches ENGAGE first it blocks the attempt.)
+        state.battlefield.combatants[char_id].initiative = 100
+        state.battlefield.combatants[npc.npc_id].initiative = 1
 
         for _ in range(2):
             open_turn(state)
             with patch("engine.combat.random.randint", return_value=1):
+                # submit_turn auto-resolves when all players have submitted; do NOT
+                # call auto_resolve_round again or the NPC gets a free extra move
+                # (no player submission) that brings it to ENGAGE, blocking the next attempt.
                 submit_turn(state, char_id, "Abscond", combat_action={
                     "action_id": "abscond", "target_id": None, "destination": None,
                     "free_text": None, "weapon_id": None,
                 })
-                auto_resolve_round(state)
 
         char = state.characters[char_id]
         cond = next(c for c in char.active_conditions if c.condition_id == "absconding")
@@ -2064,3 +2075,73 @@ class TestAActions:
         char.active_conditions = [ActiveCondition(condition_id="abjuring", duration_rounds=1)]
         assert char.defense == 200
         assert _effective_finesse(state, char_id) == 200
+
+    # --- Weapon range enforcement ---
+
+    def test_melee_weapon_blocked_when_not_at_engage(self):
+        """Attack with range-0 weapon fails when actor is not at ENGAGE with target."""
+        from engine.combat import _hook_weapon_attack
+        from engine.item import Weapon
+        from models import InventoryItem
+        state, char_id, npc_id = self._setup_combat(npc_hp=100, npc_def=0)
+        # Equip a melee weapon (range=0)
+        char = state.characters[char_id]
+        weapon = Weapon("melee_w", "Sword", "C", "Sword", "physique", "1d6", range=0)
+        char.inventory.append(InventoryItem(item_id="melee_w"))
+        char.equipped_slots["main_hand"] = "melee_w"
+        from engine.data_loader import ITEM_REGISTRY
+        ITEM_REGISTRY["melee_w"] = weapon
+        # Place actor at CLOSE_MINUS (1 band away from target at ENGAGE)
+        state.battlefield.combatants[char_id].range_band = RangeBand.CLOSE_MINUS
+        state.battlefield.combatants[npc_id].range_band  = RangeBand.ENGAGE
+        action = CombatAction(action_id="attack", target_id=npc_id)
+        log: list[str] = []
+        _hook_weapon_attack(state, char_id, action, log, {})
+        assert any("cannot reach" in line for line in log)
+        assert state.npcs_in_current_room[0].hp_current == 100
+
+    def test_reach_weapon_hits_from_adjacent_band(self):
+        """Attack with range-1 weapon succeeds from one band away."""
+        from unittest.mock import patch
+
+        from engine.combat import _hook_weapon_attack
+        from engine.item import Weapon
+        from models import InventoryItem
+        state, char_id, npc_id = self._setup_combat(npc_hp=100, npc_def=0)
+        # Equip a reach weapon (range=1)
+        char = state.characters[char_id]
+        weapon = Weapon("reach_w", "Greatspear", "C", "Polearm", "physique", "1d8", range=1)
+        char.inventory.append(InventoryItem(item_id="reach_w"))
+        char.equipped_slots["main_hand"] = "reach_w"
+        from engine.data_loader import ITEM_REGISTRY
+        ITEM_REGISTRY["reach_w"] = weapon
+        # Actor at CLOSE_MINUS (distance 1 to ENGAGE target)
+        state.battlefield.combatants[char_id].range_band = RangeBand.CLOSE_MINUS
+        state.battlefield.combatants[npc_id].range_band  = RangeBand.ENGAGE
+        action = CombatAction(action_id="attack", target_id=npc_id)
+        log: list[str] = []
+        with patch("engine.combat.random.randint", return_value=1000):
+            _hook_weapon_attack(state, char_id, action, log, {})
+        assert not any("cannot reach" in line for line in log)
+        assert state.npcs_in_current_room[0].hp_current < 100
+
+    def test_reach_weapon_blocked_two_bands_away(self):
+        """Attack with range-1 weapon fails when 2 bands away from target."""
+        from engine.combat import _hook_weapon_attack
+        from engine.item import Weapon
+        from models import InventoryItem
+        state, char_id, npc_id = self._setup_combat(npc_hp=100, npc_def=0)
+        char = state.characters[char_id]
+        weapon = Weapon("reach_w2", "Greatspear", "C", "Polearm", "physique", "1d8", range=1)
+        char.inventory.append(InventoryItem(item_id="reach_w2"))
+        char.equipped_slots["main_hand"] = "reach_w2"
+        from engine.data_loader import ITEM_REGISTRY
+        ITEM_REGISTRY["reach_w2"] = weapon
+        # Actor at FAR_MINUS (distance 2 to ENGAGE target)
+        state.battlefield.combatants[char_id].range_band = RangeBand.FAR_MINUS
+        state.battlefield.combatants[npc_id].range_band  = RangeBand.ENGAGE
+        action = CombatAction(action_id="attack", target_id=npc_id)
+        log: list[str] = []
+        _hook_weapon_attack(state, char_id, action, log, {})
+        assert any("cannot reach" in line for line in log)
+        assert state.npcs_in_current_room[0].hp_current == 100

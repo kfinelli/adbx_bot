@@ -6,7 +6,7 @@
   "description": "Make a melee attack against a target in range.",
   "requires_target": true,
   "requires_destination": false,
-  "range_requirement": ["engage", "close_minus", "close_plus"],
+  "range_requirement": "weapon",
   "effect_tags": [
     {"tag": "melee_attack", "dice": "1d6"},
     "check_death"
