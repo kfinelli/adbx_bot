@@ -2199,6 +2199,7 @@ class TestOpportunityAttacks:
     def test_opp_attack_fires_player_vs_npc_move(self):
         """Player at ENGAGE gets an opportunity attack when NPC moves out of that band."""
         from unittest.mock import patch
+
         from engine.combat import _opportunity_attacks
         state, char_id, npc_id = self._make_state()
         state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
