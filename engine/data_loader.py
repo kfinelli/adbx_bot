@@ -137,6 +137,7 @@ class ConditionDef:
     stat_modifiers: dict[str, int]       = field(default_factory=dict)
     grants_actions: list[str]            = field(default_factory=list)
     stackable:      bool                 = False
+    tags:           list[str]            = field(default_factory=list)
 
 
 @dataclass
@@ -400,6 +401,7 @@ def _load_condition(path: Path) -> ConditionDef:
         stat_modifiers=dict(data.get("stat_modifiers", {})),
         grants_actions=list(data.get("grants_actions", [])),
         stackable=bool(data.get("stackable", False)),
+        tags=list(data.get("tags", [])),
     )
 
 

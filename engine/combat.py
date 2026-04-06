@@ -744,6 +744,53 @@ def _hook_check_death(
                 )
 
 
+def _opportunity_attacks(
+    state:    GameState,
+    actor_id: UUID,
+    old_band: RangeBand,
+    log:      list[str],
+) -> None:
+    """
+    Fire a free weapon attack from every enemy sharing old_band with actor_id.
+
+    Skipped entirely if the moving actor has any condition tagged
+    "opportunity-attack-immune" (e.g. abdication-immunity).
+    """
+    actor_char = state.characters.get(actor_id)
+    actor_npc  = _find_npc(state, actor_id)
+    actor = actor_char or actor_npc
+    if actor and any(
+        (cond_def := CONDITION_REGISTRY.get(c.condition_id)) is not None
+        and "opportunity-attack-immune" in cond_def.tags
+        for c in actor.active_conditions
+    ):
+        return
+
+    actor_is_player = actor_char is not None
+
+    for enemy_id, cs in list(state.battlefield.combatants.items()):
+        if enemy_id == actor_id:
+            continue
+        if cs.range_band != old_band:
+            continue
+        enemy_char = state.characters.get(enemy_id)
+        enemy_npc  = _find_npc(state, enemy_id)
+        if actor_is_player and enemy_npc is None:
+            continue
+        if not actor_is_player and enemy_char is None:
+            continue
+        if enemy_npc and (enemy_npc.hp_current <= 0 or enemy_npc.status != "active"):
+            continue
+        if enemy_char and enemy_char.hp_current <= 0:
+            continue
+
+        enemy_name = _combatant_name(state, enemy_id)
+        log.append(f"{enemy_name} gets an opportunity attack!")
+        free_action = CombatAction(action_id="attack", target_id=actor_id)
+        _hook_weapon_attack(state, enemy_id, free_action, log, {})
+        _hook_check_death(state, enemy_id, free_action, log, {})
+
+
 def _hook_move_to_band(
     state:    GameState,
     actor_id: UUID,
@@ -781,20 +828,21 @@ def _hook_move_to_band(
 
     actor_name = _combatant_name(state, actor_id)
     old_band   = cs.range_band
+    adjacent   = _adjacent_bands(old_band)
 
-    adjacent = _adjacent_bands(old_band)
-    if action.destination in adjacent:
-        cs.range_band = action.destination
-        log.append(f"{actor_name} moves from {old_band.value} to {action.destination.value}.")
-    elif action.destination == old_band:
+    if action.destination == old_band:
         log.append(f"{actor_name} holds position at {old_band.value}.")
+        return
+
+    if action.destination in adjacent:
+        new_band = action.destination
     else:
-        one_step = _step_toward(old_band, action.destination)
-        cs.range_band = one_step
-        log.append(
-            f"{actor_name} moves toward {action.destination.value} "
-            f"(now at {one_step.value})."
-        )
+        new_band = _step_toward(old_band, action.destination)
+
+    _opportunity_attacks(state, actor_id, old_band, log)
+
+    cs.range_band = new_band
+    log.append(f"{actor_name} moves from {old_band.value} to {new_band.value}.")
 
 
 def _hook_deal_damage(

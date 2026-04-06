@@ -2145,3 +2145,146 @@ class TestAActions:
         _hook_weapon_attack(state, char_id, action, log, {})
         assert any("cannot reach" in line for line in log)
         assert state.npcs_in_current_room[0].hp_current == 100
+
+
+# ---------------------------------------------------------------------------
+# Opportunity Attacks
+# ---------------------------------------------------------------------------
+
+class TestOpportunityAttacks:
+    """Opportunity attacks fire when a combatant moves out of a band with enemies."""
+
+    def _make_state(self, npc_hp=20, char_hp=20):
+        from engine import add_npc, register_room
+        from models import Room
+        state = GameState(platform_channel_id="ch", dm_user_id="dm")
+        state.party = Party(name="P")
+        create_character(state, "Aldric", CharacterClass.KNIGHT, "Pack A", owner_id="u1")
+        start_session(state)
+        room = Room(name="Hall", description="Stone hall.")
+        register_room(state, room)
+        state.current_room_id = room.room_id
+        npc = NPC(name="Goblin", hp_current=npc_hp, hp_max=npc_hp, defense=0,
+                  damage_dice="1d6")
+        add_npc(state, npc)
+        enter_rounds(state)
+        char_id = list(state.characters.keys())[0]
+        npc_obj = state.npcs_in_current_room[0]
+        state.characters[char_id].hp_current = char_hp
+        state.characters[char_id].hp_max = char_hp
+        # Place both at ENGAGE so the player starts in a band with an enemy.
+        state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
+        state.battlefield.combatants[npc_obj.npc_id].range_band = RangeBand.ENGAGE
+        open_turn(state)
+        return state, char_id, npc_obj.npc_id
+
+    def test_opp_attack_fires_npc_vs_player_move(self):
+        """NPC at same band fires an opportunity attack when player moves away."""
+        from unittest.mock import patch
+        state, char_id, npc_id = self._make_state()
+        state.battlefield.combatants[char_id].initiative = 100
+        state.battlefield.combatants[npc_id].initiative = 1
+
+        from models import PlayerTurnSubmission
+        action = CombatAction(action_id="move", destination=RangeBand.CLOSE_MINUS)
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id, action_text="Move", is_latest=True,
+            combat_action=action.to_dict(),
+        )]
+        with patch("engine.combat.random.randint", return_value=1000):
+            result = auto_resolve_round(state)
+        assert result.ok
+        assert any("opportunity attack" in line.lower() for line in state.battlefield.round_log)
+
+    def test_opp_attack_fires_player_vs_npc_move(self):
+        """Player at ENGAGE gets an opportunity attack when NPC moves out of that band."""
+        from unittest.mock import patch
+
+        from engine.combat import _opportunity_attacks
+        state, char_id, npc_id = self._make_state()
+        state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
+        state.battlefield.combatants[npc_id].range_band = RangeBand.ENGAGE
+
+        log: list[str] = []
+        with patch("engine.combat.random.randint", return_value=1000):
+            _opportunity_attacks(state, npc_id, RangeBand.ENGAGE, log)
+        assert any("opportunity attack" in line.lower() for line in log)
+
+    def test_opp_attack_skipped_with_abdication_immunity(self):
+        """abdication-immunity suppresses opportunity attacks for the moving actor."""
+        from unittest.mock import patch
+        state, char_id, npc_id = self._make_state()
+        apply_condition(state, char_id, "abdication-immunity", duration=1)
+        state.battlefield.combatants[char_id].initiative = 100
+        state.battlefield.combatants[npc_id].initiative = 1
+
+        from models import PlayerTurnSubmission
+        action = CombatAction(action_id="move", destination=RangeBand.CLOSE_MINUS)
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id, action_text="Move", is_latest=True,
+            combat_action=action.to_dict(),
+        )]
+        with patch("engine.combat.random.randint", return_value=1000):
+            result = auto_resolve_round(state)
+        assert result.ok
+        assert not any("opportunity attack" in line.lower()
+                       for line in state.battlefield.round_log)
+
+    def test_opp_attack_not_fired_hold_position(self):
+        """No opportunity attack when destination equals current band."""
+        from unittest.mock import patch
+        state, char_id, npc_id = self._make_state()
+        state.battlefield.combatants[char_id].initiative = 100
+
+        from models import PlayerTurnSubmission
+        action = CombatAction(action_id="move", destination=RangeBand.ENGAGE)
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id, action_text="Move", is_latest=True,
+            combat_action=action.to_dict(),
+        )]
+        with patch("engine.combat.random.randint", return_value=1000):
+            result = auto_resolve_round(state)
+        assert result.ok
+        assert not any("opportunity attack" in line.lower()
+                       for line in state.battlefield.round_log)
+
+    def test_opp_attack_not_fired_enemy_in_different_band(self):
+        """No opportunity attack when the only enemy is in a different band."""
+        from unittest.mock import patch
+        state, char_id, npc_id = self._make_state()
+        # NPC is now in a different band
+        state.battlefield.combatants[npc_id].range_band = RangeBand.FAR_PLUS
+        state.battlefield.combatants[char_id].initiative = 100
+
+        from models import PlayerTurnSubmission
+        action = CombatAction(action_id="move", destination=RangeBand.CLOSE_MINUS)
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id, action_text="Move", is_latest=True,
+            combat_action=action.to_dict(),
+        )]
+        with patch("engine.combat.random.randint", return_value=1000):
+            result = auto_resolve_round(state)
+        assert result.ok
+        assert not any("opportunity attack" in line.lower()
+                       for line in state.battlefield.round_log)
+
+    def test_opp_attack_dead_enemy_skipped(self):
+        """Dead NPC (hp=0) does not make an opportunity attack."""
+        from unittest.mock import patch
+        state, char_id, npc_id = self._make_state(npc_hp=1)
+        npc = state.npcs_in_current_room[0]
+        npc.hp_current = 0
+        npc.status = "dead"
+        state.battlefield.combatants[char_id].initiative = 100
+
+        from models import PlayerTurnSubmission
+        action = CombatAction(action_id="move", destination=RangeBand.CLOSE_MINUS)
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id, action_text="Move", is_latest=True,
+            combat_action=action.to_dict(),
+        )]
+        with patch("engine.combat.random.randint", return_value=1000):
+            result = auto_resolve_round(state)
+        assert result.ok
+        assert not any("opportunity attack" in line.lower()
+                       for line in state.battlefield.round_log)
