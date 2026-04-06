@@ -733,6 +733,17 @@ def party_panel(state: GameState) -> str:
       </div>
     </form>
     {make_leader_btn}
+    <form hx-post="/session/{channel_id}/char/{cid_str}/rollsave"
+          hx-target="#dashboard" hx-swap="outerHTML"
+          style="display:inline-flex;gap:4px;align-items:center;margin-top:4px">
+      <select name="stat" style="font-size:0.78rem;padding:2px 4px">
+        <option value="physique">Physique</option>
+        <option value="finesse">Finesse</option>
+        <option value="reason">Reason</option>
+        <option value="savvy">Savvy</option>
+      </select>
+      <button class="btn-sm" type="submit" style="margin-top:0">Roll Save</button>
+    </form>
     {combat_sub}
   </td>
 </tr>"""

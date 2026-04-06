@@ -302,6 +302,43 @@ async def route_char_setstatus(
     return _respond(channel_id)
 
 
+@app.post("/session/{channel_id}/char/{char_id}/rollsave", response_class=HTMLResponse)
+async def route_char_rollsave(
+    channel_id: str,
+    char_id: str,
+    stat: Annotated[str, Form()] = "physique",
+):
+    """Roll a saving throw for a character against base_save + chosen stat."""
+    import random
+    from engine.azure_constants import POWER_LEVEL
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    char = state.characters.get(UUID(char_id))
+    if char is None:
+        return _respond(channel_id, error="Character not found.")
+
+    stat_val = getattr(char.ability_scores, stat, None)
+    if stat_val is None:
+        return _respond(channel_id, error=f"Unknown stat: {stat}")
+
+    base_save = char.saving_throws.get("save", 0)
+    threshold = base_save + stat_val
+    raw = random.randint(1, 10 * POWER_LEVEL)
+
+    if raw < threshold:
+        msg = (
+            f"**{char.name} PASSES** their save! "
+            f"(rolled {raw} < threshold {threshold} = save {base_save} + {stat} {stat_val})"
+        )
+    else:
+        msg = (
+            f"**{char.name} FAILS** their save. "
+            f"(rolled {raw} ≥ threshold {threshold} = save {base_save} + {stat} {stat_val})"
+        )
+    return _respond(channel_id, flash=msg)
+
+
 @app.post("/session/{channel_id}/char/{char_id}/additem", response_class=HTMLResponse)
 async def route_char_additem(
     channel_id: str,
