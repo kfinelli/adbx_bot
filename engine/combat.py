@@ -650,6 +650,12 @@ def _hook_weapon_attack(
                     return
                 if current > 0:
                     weapon_inv.charges = current - 1
+            # Consume the weapon on a throwable attack (thrown regardless of hit/miss).
+            if action and action.weapon_id and action.weapon_id.endswith("__throwable"):
+                real_id = action.weapon_id.removesuffix("__throwable")
+                actor_char.inventory = [i for i in actor_char.inventory if i.item_id != real_id]
+                if actor_char.equipped_slots.get("main_hand") == real_id:
+                    actor_char.equipped_slots["main_hand"] = None
         str_mod      = _effective_stat_mod(state, actor_id, stat_name)
         attack_bonus = 0
     elif actor_npc:

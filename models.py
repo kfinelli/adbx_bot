@@ -251,14 +251,19 @@ class Character:
         """
         Return all accessible weapons as (inv_item, definition) pairs.
 
-        - Regular Weapon/ChargeWeapon in main_hand → one entry.
+        - Regular Weapon/ChargeWeapon in main_hand → one or two entries:
+            - Always the base entry (Physique stat).
+            - If the weapon has the "Agile" tag, also a synthetic finesse-variant
+              entry with item_id "<id>__agile" and name "<name> [Agile]".
         - ContainerItem in main_hand → one entry per contained spell,
           each sharing the container's InventoryItem.
         - No weapon equipped → empty list.
 
         The first entry is used for attacks when no explicit weapon is chosen.
-        Weapon picker (choosing among multiple options) is a follow-up feature.
+        Synthetic Agile entries are never in char.inventory; they are produced
+        here and identified by their virtual item_id in CombatAction.weapon_id.
         """
+        import copy as _copy
         inv_item = self.equipped_weapon()
         if inv_item is None:
             return []
@@ -281,7 +286,28 @@ class Character:
                     results.append((spell_inv, spell_def))
             return results
         if isinstance(definition, Weapon):
-            return [(inv_item, definition)]
+            results = [(inv_item, definition)]
+            if "Agile" in definition.getTags() and getattr(definition, "stat", "physique") == "physique":
+                agile_def = _copy.copy(definition)
+                agile_def.stat = "finesse"
+                agile_def.name = f"{definition.name} [Agile]"
+                agile_inv = _copy.copy(inv_item)
+                agile_inv.item_id = f"{inv_item.item_id}__agile"
+                results.append((agile_inv, agile_def))
+            for tag in definition.getTags():
+                if tag.startswith("Throwable "):
+                    try:
+                        throw_range = int(tag.split()[-1])
+                    except ValueError:
+                        continue
+                    throwable_def = _copy.copy(definition)
+                    throwable_def.range = throw_range
+                    throwable_def.name = f"{definition.name} [Throwable]"
+                    throwable_inv = _copy.copy(inv_item)
+                    throwable_inv.item_id = f"{inv_item.item_id}__throwable"
+                    results.append((throwable_inv, throwable_def))
+                    break  # one throwable variant per weapon
+            return results
         return []
 
     def items_in_slot(self, slot_key: str) -> list[InventoryItem]:

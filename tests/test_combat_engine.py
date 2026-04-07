@@ -2488,7 +2488,7 @@ def _find_heavy_gear_id():
 
 def _find_non_heavy_weapon_id():
     from engine.data_loader import ITEM_REGISTRY
-    from engine.item import ChargeWeapon, EquipItem, Weapon
+    from engine.item import ChargeWeapon, Weapon
     item_id = next(
         (iid for iid, d in ITEM_REGISTRY.items()
          if isinstance(d, Weapon) and not isinstance(d, ChargeWeapon)
@@ -2515,7 +2515,7 @@ class TestHeavyTag:
 
     def test_non_heavy_item_no_cap(self):
         """A non-Heavy item in equipped_slots does not cap dodge."""
-        from engine.azure_constants import ItemSlot, POWER_LEVEL
+        from engine.azure_constants import POWER_LEVEL, ItemSlot
         state, char = _make_simple_char_state()
         char.ability_scores.finesse = POWER_LEVEL * 5
         item_id = _find_non_heavy_weapon_id()
@@ -2524,7 +2524,7 @@ class TestHeavyTag:
 
     def test_heavy_weapon_caps_dodge(self):
         """A Heavy weapon in equipped_slots caps dodge at POWER_LEVEL."""
-        from engine.azure_constants import ItemSlot, POWER_LEVEL
+        from engine.azure_constants import POWER_LEVEL, ItemSlot
         state, char = _make_simple_char_state()
         char.ability_scores.finesse = POWER_LEVEL * 5
         item_id = _find_heavy_weapon_id()
@@ -2533,7 +2533,7 @@ class TestHeavyTag:
 
     def test_heavy_gear_caps_dodge(self):
         """Heavy armor in equipped_slots caps dodge at POWER_LEVEL."""
-        from engine.azure_constants import ItemSlot, POWER_LEVEL
+        from engine.azure_constants import POWER_LEVEL, ItemSlot
         state, char = _make_simple_char_state()
         char.ability_scores.finesse = POWER_LEVEL * 5
         item_id = _find_heavy_gear_id()
@@ -2542,7 +2542,7 @@ class TestHeavyTag:
 
     def test_two_heavy_items_cap_not_stacked(self):
         """Two Heavy items still produce a cap of POWER_LEVEL, not lower."""
-        from engine.azure_constants import ItemSlot, POWER_LEVEL
+        from engine.azure_constants import POWER_LEVEL, ItemSlot
         state, char = _make_simple_char_state()
         char.ability_scores.finesse = POWER_LEVEL * 5
         char.equipped_slots[ItemSlot.MAIN_HAND.value] = _find_heavy_weapon_id()
@@ -2551,7 +2551,7 @@ class TestHeavyTag:
 
     def test_dodge_below_cap_unchanged(self):
         """If finesse is already <= POWER_LEVEL, Heavy does not reduce dodge further."""
-        from engine.azure_constants import ItemSlot, POWER_LEVEL
+        from engine.azure_constants import POWER_LEVEL, ItemSlot
         state, char = _make_simple_char_state()
         char.ability_scores.finesse = POWER_LEVEL // 2
         char.equipped_slots[ItemSlot.MAIN_HAND.value] = _find_heavy_weapon_id()
@@ -2559,7 +2559,7 @@ class TestHeavyTag:
 
     def test_heavy_cap_reflected_in_effective_finesse(self):
         """_effective_finesse reads char.dodge, so Heavy cap propagates to attack resolution."""
-        from engine.azure_constants import ItemSlot, POWER_LEVEL
+        from engine.azure_constants import POWER_LEVEL, ItemSlot
         from engine.combat import _effective_finesse
         state, char = _make_simple_char_state()
         char.ability_scores.finesse = POWER_LEVEL * 5
