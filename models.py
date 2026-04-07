@@ -21,7 +21,7 @@ from uuid import UUID, uuid4
 # Import it here so the rest of the codebase can import from models as before.
 from engine.azure_engine import CharacterClass
 from engine.data_loader import CONDITION_REGISTRY, ITEM_REGISTRY
-from engine.item import ContainerItem, Gear, Weapon
+from engine.item import ContainerItem, EquipItem, Gear, Weapon
 
 log = logging.getLogger(__name__)
 
@@ -222,6 +222,19 @@ class Character:
             if c.condition_id in CONDITION_REGISTRY
         )
         return max(0, total)
+
+    @property
+    def dodge(self) -> int:
+        """Dodge target number (base = finesse). Capped at POWER_LEVEL when any Heavy item is equipped."""
+        from engine.azure_constants import POWER_LEVEL
+        base = self.ability_scores.finesse
+        for item_id in self.equipped_slots.values():
+            if item_id is None:
+                continue
+            definition = ITEM_REGISTRY.get(item_id)
+            if isinstance(definition, EquipItem) and "Heavy" in definition.getTags():
+                return min(base, POWER_LEVEL)
+        return base
 
     def equipped_weapon(self) -> InventoryItem | None:
         """
@@ -517,6 +530,11 @@ class NPC:
     status:            str               = "active"    # free-form: active/dead/fled/charmed/etc.
     notes:             str               = ""          # DM-facing
     active_conditions: list[ActiveCondition] = field(default_factory=list)
+
+    @property
+    def dodge(self) -> int:
+        """Dodge target number for NPCs — equals finesse (no equipment)."""
+        return self.ability_scores.finesse
 
 
 # ---------------------------------------------------------------------------

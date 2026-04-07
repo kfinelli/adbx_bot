@@ -2440,3 +2440,128 @@ class TestCombatEquipAction:
         )
         assert result.ok
         assert "unequip failed" in result.message.lower() or "nothing" in result.message.lower()
+
+
+# ---------------------------------------------------------------------------
+# Heavy tag — dodge cap
+# ---------------------------------------------------------------------------
+
+def _make_simple_char_state():
+    """Minimal EXPLORATION state with one Knight."""
+    from engine import register_room
+    from models import Room
+
+    state = GameState(platform_channel_id="ch", dm_user_id="dm")
+    state.party = Party(name="P")
+    create_character(state, "Aldric", CharacterClass.KNIGHT, "", owner_id="u1")
+    start_session(state)
+    room = Room(name="Hall", description="Stone hall.")
+    register_room(state, room)
+    state.current_room_id = room.room_id
+    char = next(iter(state.characters.values()))
+    return state, char
+
+
+def _find_heavy_weapon_id():
+    from engine.data_loader import ITEM_REGISTRY
+    from engine.item import EquipItem
+    item_id = next(
+        (iid for iid, d in ITEM_REGISTRY.items()
+         if isinstance(d, EquipItem) and "Heavy" in d.getTags() and hasattr(d, "damage")),
+        None,
+    )
+    assert item_id, "No Heavy weapon found in registry"
+    return item_id
+
+
+def _find_heavy_gear_id():
+    from engine.data_loader import ITEM_REGISTRY
+    from engine.item import Gear
+    item_id = next(
+        (iid for iid, d in ITEM_REGISTRY.items()
+         if isinstance(d, Gear) and "Heavy" in d.getTags()),
+        None,
+    )
+    assert item_id, "No Heavy gear found in registry"
+    return item_id
+
+
+def _find_non_heavy_weapon_id():
+    from engine.data_loader import ITEM_REGISTRY
+    from engine.item import ChargeWeapon, EquipItem, Weapon
+    item_id = next(
+        (iid for iid, d in ITEM_REGISTRY.items()
+         if isinstance(d, Weapon) and not isinstance(d, ChargeWeapon)
+         and "Heavy" not in d.getTags()),
+        None,
+    )
+    assert item_id, "No non-Heavy weapon found in registry"
+    return item_id
+
+
+class TestHeavyTag:
+    """dodge property returns finesse normally; Heavy-tagged items cap it at POWER_LEVEL.
+
+    Tests set equipped_slots directly to bypass rank enforcement — the dodge
+    property only reads slot contents, so this exercises the logic cleanly.
+    """
+
+    def test_no_equipped_items_no_cap(self):
+        """Bare character: dodge equals raw finesse."""
+        from engine.azure_constants import POWER_LEVEL
+        state, char = _make_simple_char_state()
+        char.ability_scores.finesse = POWER_LEVEL * 5
+        assert char.dodge == POWER_LEVEL * 5
+
+    def test_non_heavy_item_no_cap(self):
+        """A non-Heavy item in equipped_slots does not cap dodge."""
+        from engine.azure_constants import ItemSlot, POWER_LEVEL
+        state, char = _make_simple_char_state()
+        char.ability_scores.finesse = POWER_LEVEL * 5
+        item_id = _find_non_heavy_weapon_id()
+        char.equipped_slots[ItemSlot.MAIN_HAND.value] = item_id
+        assert char.dodge == POWER_LEVEL * 5
+
+    def test_heavy_weapon_caps_dodge(self):
+        """A Heavy weapon in equipped_slots caps dodge at POWER_LEVEL."""
+        from engine.azure_constants import ItemSlot, POWER_LEVEL
+        state, char = _make_simple_char_state()
+        char.ability_scores.finesse = POWER_LEVEL * 5
+        item_id = _find_heavy_weapon_id()
+        char.equipped_slots[ItemSlot.MAIN_HAND.value] = item_id
+        assert char.dodge == POWER_LEVEL
+
+    def test_heavy_gear_caps_dodge(self):
+        """Heavy armor in equipped_slots caps dodge at POWER_LEVEL."""
+        from engine.azure_constants import ItemSlot, POWER_LEVEL
+        state, char = _make_simple_char_state()
+        char.ability_scores.finesse = POWER_LEVEL * 5
+        item_id = _find_heavy_gear_id()
+        char.equipped_slots[ItemSlot.BODY.value] = item_id
+        assert char.dodge == POWER_LEVEL
+
+    def test_two_heavy_items_cap_not_stacked(self):
+        """Two Heavy items still produce a cap of POWER_LEVEL, not lower."""
+        from engine.azure_constants import ItemSlot, POWER_LEVEL
+        state, char = _make_simple_char_state()
+        char.ability_scores.finesse = POWER_LEVEL * 5
+        char.equipped_slots[ItemSlot.MAIN_HAND.value] = _find_heavy_weapon_id()
+        char.equipped_slots[ItemSlot.BODY.value] = _find_heavy_gear_id()
+        assert char.dodge == POWER_LEVEL
+
+    def test_dodge_below_cap_unchanged(self):
+        """If finesse is already <= POWER_LEVEL, Heavy does not reduce dodge further."""
+        from engine.azure_constants import ItemSlot, POWER_LEVEL
+        state, char = _make_simple_char_state()
+        char.ability_scores.finesse = POWER_LEVEL // 2
+        char.equipped_slots[ItemSlot.MAIN_HAND.value] = _find_heavy_weapon_id()
+        assert char.dodge == POWER_LEVEL // 2
+
+    def test_heavy_cap_reflected_in_effective_finesse(self):
+        """_effective_finesse reads char.dodge, so Heavy cap propagates to attack resolution."""
+        from engine.azure_constants import ItemSlot, POWER_LEVEL
+        from engine.combat import _effective_finesse
+        state, char = _make_simple_char_state()
+        char.ability_scores.finesse = POWER_LEVEL * 5
+        char.equipped_slots[ItemSlot.MAIN_HAND.value] = _find_heavy_weapon_id()
+        assert _effective_finesse(state, char.character_id) == POWER_LEVEL

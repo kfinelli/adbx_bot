@@ -489,12 +489,13 @@ def _effective_resistance(state: GameState, combatant_id: UUID) -> int:
 
 def _effective_finesse(state: GameState, combatant_id: UUID) -> int:
     """
-    Finesse (dodge target number) after condition stat_modifiers {"finesse": N}, floored at 0.
+    Dodge (finesse) after condition stat_modifiers {"finesse": N}, floored at 0.
+    Base is char.dodge / npc.dodge, which already applies the Heavy tag cap.
     "abjuring" uses +200 so attacks need a much higher roll to hit.
     """
     char = state.characters.get(combatant_id)
     npc  = _find_npc(state, combatant_id)
-    base = char.ability_scores.finesse if char else (npc.ability_scores.finesse if npc else 0)
+    base = char.dodge if char else (npc.dodge if npc else 0)
     combatant = char if char else npc
     if combatant:
         base += sum(
