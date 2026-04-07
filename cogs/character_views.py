@@ -39,29 +39,59 @@ def _find_character(state, owner_id: str):
     return None
 
 
-def _is_rounds(state) -> bool:
+async def _submit_gear_combat_action(
+    interaction: discord.Interaction,
+    char,
+    state,
+    channel_id: str,
+    action_id: str,
+    action_text: str,
+    *,
+    item_id: str | None = None,
+    slot_value: str | None = None,
+) -> bool:
+    """
+    If in ROUNDS mode, submit the gear change as a combat turn and dispatch the
+    channel update.  Returns True if handled (caller should return immediately).
+    Returns False if not in ROUNDS mode (caller continues with exploration path).
+    """
     from models import SessionMode
-    return state.mode == SessionMode.ROUNDS
+    if state.mode != SessionMode.ROUNDS:
+        return False
 
+    if state.latest_submission(char.character_id) is not None:
+        await interaction.response.edit_message(
+            content="You've already submitted an action this round.",
+            view=EquipMenuView(char, state, channel_id),
+        )
+        return True
 
-def _already_submitted(state, character_id) -> bool:
-    return state.latest_submission(character_id) is not None
+    from engine import submit_turn
+    from engine.combat import CombatAction
+    action = CombatAction(action_id=action_id, weapon_id=item_id, free_text=slot_value)
+    result = submit_turn(state, char.character_id, action_text, combat_action=action.to_dict())
+    await save_session_async(state)
 
+    if not result.ok:
+        await interaction.response.edit_message(
+            content=result.error,
+            view=EquipMenuView(char, state, channel_id),
+        )
+        return True
 
-async def _post_gear_submit(interaction: discord.Interaction, channel_id: str, state, result) -> None:
-    """
-    After a gear submit_turn() in ROUNDS mode, dispatch the round update to the
-    game channel exactly as _submit_combat_action() does in action_buttons.py.
-    """
-    from store import update_status
+    await interaction.response.edit_message(content="Action submitted.", view=None)
     channel = interaction.client.get_channel(int(channel_id))
-    if channel is None:
-        return
-    if result.auto_resolved:
-        from discord_tasks import dispatch_turn_resolved
-        await dispatch_turn_resolved(channel, state, result.message)
-    else:
-        await update_status(channel, state)
+    if channel is not None:
+        if result.auto_resolved:
+            from discord_tasks import dispatch_turn_resolved
+            await dispatch_turn_resolved(channel, state, result.message)
+        elif result.notify_dm:
+            from store import notify_dm_of_turn_close
+            await notify_dm_of_turn_close(channel, state, state.turn_number)
+        else:
+            from store import update_status
+            await update_status(channel, state)
+    return True
 
 
 def _character_sheet(char, state) -> str:
@@ -212,29 +242,10 @@ class EquipSelectView(discord.ui.View):
             )
             return
 
-        if _is_rounds(self.state):
-            if _already_submitted(self.state, self.char.character_id):
-                await interaction.response.edit_message(
-                    content="You've already submitted an action this round.",
-                    view=EquipMenuView(self.char, self.state, self.channel_id),
-                )
-                return
-            from engine import submit_turn
-            from engine.combat import CombatAction
-            action = CombatAction(action_id="equip_item", weapon_id=item_id)
-            result = submit_turn(
-                self.state, self.char.character_id, f"equips {defn.name}",
-                combat_action=action.to_dict(),
-            )
-            await save_session_async(self.state)
-            if not result.ok:
-                await interaction.response.edit_message(
-                    content=f"{result.error}",
-                    view=EquipMenuView(self.char, self.state, self.channel_id),
-                )
-                return
-            await interaction.response.edit_message(content="Action submitted.", view=None)
-            await _post_gear_submit(interaction, self.channel_id, self.state, result)
+        if await _submit_gear_combat_action(
+            interaction, self.char, self.state, self.channel_id,
+            "equip_item", f"equips {defn.name}", item_id=item_id,
+        ):
             return
         result = equip_item(self.state, self.char.character_id, item_id)
         await save_session_async(self.state)
@@ -283,33 +294,13 @@ class AccessorySlotView(discord.ui.View):
 
     def _make_callback(self, slot: ItemSlot):
         async def callback(interaction: discord.Interaction):
-            if _is_rounds(self.state):
-                if _already_submitted(self.state, self.char.character_id):
-                    await interaction.response.edit_message(
-                        content="You've already submitted an action this round.",
-                        view=EquipMenuView(self.char, self.state, self.channel_id),
-                    )
-                    return
-                from engine import submit_turn
-                from engine.combat import CombatAction
-                action = CombatAction(
-                    action_id="equip_item", weapon_id=self.item_id, free_text=slot.value
-                )
-                defn = ITEM_REGISTRY.get(self.item_id)
-                result = submit_turn(
-                    self.state, self.char.character_id,
-                    f"equips {defn.name if defn else self.item_id} into {slot.value}",
-                    combat_action=action.to_dict(),
-                )
-                await save_session_async(self.state)
-                if not result.ok:
-                    await interaction.response.edit_message(
-                        content=f"{result.error}",
-                        view=EquipMenuView(self.char, self.state, self.channel_id),
-                    )
-                    return
-                await interaction.response.edit_message(content="Action submitted.", view=None)
-                await _post_gear_submit(interaction, self.channel_id, self.state, result)
+            defn = ITEM_REGISTRY.get(self.item_id)
+            if await _submit_gear_combat_action(
+                interaction, self.char, self.state, self.channel_id,
+                "equip_item",
+                f"equips {defn.name if defn else self.item_id} into {slot.value}",
+                item_id=self.item_id, slot_value=slot.value,
+            ):
                 return
             result = equip_item(self.state, self.char.character_id, self.item_id, slot=slot)
             await save_session_async(self.state)
@@ -364,32 +355,13 @@ class UnequipView(discord.ui.View):
 
     def _make_callback(self, slot: ItemSlot):
         async def callback(interaction: discord.Interaction):
-            if _is_rounds(self.state):
-                if _already_submitted(self.state, self.char.character_id):
-                    await interaction.response.edit_message(
-                        content="You've already submitted an action this round.",
-                        view=EquipMenuView(self.char, self.state, self.channel_id),
-                    )
-                    return
-                from engine import submit_turn
-                from engine.combat import CombatAction
-                item_id = self.char.equipped_slots.get(slot.value)
-                defn = ITEM_REGISTRY.get(item_id) if item_id else None
-                action = CombatAction(action_id="unequip_item", free_text=slot.value)
-                result = submit_turn(
-                    self.state, self.char.character_id,
-                    f"unequips {defn.name if defn else slot.value}",
-                    combat_action=action.to_dict(),
-                )
-                await save_session_async(self.state)
-                if not result.ok:
-                    await interaction.response.edit_message(
-                        content=f"{result.error}",
-                        view=EquipMenuView(self.char, self.state, self.channel_id),
-                    )
-                    return
-                await interaction.response.edit_message(content="Action submitted.", view=None)
-                await _post_gear_submit(interaction, self.channel_id, self.state, result)
+            item_id = self.char.equipped_slots.get(slot.value)
+            defn = ITEM_REGISTRY.get(item_id) if item_id else None
+            if await _submit_gear_combat_action(
+                interaction, self.char, self.state, self.channel_id,
+                "unequip_item", f"unequips {defn.name if defn else slot.value}",
+                slot_value=slot.value,
+            ):
                 return
             result = unequip_item(self.state, self.char.character_id, slot)
             await save_session_async(self.state)
