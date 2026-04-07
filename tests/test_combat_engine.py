@@ -2288,3 +2288,155 @@ class TestOpportunityAttacks:
         assert result.ok
         assert not any("opportunity attack" in line.lower()
                        for line in state.battlefield.round_log)
+
+
+# ---------------------------------------------------------------------------
+# Equip/Unequip combat action
+# ---------------------------------------------------------------------------
+
+def _find_weapon_id():
+    """Return a non-arcane, non-charge weapon id from the registry."""
+    from engine.data_loader import ITEM_REGISTRY
+    from engine.item import ChargeWeapon, Weapon
+    _ARCANE = {"V", "W", "X", "Y", "Z"}
+    weapon_id = next(
+        (iid for iid, d in ITEM_REGISTRY.items()
+         if isinstance(d, Weapon) and not isinstance(d, ChargeWeapon) and d.rank not in _ARCANE),
+        None,
+    )
+    assert weapon_id, "No non-arcane weapon found in registry"
+    return weapon_id
+
+
+def _make_combat_state_with_item():
+    """
+    Single-character ROUNDS state with a weapon in inventory (not equipped).
+    Single-char party means submit_turn auto-resolves immediately.
+    """
+    from engine import give_item, register_room
+    from models import Room
+
+    state = GameState(platform_channel_id="ch", dm_user_id="dm")
+    state.party = Party(name="P")
+    create_character(state, "Aldric", CharacterClass.KNIGHT, "", owner_id="u1")
+    start_session(state)
+
+    room = Room(name="Hall", description="Stone hall.")
+    register_room(state, room)
+    state.current_room_id = room.room_id
+
+    weapon_id = _find_weapon_id()
+    char = next(iter(state.characters.values()))
+    give_item(state, char.character_id, weapon_id)
+
+    enter_rounds(state)
+    open_turn(state)
+    return state, char, weapon_id
+
+
+def _make_two_char_combat_state_with_item():
+    """
+    Two-character ROUNDS state — char1 has a weapon in inventory.
+    Submitting for char1 alone does NOT trigger auto-resolve (still waiting on char2).
+    """
+    from engine import give_item, register_room
+    from models import Room
+
+    state = GameState(platform_channel_id="ch", dm_user_id="dm")
+    state.party = Party(name="P")
+    create_character(state, "Aldric", CharacterClass.KNIGHT, "", owner_id="u1")
+    create_character(state, "Tomas",  CharacterClass.MAGE,   "", owner_id="u2")
+    start_session(state)
+
+    room = Room(name="Hall", description="Stone hall.")
+    register_room(state, room)
+    state.current_room_id = room.room_id
+
+    weapon_id = _find_weapon_id()
+    char1 = next(c for c in state.characters.values() if c.owner_id == "u1")
+    give_item(state, char1.character_id, weapon_id)
+
+    enter_rounds(state)
+    open_turn(state)
+    return state, char1, weapon_id
+
+
+class TestCombatEquipAction:
+
+    def test_equip_action_submitted_in_rounds(self):
+        """submit_turn with equip_item CombatAction records the submission before auto-resolve."""
+        # Two-char party: char1 submits, char2 hasn't yet → no auto-resolve, submission persists.
+        state, char1, weapon_id = _make_two_char_combat_state_with_item()
+        action = CombatAction(action_id="equip_item", weapon_id=weapon_id)
+        result = submit_turn(
+            state, char1.character_id, "equips weapon",
+            combat_action=action.to_dict(),
+        )
+        assert result.ok
+        sub = state.latest_submission(char1.character_id)
+        assert sub is not None
+        assert sub.combat_action["action_id"] == "equip_item"
+        assert sub.combat_action["weapon_id"] == weapon_id
+
+    def test_equip_action_applies_item_on_resolve(self):
+        """After auto-resolve the weapon appears in equipped_slots."""
+        from engine.azure_constants import ItemSlot
+        state, char, weapon_id = _make_combat_state_with_item()
+        action = CombatAction(action_id="equip_item", weapon_id=weapon_id)
+        result = submit_turn(
+            state, char.character_id, "equips weapon",
+            combat_action=action.to_dict(),
+        )
+        assert result.ok
+        char = state.characters[char.character_id]
+        assert char.equipped_slots.get(ItemSlot.MAIN_HAND.value) == weapon_id
+
+    def test_unequip_action_removes_item_on_resolve(self):
+        """After auto-resolve with unequip_item the slot is cleared."""
+        from engine import equip_item as _equip
+        from engine.azure_constants import ItemSlot
+        state, char, weapon_id = _make_combat_state_with_item()
+        _equip(state, char.character_id, weapon_id)
+        assert state.characters[char.character_id].equipped_slots.get(ItemSlot.MAIN_HAND.value) == weapon_id
+
+        action = CombatAction(action_id="unequip_item", free_text=ItemSlot.MAIN_HAND.value)
+        result = submit_turn(
+            state, char.character_id, "unequips weapon",
+            combat_action=action.to_dict(),
+        )
+        assert result.ok
+        char = state.characters[char.character_id]
+        assert char.equipped_slots.get(ItemSlot.MAIN_HAND.value) is None
+
+    def test_equip_blocked_predicate(self):
+        """After a submission (no auto-resolve yet), latest_submission() is non-None."""
+        # Two-char party so submission persists without auto-resolving.
+        state, char1, weapon_id = _make_two_char_combat_state_with_item()
+        action = CombatAction(action_id="equip_item", weapon_id=weapon_id)
+        submit_turn(state, char1.character_id, "equips weapon", combat_action=action.to_dict())
+        assert state.latest_submission(char1.character_id) is not None
+
+    def test_equip_invalid_item_logs_error_not_crash(self):
+        """Bad item_id doesn't crash; error appears in the resolved turn narrative."""
+        state, char, _ = _make_combat_state_with_item()
+        action = CombatAction(action_id="equip_item", weapon_id="nonexistent_item_xxx")
+        result = submit_turn(
+            state, char.character_id, "equips nothing",
+            combat_action=action.to_dict(),
+        )
+        assert result.ok
+        # After auto-resolve, narrative is in result.message
+        assert "equip failed" in result.message.lower() or "not in" in result.message.lower()
+
+    def test_unequip_missing_slot_logs_error_not_crash(self):
+        """Unequipping an empty slot logs an error in the narrative rather than crashing."""
+        from engine.azure_constants import ItemSlot
+        state, char, _ = _make_combat_state_with_item()
+        # MAIN_HAND is empty (nothing equipped yet)
+        action = CombatAction(action_id="unequip_item", free_text=ItemSlot.MAIN_HAND.value)
+        result = submit_turn(
+            state, char.character_id, "unequips empty slot",
+            combat_action=action.to_dict(),
+        )
+        assert result.ok
+        assert "unequip failed" in result.message.lower() or "nothing" in result.message.lower()

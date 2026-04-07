@@ -1084,6 +1084,60 @@ def _hook_abscond_roll(
 #   4. Add a test in tests/test_combat_engine.py.
 # See CONTRIBUTING.md for the full walkthrough.
 #
+def _hook_resolve_equip(
+    state:    GameState,
+    actor_id: UUID,
+    action:   CombatAction | None,
+    log:      list[str],
+    params:   dict,
+) -> None:
+    """
+    Equip an item during round resolution.
+    action.weapon_id = item_id to equip
+    action.free_text = ItemSlot.value string for target slot, or "" for auto-detect
+    """
+    from engine.azure_constants import ItemSlot
+    from engine.character import CharacterManager
+
+    if action is None or not action.weapon_id:
+        log.append(f"[equip_item: no item_id for {_combatant_name(state, actor_id)}]")
+        return
+    slot = None
+    if action.free_text:
+        try:
+            slot = ItemSlot(action.free_text)
+        except ValueError:
+            log.append(f"[equip_item: unknown slot '{action.free_text}' — using auto]")
+    result = CharacterManager().equip_item(state, actor_id, action.weapon_id, slot=slot)
+    log.append(result.message if result.ok else f"[equip failed: {result.error}]")
+
+
+def _hook_resolve_unequip(
+    state:    GameState,
+    actor_id: UUID,
+    action:   CombatAction | None,
+    log:      list[str],
+    params:   dict,
+) -> None:
+    """
+    Unequip an item during round resolution.
+    action.free_text = ItemSlot.value string (e.g. "main_hand")
+    """
+    from engine.azure_constants import ItemSlot
+    from engine.character import CharacterManager
+
+    if action is None or not action.free_text:
+        log.append(f"[unequip_item: no slot for {_combatant_name(state, actor_id)}]")
+        return
+    try:
+        slot = ItemSlot(action.free_text)
+    except ValueError:
+        log.append(f"[unequip_item: unknown slot '{action.free_text}']")
+        return
+    result = CharacterManager().unequip_item(state, actor_id, slot)
+    log.append(result.message if result.ok else f"[unequip failed: {result.error}]")
+
+
 _HOOK_DISPATCH: dict[str, object] = {
     # Attack
     "melee_attack":    _hook_weapon_attack,
@@ -1097,6 +1151,9 @@ _HOOK_DISPATCH: dict[str, object] = {
     "skip_action":     _hook_skip_action,
     # Flee
     "abscond_roll":    _hook_abscond_roll,
+    # Gear management
+    "resolve_equip":   _hook_resolve_equip,
+    "resolve_unequip": _hook_resolve_unequip,
 }
 
 
