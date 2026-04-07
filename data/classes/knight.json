@@ -8,5 +8,5 @@
   "primary_stat": "PHY",
   "max_level": 5,
   "description": "Knights who behave dishonorably may lose access to some or all of their knightly abilities. Minor infractions may incur short penalties, however major infractions could require a knight to perform a quest of atonement to reacquire their abilities.",
-  "combat_actions": ["attack", "move", "charge", "affect"]
+  "combat_actions": ["attack", "bulk","move", "charge", "affect"]
 }

@@ -19,8 +19,9 @@ from uuid import UUID, uuid4
 
 # CharacterClass is generated in azure_engine.py from job JSON files.
 # Import it here so the rest of the codebase can import from models as before.
+from engine.azure_constants import CombatStat
 from engine.azure_engine import CharacterClass
-from engine.data_loader import ITEM_REGISTRY
+from engine.data_loader import CONDITION_REGISTRY, ITEM_REGISTRY
 from engine.item import ContainerItem, Gear, Weapon
 
 log = logging.getLogger(__name__)
@@ -618,6 +619,26 @@ class ActiveCondition:
     condition_id:    str            = ""
     duration_rounds: int | None  = None
     source_id:       UUID | None = None
+
+@dataclass
+class GenericCombatCondition(ActiveCondition):
+    def __init__(self,
+    generic_id:      str        = "",
+    condition_id:    str = "",
+    combat_changes:          dict | None = None,
+    duration_rounds: int | None  = None,
+    stackable:       bool = False,
+    source_id:       UUID | None = None,
+    ):
+        self.generic_id = generic_id
+        self.condition_id = condition_id
+        self.duration_rounds = duration_rounds
+        self.stackable = stackable
+        self.source_id = source_id
+        if combat_changes is None:
+            self.combat_changes = CONDITION_REGISTRY.get(self.generic_id).get(combat_changes, None)
+        else:
+            self.combat_changes = combat_changes
 
 
 @dataclass

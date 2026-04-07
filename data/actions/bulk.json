@@ -1,0 +1,20 @@
+{
+  "action_id": "bulk",
+  "label": "Bulk",
+  "button_style": "primary",
+  "action_type": "move",
+  "description": "Get Stronger",
+  "requires_target": true,
+  "requires_destination": false,
+  "range_requirement": [],
+  "effect_tags": [
+    {
+      "tag": "combat_changes",
+      "combat_changes": {
+        "physique": 2,
+        "defense": 0.5
+      },
+      "duration": 2
+    }
+  ]
+}

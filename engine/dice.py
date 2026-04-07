@@ -8,6 +8,7 @@ import re
 from engine.azure_constants import POWER_LEVEL
 
 
+
 def print_dice_results(results):
   diceOutput = ""
   for die in results['dice']:
@@ -17,6 +18,15 @@ def print_dice_results(results):
   print("Bonus: ", results['bonus'])
   print("Total: ", results['total'])
 
+def roll_dice_expr(expr, noMultiplier=False):
+    diceToRoll = expr.replace(" ","").split("+")
+    results = {'expression': expr, 'dice':[], 'total':0, 'bonus':0}
+    for expression in diceToRoll:
+        exprResult = evaluate_dice_expr(expression, noMultiplier)
+        results['dice'].append(exprResult['dice'])
+        results['total'] += exprResult['total']
+        results['bonus'] += exprResult['bonus']
+    return results
 
 #  Rolls a XdY+Z expression (strict order)
 #  or returns a number if a number is given
@@ -24,14 +34,37 @@ def print_dice_results(results):
 #    'bonus': bonus applied to the roll
 #    'dice': list of all rolled dice
 #    'total': total of all rolled dice
-def roll_dice_expr(expr):
+def evaluate_dice_expr(expr, noMultiplier=False):
     xyz = re.split(r'd|\+', expr)
     x = int(xyz[0])
     if len(xyz) == 1:
-        return {'dice':{x},'total':x, 'bonus':0}
+        x = {True: x, False: x * POWER_LEVEL}[noMultiplier]
+        return {'dice':[x],'total':x, 'bonus':x}
     if "d" not in expr:
         z = int(xyz[1])
-        return {'dice': {x}, 'total': x + z, 'bonus': z}
+        z = {True: z, False: z * POWER_LEVEL}[noMultiplier]
+        x = {True: x, False: x * POWER_LEVEL}[noMultiplier]
+        return {'dice': [x], 'total': x + z, 'bonus': z}
+    y = int(xyz[1])
+    if len(xyz) == 2 and y != 0:
+        y = {True: y, False: y * POWER_LEVEL}[noMultiplier]
+        return roll_expr(x, y)
+    z = 0
+    if len(xyz) > 2:
+        z = int(xyz[2])
+        z = {True: z, False: z * POWER_LEVEL}[noMultiplier]
+    if y == 0:
+        return {'dice': [0], 'total': 0+z, 'bonus': z}
+    return roll_expr(x,y,z)
+
+def evaluate_true_dice_expr(expr):
+    xyz = re.split(r'd|\+', expr)
+    x = int(xyz[0])
+    if len(xyz) == 1:
+        return {'dice':[x],'total':x, 'bonus':x}
+    if "d" not in expr:
+        z = int(xyz[1])
+        return {'dice': [x], 'total': x + z, 'bonus': z}
     y = int(xyz[1])
     if len(xyz) == 2 and y != 0:
         return roll_expr(x, y)
@@ -39,9 +72,8 @@ def roll_dice_expr(expr):
     if len(xyz) > 2:
         z = int(xyz[2])
     if y == 0:
-        return {'dice': {x}, 'total': x+z, 'bonus': z}
+        return {'dice': [0], 'total': 0+z, 'bonus': z}
     return roll_expr(x,y,z)
-
 
 def roll_expr(dCount, dSize, bonus=0):
     result = {'dice':[],'bonus':bonus,'total':bonus}
@@ -59,6 +91,19 @@ def d(x):
         return 0
     return random.randint(1, x)
 
+# This is NOT A VERY GOOD CHECKER!!! It only allows the characters 0-9, d, D, +, -, and whitespace.
+# Does not check if the expression is valid otherwise
+# Returns True if expr is a dice expression
+# Returns False if expr is just a number
+# Returns None if expr is not a dice expression at all
+def is_dice_expression(expr):
+    DICE_REGEX = r"^[0-9dD+-]*$"
+    if re.fullmatch(DICE_REGEX, expr) is None:
+        return None
+    elif ('d' in expr or 'D' in expr):
+        return True
+    else:
+        return False
 
 def roll(n: int, sides: int) -> list[int]:
     """Roll n dice of `sides` sides, return individual results."""
