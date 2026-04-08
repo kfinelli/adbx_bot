@@ -54,6 +54,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from engine.azure_constants import SkillType
 from engine.item import Item, createItemFromData
 
 # ---------------------------------------------------------------------------
@@ -143,8 +144,7 @@ class ConditionDef:
 @dataclass
 class SkillDef:
     """
-    Definition of one job skill, loaded from data/classes/<key>.json skills block
-    or a companion <key>_skills.json file.
+    Definition of one job skill, loaded from data/jobskills/skills.json.
 
     Skills are permanent character benefits gained at level-up.  Some skills
     happen to grant access to a combat action button (type == COMBAT_ACTION),
@@ -154,14 +154,15 @@ class SkillDef:
     skill_id    : Unique string key (e.g. "knight_protector").
     name        : Display name (e.g. "Protector").
     source      : Job id this skill originates from (e.g. "knight").
-    level       : Job level at which this skill is unlocked (pre-multiplied by
-                  LEVEL_MULTIPLIER from the raw JSON "level" field).
-    skill_type  : Integer matching SkillType enum in azure_engine.py:
+    level       : Job level at which this skill is unlocked.
+    skill_type  : Integer matching SkillType enum in azure_constants.py:
                     0 SIMPLE, 1 TURN_ACTION, 2 COMBAT_ACTION, 3 ORACLE_ACTION,
                     4 FREE_ACTION, 5 PASSIVE_BONUS, 6 WEAPON_RANK, 7 ROLEPLAY,
                     8 STATUS, 9 COMPLEX
     description : Player-facing description.
     dm_notes    : DM-only notes (not shown to players).
+    action_id   : For COMBAT_ACTION/TURN_ACTION/ORACLE_ACTION/FREE_ACTION skills —
+                  the action_id in ACTION_REGISTRY this skill grants access to.
     stat        : For PASSIVE_BONUS skills — the stat being boosted
                   ("PHY", "FNS", "RSN", "SVY", "ANY", "SAVE").
     bonus       : For PASSIVE_BONUS skills — bonus amount (raw, not scaled).
@@ -178,6 +179,7 @@ class SkillDef:
     skill_type:  int        = 0
     description: str        = ""
     dm_notes:    str        = ""
+    action_id:   str | None = None
     stat:        str | None = None
     bonus:       int        = 0
     rank:        str | None = None
@@ -195,32 +197,22 @@ class JobDef:
     display_name : Player-facing name (e.g. "Knight").
     hit_die      : HP die size (e.g. 12 for d12), pre-scaled by POWER_LEVEL
                    at creation time.
-    weapon_rank  : Highest physical weapon rank the job starts with ("E"–"A").
-    armor_rank   : Highest armor/gear rank the job can equip ("E"–"A"). Defaults to "E".
-    spell_rank   : Highest arcane/spell rank the job can equip ("V"–"Z"), or None for no arcane access.
     base_save    : Starting save value (raw, scaled by POWER_LEVEL at creation).
     primary_stat : Which of the four stats (PHY/FNS/RSN/SVY) grows on level-up.
-                   Maps to StatPriority.GREATEST for that stat; others are NONE.
-    max_level    : Maximum level for this job (pre-multiplied by LEVEL_MULTIPLIER).
+    max_level    : Maximum level for this job.
     description  : Job flavour / lore text.
-    combat_actions: Ordered list of action IDs available to this job by default
-                   in ROUNDS mode.  "affect" should always be last.
-                   Note: additional actions may be unlocked via SkillType.COMBAT_ACTION
-                   skills — that is handled at the character level, not here.
     skills       : All skills associated with this job, keyed by skill_id.
-                   Built by _load_job_skills().
+                   Loaded from data/jobskills/skills.json.
+                   Equip rank access, combat actions, and passive bonuses are all
+                   derived from skills rather than hardcoded fields.
     """
     key:            str             = ""
     display_name:   str             = ""
     hit_die:        int             = 6
-    weapon_rank:    str             = "E"
-    armor_rank:     str             = "E"
-    spell_rank:     str | None      = None
     base_save:      int             = 0
     primary_stat:   str             = "PHY"
     max_level:      int             = 5
     description:    str             = ""
-    combat_actions: list[str]       = field(default_factory=list)
     skills:         dict[str, SkillDef] = field(default_factory=dict)
 
 
@@ -236,8 +228,8 @@ _CONDITION_REQUIRED = {
     "condition_id", "label", "duration_type", "hooks",
 }
 _JOB_REQUIRED = {
-    "key", "display_name", "hit_die", "weapon_rank",
-    "base_save", "primary_stat", "max_level", "combat_actions",
+    "key", "display_name", "hit_die",
+    "base_save", "primary_stat", "max_level",
 }
 _SKILL_REQUIRED = {
     "id", "source", "level", "type",
@@ -411,7 +403,7 @@ def _load_condition(path: Path) -> ConditionDef:
 
 def _load_skill(name: str, sdata: dict, path: Path) -> SkillDef:
     """
-    Parse one skill entry from a job's skills block.
+    Parse one skill entry from skills.json.
     `name` is the display-name key from the JSON object (e.g. "Protector").
     `sdata` is the value dict.
     """
@@ -424,16 +416,17 @@ def _load_skill(name: str, sdata: dict, path: Path) -> SkillDef:
         skill_id=sdata["id"],
         name=name,
         source=sdata["source"],
-        level=int(sdata["level"]),     # raw level; azure_engine.py multiplies by LEVEL_MULTIPLIER
+        level=int(sdata["level"]),
         skill_type=skill_type,
         description=sdata.get("desc", ""),
         dm_notes=sdata.get("dm_notes", ""),
+        action_id=sdata.get("action_id"),
         uses=int(uses_raw) if uses_raw is not None else None,
         check=sdata.get("check"),
     )
 
-    # WEAPON_RANK (type 6)
-    if skill_type == 6:
+    # WEAPON_RANK
+    if skill_type == SkillType.WEAPON_RANK.value:
         rank = sdata.get("rank", "E")
         if rank not in _VALID_WEAPON_RANKS:
             raise ValueError(
@@ -442,35 +435,38 @@ def _load_skill(name: str, sdata: dict, path: Path) -> SkillDef:
             )
         skill.rank = rank
 
-    # PASSIVE_BONUS (type 5)
-    if skill_type == 5:
+    # PASSIVE_BONUS
+    if skill_type == SkillType.PASSIVE_BONUS.value:
         skill.stat  = sdata.get("stat")
         skill.bonus = int(sdata.get("bonus", 1))
 
     return skill
 
 
-def _load_job_skills(path: Path) -> dict[str, SkillDef]:
+def _load_all_job_skills(jobskills_dir: Path) -> dict[str, dict[str, SkillDef]]:
     """
-    Load skills for one job from a companion <key>_skills.json file,
-    or return an empty dict if no such file exists.
+    Load data/jobskills/skills.json.
+    Returns a dict keyed by lowercase job name → dict[skill_id, SkillDef].
     """
-    skills_path = path.parent / (path.stem + "_skills.json")
+    skills_path = jobskills_dir / "skills.json"
     if not skills_path.exists():
         return {}
     data = _load_json(skills_path)
-    skills: dict[str, SkillDef] = {}
-    for name, sdata in data.items():
-        skill = _load_skill(name, sdata, skills_path)
-        skills[skill.skill_id] = skill
-    return skills
+    result: dict[str, dict[str, SkillDef]] = {}
+    for job_key_lower, job_skills_data in data.items():
+        skills: dict[str, SkillDef] = {}
+        for name, sdata in job_skills_data.items():
+            skill = _load_skill(name, sdata, skills_path)
+            skills[skill.skill_id] = skill
+        result[job_key_lower] = skills
+    return result
 
 
 # ---------------------------------------------------------------------------
 # Job loader
 # ---------------------------------------------------------------------------
 
-def _load_job(path: Path) -> JobDef:
+def _load_job(path: Path, all_skills: dict[str, dict[str, SkillDef]]) -> JobDef:
     data = _load_json(path)
     _validate_keys(data, _JOB_REQUIRED, path)
 
@@ -488,41 +484,16 @@ def _load_job(path: Path) -> JobDef:
             f"must be one of {_VALID_PRIMARY_STATS}"
         )
 
-    weapon_rank = data["weapon_rank"]
-    if weapon_rank not in _VALID_WEAPON_RANKS:
-        raise ValueError(
-            f"{path}: invalid weapon_rank '{weapon_rank}'; "
-            f"valid ranks: {sorted(_VALID_WEAPON_RANKS)}"
-        )
-
-    armor_rank = data.get("armor_rank", "E")
-    if armor_rank not in _VALID_WEAPON_RANKS:
-        raise ValueError(
-            f"{path}: invalid armor_rank '{armor_rank}'; "
-            f"valid ranks: {sorted(_VALID_WEAPON_RANKS)}"
-        )
-
-    spell_rank = data.get("spell_rank", None)
-    if spell_rank is not None and spell_rank not in _VALID_WEAPON_RANKS:
-        raise ValueError(
-            f"{path}: invalid spell_rank '{spell_rank}'; "
-            f"valid ranks: {sorted(_VALID_WEAPON_RANKS)}"
-        )
-
-    skills = _load_job_skills(path)
+    skills = all_skills.get(key.lower(), {})
 
     return JobDef(
         key=key.upper(),
         display_name=data["display_name"],
         hit_die=int(data["hit_die"]),
-        weapon_rank=weapon_rank,
-        armor_rank=armor_rank,
-        spell_rank=spell_rank,
         base_save=int(data["base_save"]),
         primary_stat=primary_stat,
         max_level=int(data["max_level"]),
         description=data.get("description", ""),
-        combat_actions=list(data["combat_actions"]),
         skills=skills,
     )
 
@@ -559,22 +530,22 @@ def _build_condition_registry(conditions_dir: Path) -> dict[str, ConditionDef]:
 
 def _build_job_definitions(
     classes_dir: Path,
+    jobskills_dir: Path,
 ) -> tuple[dict[str, JobDef], dict[str, SkillDef]]:
     """
-    Load all job files from classes_dir.
+    Load all job files from classes_dir and skills from jobskills_dir/skills.json.
     Returns (job_definitions, skill_registry).
     skill_registry is a flat dict of all skills across all jobs.
     Shared skills (same id, multiple jobs) are stored once — last writer wins
     in the flat registry, but each JobDef keeps its own copy.
     """
+    all_skills = _load_all_job_skills(jobskills_dir)
     job_defs:      dict[str, JobDef]  = {}
     skill_registry: dict[str, SkillDef] = {}
     if not classes_dir.exists():
         return job_defs, skill_registry
     for path in sorted(classes_dir.glob("*.json")):
-        if path.stem.endswith("_skills"):
-            continue  # companion skill files are loaded by _load_job_skills
-        defn = _load_job(path)
+        defn = _load_job(path, all_skills)
         if defn.key in job_defs:
             raise ValueError(f"Duplicate job key '{defn.key}' (from {path})")
         job_defs[defn.key] = defn
@@ -621,12 +592,19 @@ def _cross_validate(
     class_definitions:  dict[str, JobDef],
 ) -> None:
     """Ensure all cross-references between registries are consistent."""
+    _ACTION_SKILL_TYPES = {
+        SkillType.TURN_ACTION.value,
+        SkillType.COMBAT_ACTION.value,
+        SkillType.ORACLE_ACTION.value,
+        SkillType.FREE_ACTION.value,
+    }
     for key, job_def in class_definitions.items():
-        for action_id in job_def.combat_actions:
-            if action_id not in action_registry:
+        for skill in job_def.skills.values():
+            if skill.skill_type in _ACTION_SKILL_TYPES and skill.action_id is not None and skill.action_id not in action_registry:
                 raise ValueError(
-                    f"Job '{key}' references unknown action_id '{action_id}' "
-                    f"in combat_actions. Add data/actions/{action_id}.json."
+                    f"Job '{key}' skill '{skill.name}' references unknown "
+                    f"action_id '{skill.action_id}'. "
+                    f"Add data/actions/{skill.action_id}.json."
                 )
 
     for cond_id, cond_def in condition_registry.items():
@@ -660,7 +638,9 @@ def load_all(data_dir: Path = _DATA_DIR) -> tuple[
     """
     action_registry    = _build_action_registry(data_dir / "actions")
     condition_registry = _build_condition_registry(data_dir / "conditions")
-    class_definitions, skill_registry = _build_job_definitions(data_dir / "classes")
+    class_definitions, skill_registry = _build_job_definitions(
+        data_dir / "classes", data_dir / "jobskills"
+    )
     _cross_validate(action_registry, condition_registry, class_definitions)
     item_registry = _build_item_registry(data_dir / "items")
     return action_registry, condition_registry, class_definitions, skill_registry, item_registry

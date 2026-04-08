@@ -11,6 +11,7 @@ import discord
 
 from engine import equip_item, unequip_item
 from engine.azure_constants import UI_SLOTS, ItemSlot
+from engine.character import CharacterManager
 from engine.data_loader import CONDITION_REGISTRY, ITEM_REGISTRY
 from engine.item import EquipItem
 from store import save_session_async
@@ -164,6 +165,16 @@ def _character_sheet(char, state) -> str:
         inv_lines,
         sep,
     ]
+    # Skills section
+    active_skills = CharacterManager.get_active_skills(char)
+    if active_skills:
+        skill_lines = []
+        for skill in active_skills:
+            skill_lines.append(f"  {skill.name}: {skill.description}")
+        sheet_lines.append("Skills:")
+        sheet_lines.extend(skill_lines)
+        sheet_lines.append(sep)
+
     if char.status_notes:
         sheet_lines.append(f"Status: {char.status_notes}")
 

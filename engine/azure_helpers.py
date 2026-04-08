@@ -127,14 +127,13 @@ def _load_job_file(job_path: Path) -> "Job":
         cJob = json.load(f)
     skills_path = job_path.parent / (job_path.stem + "_skills.json")
     skills = _load_job_skills_file(skills_path)
-    weaponRanks = getLowerWeaponRanks(cJob['weapon_rank'])
     # 'key' is the uppercase identifier; job id is its lowercase form
     job_id = cJob['key'].lower()
     return Job(
         job_id,
         cJob['display_name'],
         cJob['hit_die'],
-        weaponRanks,
+        set(),          # weaponRanks: legacy field, now derived from skills
         cJob['base_save'],
         cJob['primary_stat'],
         skills,

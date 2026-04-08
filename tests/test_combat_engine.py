@@ -1080,11 +1080,12 @@ class TestPoisonAction:
         state.characters[char_id].hp_max = 20
         return state, list(state.characters.keys())[0], npc
 
-    def test_poison_not_in_any_class_actions(self):
+    def test_poison_not_granted_by_any_class_skill(self):
         from engine import CLASS_DEFINITIONS
         for key, job_def in CLASS_DEFINITIONS.items():
-            assert "poison" not in job_def.combat_actions, (
-                f"poison should be removed from {key} combat_actions"
+            action_ids = {s.action_id for s in job_def.skills.values() if s.action_id}
+            assert "poison" not in action_ids, (
+                f"poison should not be granted by a skill in {key}"
             )
 
     def test_poison_has_no_range_requirement(self):

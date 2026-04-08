@@ -2,12 +2,8 @@
   "key": "MAGE",
   "display_name": "Mage",
   "hit_die": 4,
-  "weapon_rank": "E",
-  "armor_rank": "E",
-  "spell_rank": "V",
   "base_save": 2,
   "primary_stat": "RSN",
   "max_level": 5,
-  "description": "",
-  "combat_actions": ["advance", "abdicate", "aggrieve", "assail", "abjure", "abscond", "affect"]
+  "description": ""
 }

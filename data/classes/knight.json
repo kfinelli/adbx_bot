@@ -2,11 +2,8 @@
   "key": "KNIGHT",
   "display_name": "Knight",
   "hit_die": 12,
-  "weapon_rank": "C",
-  "armor_rank": "B",
   "base_save": 4,
   "primary_stat": "PHY",
   "max_level": 5,
-  "description": "Knights who behave dishonorably may lose access to some or all of their knightly abilities. Minor infractions may incur short penalties, however major infractions could require a knight to perform a quest of atonement to reacquire their abilities.",
-  "combat_actions": ["advance", "abdicate", "aggrieve", "assail", "abjure", "abscond", "affect"]
+  "description": "Knights who behave dishonorably may lose access to some or all of their knightly abilities. Minor infractions may incur short penalties, however major infractions could require a knight to perform a quest of atonement to reacquire their abilities."
 }

@@ -7,10 +7,11 @@ from engine.azure_constants import (
     DEFAULT_EQUIPPED_SLOTS,
     GEAR_SLOT_MAP,
     ItemSlot,
+    SkillType,
 )
 from engine.azure_engine import CREATION_RULES, POWER_LEVEL
 from engine.azure_helpers import getLowerWeaponRanks
-from engine.data_loader import CLASS_DEFINITIONS, ITEM_REGISTRY
+from engine.data_loader import CLASS_DEFINITIONS, ITEM_REGISTRY, SkillDef
 from engine.item import ChargeWeapon, ContainerItem, EquipItem, Weapon
 from models import (
     AzureStats,
@@ -142,25 +143,39 @@ class CharacterManager:
     _PHYSICAL_RANKS = {"E", "D", "C", "B", "A"}
     _ARCANE_RANKS   = {"V", "W", "X", "Y", "Z"}
 
+    @staticmethod
+    def get_active_skills(char: Character) -> list[SkillDef]:
+        """
+        Return all skills unlocked by the character's current job levels.
+        A skill is active when skill.level <= the character's level in that job.
+        """
+        active: list[SkillDef] = []
+        for job_key, job_exp in char.jobs.items():
+            job_def = CLASS_DEFINITIONS.get(job_key.upper())
+            if job_def is None:
+                continue
+            for skill in job_def.skills.values():
+                if skill.level <= job_exp.level:
+                    active.append(skill)
+        return active
+
     def _char_allowed_ranks(self, char: Character, rank_type: str) -> set:
         """
         Return the set of item ranks the character is allowed to equip for the
         given rank_type ("weapon", "armor", or "spell").
 
-        Unions across all jobs so multi-class characters get the best rank.
-        Returns an empty set if no rank is available for that category.
+        Derived from WEAPON_RANK (type 6) skills active at the character's level.
+        Physical rank skills (E–A) apply to both weapons and armor.
+        Arcane rank skills (V–Z) apply to spells.
         """
         allowed: set[str] = set()
-        for job_key in char.jobs:
-            job_def = CLASS_DEFINITIONS.get(job_key.upper())
-            if job_def is None:
+        for skill in self.get_active_skills(char):
+            if skill.skill_type != SkillType.WEAPON_RANK.value or skill.rank is None:
                 continue
-            if rank_type == "weapon":
-                allowed |= getLowerWeaponRanks(job_def.weapon_rank)
-            elif rank_type == "armor":
-                allowed |= getLowerWeaponRanks(job_def.armor_rank)
-            elif rank_type == "spell" and job_def.spell_rank is not None:
-                allowed |= getLowerWeaponRanks(job_def.spell_rank)
+            if (rank_type in ("weapon", "armor") and skill.rank in self._PHYSICAL_RANKS) or (
+                rank_type == "spell" and skill.rank in self._ARCANE_RANKS
+            ):
+                allowed |= getLowerWeaponRanks(skill.rank)
         return allowed
 
     def _resolve_target_slot(
@@ -626,13 +641,16 @@ class CharacterManager:
         from engine.azure_constants import POWER_LEVEL, StatPriority
 
         _STAT_MAP = {"PHY": "physique", "FNS": "finesse", "RSN": "reason", "SVY": "savvy"}
+        _VALID_STATS = {"PHY", "FNS", "RSN", "SVY"}
 
         # HP gain: roll d(hit_die * POWER_LEVEL), matching hero.py formula
+        # TODO: make HP gain possible to recalculate by preserving random results
         hp_gain = random.randint(1, job_def.hit_die * POWER_LEVEL)
         job_exp.hp_bonus += hp_gain
         char.hp_max += hp_gain
 
         # Stat gain: primary stat only, up to StatPriority.GREATEST POWER_LEVEL units
+        # TODO: make stat gain possible to recalculate by preserving random results
         primary_attr = _STAT_MAP.get(job_def.primary_stat, "physique")
         stat_gain = random.randint(1, StatPriority.GREATEST)
         job_exp.stat_bonuses[primary_attr] += stat_gain
@@ -646,11 +664,38 @@ class CharacterManager:
         # Heal to full (per hero.py refreshSheet(heal=True) behaviour)
         char.hp_current = char.hp_max
 
+        # Apply PASSIVE_BONUS skills unlocked at the new level
+        skill_stat_changes: dict[str, int] = {}
+        skills_granted: list[SkillDef] = []
+        for skill in job_def.skills.values():
+            if skill.level != job_exp.level:
+                continue
+            skills_granted.append(skill)
+            if skill.skill_type == SkillType.PASSIVE_BONUS.value and skill.bonus:
+                stat_key = skill.stat
+                if stat_key in _VALID_STATS:
+                    attr = _STAT_MAP[stat_key]
+                elif stat_key == "ANY":
+                    # Randomly pick one of the four stats
+                    attr = random.choice(list(_STAT_MAP.values()))
+                else:
+                    continue
+                bonus = skill.bonus
+                job_exp.stat_bonuses[attr] += bonus
+                setattr(char.ability_scores, attr,
+                        getattr(char.ability_scores, attr) + bonus)
+                skill_stat_changes[attr] = skill_stat_changes.get(attr, 0) + bonus
+
+        combined_stat_changes = {primary_attr: stat_gain}
+        for attr, bonus in skill_stat_changes.items():
+            combined_stat_changes[attr] = combined_stat_changes.get(attr, 0) + bonus
+
         return LevelUpResult(
             character_id=char.character_id,
             character_name=char.name,
             job_id=job_exp.job_id,
             new_level=job_exp.level,
             hp_gained=hp_gain,
-            stat_changes={primary_attr: stat_gain},
+            stat_changes=combined_stat_changes,
+            skills_granted=skills_granted,
         )

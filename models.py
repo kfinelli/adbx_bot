@@ -54,6 +54,7 @@ class LevelUpResult:
     new_level: int
     hp_gained: int              # POWER_LEVEL units
     stat_changes: dict[str, int]  # POWER_LEVEL units, non-zero entries only
+    skills_granted: list = field(default_factory=list)  # list[SkillDef]
 
 
 class CharacterStatus(Enum):

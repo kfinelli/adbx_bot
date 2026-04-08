@@ -20,6 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from engine.azure_constants import SkillType
 from engine.data_loader import (
     ACTION_REGISTRY,
     CLASS_DEFINITIONS,
@@ -40,10 +41,12 @@ def _make_data_dir(tmp: Path) -> tuple[Path, Path, Path, Path]:
     conditions = tmp / "conditions"
     classes    = tmp / "classes"
     items      = tmp / "items"
+    jobskills  = tmp / "jobskills"
     actions.mkdir()
     conditions.mkdir()
     classes.mkdir()
     items.mkdir()
+    jobskills.mkdir()
     return actions, conditions, classes, items
 
 
@@ -74,16 +77,28 @@ _VALID_CONDITION = {
     },
 }
 
-# Minimal valid job fixture (Azure schema)
+# Minimal valid job fixture (Azure schema — no hardcoded ranks or actions)
 _VALID_JOB = {
-    "key":            "KNIGHT",
-    "display_name":   "Knight",
-    "hit_die":        12,
-    "weapon_rank":    "C",
-    "base_save":      4,
-    "primary_stat":   "PHY",
-    "max_level":      5,
-    "combat_actions": ["attack"],
+    "key":          "KNIGHT",
+    "display_name": "Knight",
+    "hit_die":      12,
+    "base_save":    4,
+    "primary_stat": "PHY",
+    "max_level":    5,
+}
+
+# Minimal valid jobskills fixture for KNIGHT (used by isolated tests)
+_VALID_KNIGHT_SKILLS = {
+    "knight": {
+        "Attack": {
+            "id": "knight_attack",
+            "source": "knight",
+            "level": 1,
+            "type": 2,
+            "action_id": "attack",
+            "desc": "Basic attack.",
+        }
+    }
 }
 
 
@@ -134,28 +149,31 @@ class TestProductionDataFiles:
         assert isinstance(j, JobDef)
         assert j.display_name == "Knight"
         assert j.hit_die == 12
-        assert j.weapon_rank == "C"
         assert j.base_save == 4
         assert j.primary_stat == "PHY"
         assert j.max_level == 5
-        assert "aggrieve" in j.combat_actions
-        assert "move"     not in j.combat_actions  # Move is a top-level button, not an Act action
-        assert "affect"   in j.combat_actions
+        # Actions come from COMBAT_ACTION skills
+        action_ids = {s.action_id for s in j.skills.values() if s.action_id}
+        assert "aggrieve" in action_ids
+        assert "move" not in action_ids  # Move is a top-level button, not from a skill
+        assert "affect" in action_ids
+        # Starting weapon rank comes from WEAPON_RANK skill at level 1
+        weapon_rank_skills = [s for s in j.skills.values() if s.skill_type == SkillType.WEAPON_RANK.value and s.level == 1]
+        assert any(s.rank == "C" for s in weapon_rank_skills)
 
     def test_job_thief_values(self):
         j = CLASS_DEFINITIONS["THIEF"]
         assert j.display_name == "Thief"
         assert j.hit_die == 6
-        assert j.weapon_rank == "D"
         assert j.base_save == 2
         assert j.primary_stat == "FNS"
-        assert "assail" in j.combat_actions
+        action_ids = {s.action_id for s in j.skills.values() if s.action_id}
+        assert "assail" in action_ids
 
     def test_job_mage_values(self):
         j = CLASS_DEFINITIONS["MAGE"]
         assert j.display_name == "Mage"
         assert j.hit_die == 4
-        assert j.weapon_rank == "E"
         assert j.primary_stat == "RSN"
 
     def test_job_dilettante_values(self):
@@ -170,25 +188,27 @@ class TestProductionDataFiles:
         ):
             assert cid in CONDITION_REGISTRY
 
-    def test_all_classes_have_a_actions(self):
+    def test_all_classes_have_base_actions(self):
         expected = {"advance", "abdicate", "aggrieve", "assail", "abjure", "abscond", "affect"}
         for key, job_def in CLASS_DEFINITIONS.items():
-            assert expected == set(job_def.combat_actions), (
-                f"Class {key} has wrong combat_actions: {job_def.combat_actions}"
+            action_ids = {s.action_id for s in job_def.skills.values() if s.action_id}
+            assert expected <= action_ids, (
+                f"Class {key} missing base actions: {expected - action_ids}"
             )
 
     def test_new_actions_exist_in_registry(self):
         for action_id in ("aggrieve", "advance", "abdicate", "assail", "abjure"):
             assert action_id in ACTION_REGISTRY, f"Missing action: {action_id}"
 
-    def test_all_job_combat_actions_exist_in_registry(self):
-        """Every action ID referenced by any job must exist in ACTION_REGISTRY."""
+    def test_all_job_skill_action_ids_exist_in_registry(self):
+        """Every action_id referenced by a job skill must exist in ACTION_REGISTRY."""
         for key, job_def in CLASS_DEFINITIONS.items():
-            for action_id in job_def.combat_actions:
-                assert action_id in ACTION_REGISTRY, (
-                    f"Job {key} references action '{action_id}' "
-                    f"which is not in ACTION_REGISTRY"
-                )
+            for skill in job_def.skills.values():
+                if skill.action_id is not None:
+                    assert skill.action_id in ACTION_REGISTRY, (
+                        f"Job {key} skill '{skill.name}' references action "
+                        f"'{skill.action_id}' which is not in ACTION_REGISTRY"
+                    )
 
     def test_skill_registry_is_dict(self):
         """SKILL_REGISTRY loads without error (empty until _skills.json files added)."""
@@ -241,19 +261,21 @@ class TestLoadAllIsolated:
             assert cd["KNIGHT"].primary_stat == "PHY"
             assert isinstance(cd["KNIGHT"], JobDef)
 
-    def test_job_skills_loaded_from_companion_file(self):
-        """Skills in <key>_skills.json are loaded into the JobDef.skills dict."""
+    def test_job_skills_loaded_from_skills_json(self):
+        """Skills in jobskills/skills.json are loaded into the JobDef.skills dict."""
         with tempfile.TemporaryDirectory() as tmp:
             actions, conditions, classes, items = _make_data_dir(Path(tmp))
             _write(actions / "attack.json", _VALID_ACTION)
             _write(classes / "knight.json", _VALID_JOB)
-            _write(classes / "knight_skills.json", {
-                "Protector": {
-                    "id": "knight_protector",
-                    "source": "knight",
-                    "level": 1,
-                    "type": 4,
-                    "desc": "Give +1 DEF to one other party member.",
+            _write(Path(tmp) / "jobskills" / "skills.json", {
+                "knight": {
+                    "Protector": {
+                        "id": "knight_protector",
+                        "source": "knight",
+                        "level": 1,
+                        "type": 4,
+                        "desc": "Give +1 DEF to one other party member.",
+                    }
                 }
             })
             _, _, cd, sr, _ = load_all(Path(tmp))
@@ -263,22 +285,24 @@ class TestLoadAllIsolated:
             assert isinstance(skill, SkillDef)
             assert skill.name == "Protector"
             assert skill.source == "knight"
-            assert skill.skill_type == 4
+            assert skill.skill_type == SkillType.FREE_ACTION.value
 
     def test_skill_passive_bonus_fields(self):
         with tempfile.TemporaryDirectory() as tmp:
             actions, conditions, classes, items = _make_data_dir(Path(tmp))
             _write(actions / "attack.json", _VALID_ACTION)
             _write(classes / "knight.json", _VALID_JOB)
-            _write(classes / "knight_skills.json", {
-                "+1 PHY": {
-                    "id": "knight_phyBonus",
-                    "source": "knight",
-                    "level": 2,
-                    "type": 5,
-                    "stat": "PHY",
-                    "bonus": 1,
-                    "desc": "Increase Physique by 1!",
+            _write(Path(tmp) / "jobskills" / "skills.json", {
+                "knight": {
+                    "+1 PHY": {
+                        "id": "knight_phyBonus",
+                        "source": "knight",
+                        "level": 2,
+                        "type": 5,
+                        "stat": "PHY",
+                        "bonus": 1,
+                        "desc": "Increase Physique by 1!",
+                    }
                 }
             })
             _, _, cd, _, _ = load_all(Path(tmp))
@@ -291,23 +315,25 @@ class TestLoadAllIsolated:
             actions, conditions, classes, items = _make_data_dir(Path(tmp))
             _write(actions / "attack.json", _VALID_ACTION)
             _write(classes / "knight.json", _VALID_JOB)
-            _write(classes / "knight_skills.json", {
-                "Martial Expertise": {
-                    "id": "martial_iii",
-                    "source": "knight",
-                    "level": 5,
-                    "type": 6,
-                    "rank": "B",
-                    "desc": "You can equip gear and weapons with Rank: B",
+            _write(Path(tmp) / "jobskills" / "skills.json", {
+                "knight": {
+                    "Martial Expertise": {
+                        "id": "martial_iii",
+                        "source": "knight",
+                        "level": 5,
+                        "type": 6,
+                        "rank": "B",
+                        "desc": "You can equip gear and weapons with Rank: B",
+                    }
                 }
             })
             _, _, cd, _, _ = load_all(Path(tmp))
             skill = cd["KNIGHT"].skills["martial_iii"]
             assert skill.rank == "B"
-            assert skill.skill_type == 6
+            assert skill.skill_type == SkillType.WEAPON_RANK.value
 
     def test_shared_skills_merged_into_skill_registry(self):
-        """A skill id shared by two jobs appears once in SKILL_REGISTRY."""
+        """A skill id shared by two jobs appears in SKILL_REGISTRY and both JobDefs."""
         with tempfile.TemporaryDirectory() as tmp:
             actions, conditions, classes, items = _make_data_dir(Path(tmp))
             _write(actions / "attack.json", _VALID_ACTION)
@@ -317,17 +343,26 @@ class TestLoadAllIsolated:
             job2["primary_stat"] = "FNS"
             _write(classes / "knight.json", _VALID_JOB)
             _write(classes / "thief.json", job2)
-            shared_skill = {
-                "Trapwise": {
-                    "id": "trapwise",
-                    "source": "thief",
-                    "level": 1,
-                    "type": 1,
-                    "desc": "Locate traps.",
-                }
-            }
-            _write(classes / "knight_skills.json", shared_skill)
-            _write(classes / "thief_skills.json", shared_skill)
+            _write(Path(tmp) / "jobskills" / "skills.json", {
+                "knight": {
+                    "Trapwise": {
+                        "id": "trapwise",
+                        "source": "knight",
+                        "level": 1,
+                        "type": 1,
+                        "desc": "Locate traps.",
+                    }
+                },
+                "thief": {
+                    "Trapwise": {
+                        "id": "trapwise",
+                        "source": "thief",
+                        "level": 1,
+                        "type": 1,
+                        "desc": "Locate traps.",
+                    }
+                },
+            })
             _, _, cd, sr, _ = load_all(Path(tmp))
             assert "trapwise" in sr
             assert "trapwise" in cd["KNIGHT"].skills
@@ -560,17 +595,28 @@ class TestValidationErrors:
             except ValueError as e:
                 assert "primary_stat" in str(e)
 
-    def test_invalid_weapon_rank(self):
+    def test_invalid_skill_weapon_rank(self):
+        """A WEAPON_RANK skill with an invalid rank letter should raise."""
         with tempfile.TemporaryDirectory() as tmp:
             actions, conditions, classes, items = _make_data_dir(Path(tmp))
-            bad = dict(_VALID_JOB)
-            bad["weapon_rank"] = "S"
-            _write(classes / "knight.json", bad)
+            _write(classes / "knight.json", _VALID_JOB)
+            _write(Path(tmp) / "jobskills" / "skills.json", {
+                "knight": {
+                    "Bad Rank": {
+                        "id": "bad_rank",
+                        "source": "knight",
+                        "level": 1,
+                        "type": 6,
+                        "rank": "S",
+                        "desc": "Invalid rank.",
+                    }
+                }
+            })
             try:
                 load_all(Path(tmp))
                 raise AssertionError("Should have raised")
             except ValueError as e:
-                assert "weapon_rank" in str(e)
+                assert "rank" in str(e).lower()
 
     def test_malformed_json_raises(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -582,28 +628,29 @@ class TestValidationErrors:
             except ValueError as e:
                 assert "Invalid JSON" in str(e)
 
-    def test_job_references_unknown_action(self):
+    def test_skill_references_unknown_action(self):
+        """A COMBAT_ACTION skill referencing a missing action_id should raise."""
         with tempfile.TemporaryDirectory() as tmp:
             actions, conditions, classes, items = _make_data_dir(Path(tmp))
-            job = dict(_VALID_JOB)
-            job["combat_actions"] = ["attack", "nonexistent_action"]
             _write(actions / "attack.json", _VALID_ACTION)
-            _write(classes / "knight.json", job)
+            _write(classes / "knight.json", _VALID_JOB)
+            _write(Path(tmp) / "jobskills" / "skills.json", {
+                "knight": {
+                    "Ghost Strike": {
+                        "id": "ghost_strike",
+                        "source": "knight",
+                        "level": 1,
+                        "type": 2,
+                        "action_id": "nonexistent_action",
+                        "desc": "Does something.",
+                    }
+                }
+            })
             try:
                 load_all(Path(tmp))
                 raise AssertionError("Should have raised")
             except ValueError as e:
                 assert "nonexistent_action" in str(e)
-
-    def test_job_with_no_actions_references_unknown(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            actions, conditions, classes, items = _make_data_dir(Path(tmp))
-            _write(classes / "knight.json", _VALID_JOB)  # references "attack"
-            try:
-                load_all(Path(tmp))
-                raise AssertionError("Should have raised")
-            except ValueError as e:
-                assert "attack" in str(e)
 
     def test_condition_references_unknown_action_in_grants(self):
         with tempfile.TemporaryDirectory() as tmp:

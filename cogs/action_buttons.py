@@ -57,7 +57,6 @@ from discord.ext import commands
 from discord_tasks import post_oracle_question
 from engine import (
     ACTION_REGISTRY,
-    CLASS_DEFINITIONS,
     CombatAction,
     abscond,
     ask_oracle,
@@ -69,6 +68,7 @@ from engine import (
     say,
     submit_turn,
 )
+from engine.azure_constants import SkillType
 from models import RangeBand, SessionMode, TurnStatus
 from store import (
     get_session,
@@ -734,10 +734,15 @@ def _build_class_action_view(char, state, channel_id: str) -> discord.ui.View:
 
     The view is ephemeral-only (timeout=180) and NOT registered as persistent.
     """
-    # Base action IDs from class definition
-    cls_key = char.character_class.name   # e.g. "KNIGHT"
-    cls_def = CLASS_DEFINITIONS.get(cls_key)
-    action_ids = list(cls_def.combat_actions) if cls_def else ["attack", "move", "affect"]
+    # Base action IDs from COMBAT_ACTION skills active at the character's level
+    from engine.character import CharacterManager
+    active_skills = CharacterManager.get_active_skills(char)
+    seen: set[str] = set()
+    action_ids: list[str] = []
+    for skill in active_skills:
+        if skill.skill_type == SkillType.COMBAT_ACTION.value and skill.action_id and skill.action_id not in seen:
+            seen.add(skill.action_id)
+            action_ids.append(skill.action_id)
 
     # Add any condition-granted actions
     if state.battlefield:
