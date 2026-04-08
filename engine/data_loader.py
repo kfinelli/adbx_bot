@@ -231,9 +231,8 @@ _JOB_REQUIRED = {
     "key", "display_name", "hit_die",
     "base_save", "primary_stat", "max_level",
 }
-_SKILL_REQUIRED = {
-    "id", "source", "level", "type",
-}
+_SKILL_DEF_REQUIRED = {"name", "type"}
+_SKILL_GRANT_REQUIRED = {"id", "level"}
 
 _VALID_BUTTON_STYLES  = {"primary", "secondary", "danger", "success"}
 _VALID_ACTION_TYPES   = {"attack", "move", "affect", "combat"}
@@ -401,22 +400,23 @@ def _load_condition(path: Path) -> ConditionDef:
 # Skill loader
 # ---------------------------------------------------------------------------
 
-def _load_skill(name: str, sdata: dict, path: Path) -> SkillDef:
+def _load_skill_definition(skill_id: str, sdata: dict, path: Path) -> SkillDef:
     """
-    Parse one skill entry from skills.json.
-    `name` is the display-name key from the JSON object (e.g. "Protector").
-    `sdata` is the value dict.
+    Parse one skill definition from the "definitions" block of skills.json.
+    `skill_id` is the key in the definitions dict (e.g. "advance").
+    `sdata` is the value dict; it must NOT contain source or level
+    (those are assigned per-job in the grants block).
     """
-    _validate_keys(sdata, _SKILL_REQUIRED, path)
+    _validate_keys(sdata, _SKILL_DEF_REQUIRED, path)
 
     skill_type = int(sdata["type"])
     uses_raw   = sdata.get("uses")
 
     skill = SkillDef(
-        skill_id=sdata["id"],
-        name=name,
-        source=sdata["source"],
-        level=int(sdata["level"]),
+        skill_id=skill_id,
+        name=sdata["name"],
+        source="",    # filled in when the skill is assigned to a job
+        level=0,      # filled in from the grants block
         skill_type=skill_type,
         description=sdata.get("desc", ""),
         dm_notes=sdata.get("dm_notes", ""),
@@ -430,7 +430,7 @@ def _load_skill(name: str, sdata: dict, path: Path) -> SkillDef:
         rank = sdata.get("rank", "E")
         if rank not in _VALID_WEAPON_RANKS:
             raise ValueError(
-                f"{path}: skill '{name}' has invalid weapon rank '{rank}'; "
+                f"{path}: skill '{skill_id}' has invalid weapon rank '{rank}'; "
                 f"valid ranks: {sorted(_VALID_WEAPON_RANKS)}"
             )
         skill.rank = rank
@@ -443,30 +443,34 @@ def _load_skill(name: str, sdata: dict, path: Path) -> SkillDef:
     return skill
 
 
-def _load_all_job_skills(jobskills_dir: Path) -> dict[str, dict[str, SkillDef]]:
+def _load_skill_definitions(jobskills_dir: Path) -> dict[str, SkillDef]:
     """
-    Load data/jobskills/skills.json.
-    Returns a dict keyed by lowercase job name → dict[skill_id, SkillDef].
+    Load the "definitions" block from data/jobskills/skills.json.
+    Returns a flat dict[skill_id, SkillDef] with source and level unset
+    (those are filled in per-job when resolving grants in _load_job).
     """
     skills_path = jobskills_dir / "skills.json"
     if not skills_path.exists():
         return {}
     data = _load_json(skills_path)
-    result: dict[str, dict[str, SkillDef]] = {}
-    for job_key_lower, job_skills_data in data.items():
-        skills: dict[str, SkillDef] = {}
-        for name, sdata in job_skills_data.items():
-            skill = _load_skill(name, sdata, skills_path)
-            skills[skill.skill_id] = skill
-        result[job_key_lower] = skills
-    return result
+    defs: dict[str, SkillDef] = {}
+    for skill_id, sdata in data.get("definitions", {}).items():
+        defs[skill_id] = _load_skill_definition(skill_id, sdata, skills_path)
+    return defs
 
 
 # ---------------------------------------------------------------------------
 # Job loader
 # ---------------------------------------------------------------------------
 
-def _load_job(path: Path, all_skills: dict[str, dict[str, SkillDef]]) -> JobDef:
+def _load_job(path: Path, skill_defs: dict[str, SkillDef]) -> JobDef:
+    """
+    Load one job from data/classes/<key>.json.
+    The job's "skills" array (list of {id, level} grants) is resolved
+    against skill_defs to build JobDef.skills.
+    """
+    import dataclasses
+
     data = _load_json(path)
     _validate_keys(data, _JOB_REQUIRED, path)
 
@@ -484,7 +488,19 @@ def _load_job(path: Path, all_skills: dict[str, dict[str, SkillDef]]) -> JobDef:
             f"must be one of {_VALID_PRIMARY_STATS}"
         )
 
-    skills = all_skills.get(key.lower(), {})
+    job_key_lower = key.lower()
+    skills: dict[str, SkillDef] = {}
+    for grant in data.get("skills", []):
+        _validate_keys(grant, _SKILL_GRANT_REQUIRED, path)
+        skill_id = grant["id"]
+        level    = int(grant["level"])
+        base = skill_defs.get(skill_id)
+        if base is None:
+            raise ValueError(
+                f"{path}: job '{job_key_lower}' grants unknown skill id "
+                f"'{skill_id}'. Add it to data/jobskills/skills.json."
+            )
+        skills[skill_id] = dataclasses.replace(base, source=job_key_lower, level=level)
 
     return JobDef(
         key=key.upper(),
@@ -539,13 +555,13 @@ def _build_job_definitions(
     Shared skills (same id, multiple jobs) are stored once — last writer wins
     in the flat registry, but each JobDef keeps its own copy.
     """
-    all_skills = _load_all_job_skills(jobskills_dir)
+    skill_defs = _load_skill_definitions(jobskills_dir)
     job_defs:      dict[str, JobDef]  = {}
     skill_registry: dict[str, SkillDef] = {}
     if not classes_dir.exists():
         return job_defs, skill_registry
     for path in sorted(classes_dir.glob("*.json")):
-        defn = _load_job(path, all_skills)
+        defn = _load_job(path, skill_defs)
         if defn.key in job_defs:
             raise ValueError(f"Duplicate job key '{defn.key}' (from {path})")
         job_defs[defn.key] = defn

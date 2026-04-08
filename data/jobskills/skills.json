@@ -1,507 +1,192 @@
 {
-  "knight": {
-    "Advance": {
-      "id": "knight_advance",
-      "source": "knight",
-      "level": 1,
+  "definitions": {
+    "advance": {
+      "name": "Advance",
       "type": 2,
       "action_id": "advance",
       "desc": "Move to an adjacent zone."
     },
-    "Abdicate": {
-      "id": "knight_abdicate",
-      "source": "knight",
-      "level": 1,
+    "abdicate": {
+      "name": "Abdicate",
       "type": 2,
       "action_id": "abdicate",
       "desc": "Forfeit your combat action."
     },
-    "Aggrieve": {
-      "id": "knight_aggrieve",
-      "source": "knight",
-      "level": 1,
+    "aggrieve": {
+      "name": "Aggrieve",
       "type": 2,
       "action_id": "aggrieve",
       "desc": "Charge into melee range and attack."
     },
-    "Assail": {
-      "id": "knight_assail",
-      "source": "knight",
-      "level": 1,
+    "assail": {
+      "name": "Assail",
       "type": 2,
       "action_id": "assail",
       "desc": "Attack an enemy in range."
     },
-    "Abjure": {
-      "id": "knight_abjure",
-      "source": "knight",
-      "level": 1,
+    "abjure": {
+      "name": "Abjure",
       "type": 2,
       "action_id": "abjure",
       "desc": "Attempt to repel an enemy."
     },
-    "Abscond": {
-      "id": "knight_abscond",
-      "source": "knight",
-      "level": 1,
+    "abscond": {
+      "name": "Abscond",
       "type": 2,
       "action_id": "abscond",
       "desc": "Attempt to flee from combat."
     },
-    "Affect": {
-      "id": "knight_affect",
-      "source": "knight",
-      "level": 1,
+    "affect": {
+      "name": "Affect",
       "type": 2,
       "action_id": "affect",
       "desc": "Declare a freeform action requiring DM input."
     },
-    "Martial Training": {
-      "id": "martial_i_knight",
-      "source": "knight",
-      "level": 1,
+    "trapwise": {
+      "name": "Trapwise",
+      "type": 1,
+      "desc": "Locate traps using RSN or SVY."
+    },
+    "martial_training_c": {
+      "name": "Martial Training",
       "type": 6,
       "rank": "C",
       "desc": "You can equip gear and weapons with Rank: C"
     },
-    "Protector": {
-      "id": "knight_protector",
-      "source": "knight",
-      "level": 1,
-      "type": 4,
-      "desc": "Give +1 DEF to one other party member or NPC. This bonus increases to +2 at level 3, and to +3 at level 5.\nYou may switch targets on your turn as part of an oracle action."
+    "martial_training_d": {
+      "name": "Light Weapons",
+      "type": 6,
+      "rank": "D",
+      "desc": "You can equip gear and weapons with Rank: D"
     },
-    "+1 PHY": {
-      "id": "knight_phyBonus",
-      "source": "knight",
-      "level": 2,
+    "martial_expertise_b": {
+      "name": "Martial Expertise",
+      "type": 6,
+      "rank": "B",
+      "desc": "You can equip gear and weapons with Rank: B"
+    },
+    "arcane_basics": {
+      "name": "Arcane Basics",
+      "type": 6,
+      "rank": "V",
+      "desc": "You can equip gear and weapons with Rank: V"
+    },
+    "arcane_knowledge": {
+      "name": "Arcane Knowledge",
+      "type": 6,
+      "rank": "W",
+      "desc": "You can equip gear and weapons with Rank: W"
+    },
+    "arcane_secrets": {
+      "name": "Arcane Secrets",
+      "type": 6,
+      "rank": "X",
+      "desc": "You can equip gear and weapons with Rank: X"
+    },
+    "passive_phy_bonus": {
+      "name": "+1 PHY",
       "type": 5,
       "stat": "PHY",
       "bonus": 1,
       "desc": "Increase Physique by 1!"
     },
-    "+1 ANY": {
-      "id": "knight_anyBonus",
-      "source": "knight",
-      "level": 4,
-      "type": 5,
-      "stat": "ANY",
-      "bonus": 1,
-      "desc": "Increase any stat by 1!"
-    },
-    "Honorable Reputation": {
-      "id": "knight_rep",
-      "source": "knight",
-      "level": 4,
-      "type": 7,
-      "desc": "When making a check to persuade an NPC, lower the DC by 2 unless they hate knights."
-    },
-    "Martial Expertise": {
-      "id": "martial_iii",
-      "source": "knight",
-      "level": 5,
-      "type": 6,
-      "rank": "B",
-      "desc": "You can equip gear and weapons with Rank: B"
-    },
-    "Unburdened": {
-      "id": "knight_unburdened",
-      "source": "knight",
-      "level": 5,
-      "type": 9,
-      "desc": "Your dodge is not capped while wearing [Heavy] armor."
-    },
-    "Resilience": {
-      "id": "knight_resilience",
-      "source": "knight",
-      "level": 5,
-      "type": 8,
-      "desc": "Once per day, remain at 1hp after taking lethal damage."
-    }
-  },
-  "thief": {
-    "Advance": {
-      "id": "thief_advance",
-      "source": "thief",
-      "level": 1,
-      "type": 2,
-      "action_id": "advance",
-      "desc": "Move to an adjacent zone."
-    },
-    "Abdicate": {
-      "id": "thief_abdicate",
-      "source": "thief",
-      "level": 1,
-      "type": 2,
-      "action_id": "abdicate",
-      "desc": "Forfeit your combat action."
-    },
-    "Aggrieve": {
-      "id": "thief_aggrieve",
-      "source": "thief",
-      "level": 1,
-      "type": 2,
-      "action_id": "aggrieve",
-      "desc": "Charge into melee range and attack."
-    },
-    "Assail": {
-      "id": "thief_assail",
-      "source": "thief",
-      "level": 1,
-      "type": 2,
-      "action_id": "assail",
-      "desc": "Attack an enemy in range."
-    },
-    "Abjure": {
-      "id": "thief_abjure",
-      "source": "thief",
-      "level": 1,
-      "type": 2,
-      "action_id": "abjure",
-      "desc": "Attempt to repel an enemy."
-    },
-    "Abscond": {
-      "id": "thief_abscond",
-      "source": "thief",
-      "level": 1,
-      "type": 2,
-      "action_id": "abscond",
-      "desc": "Attempt to flee from combat."
-    },
-    "Affect": {
-      "id": "thief_affect",
-      "source": "thief",
-      "level": 1,
-      "type": 2,
-      "action_id": "affect",
-      "desc": "Declare a freeform action requiring DM input."
-    },
-    "Light Weapons": {
-      "id": "light_weapons_thief",
-      "source": "thief",
-      "level": 1,
-      "type": 6,
-      "rank": "D",
-      "desc": "You can equip gear and weapons with Rank: D"
-    },
-    "Acquire": {
-      "id": "thief_acquire",
-      "source": "thief",
-      "level": 1,
-      "type": 2,
-      "action_id": "affect",
-      "desc": "DC: ? + [target FNS].\nMake a finesse check to steal an unequipped item from an enemy.",
-      "dm_notes": "Base DCs are usually:\n5 - unequipped items\n7 - held items (level 3 or higher)\n9 - equipped items (level 5)\nSome items may be easier or harder to steal at your discretion"
-    },
-    "Trapwise": {
-      "id": "trapwise",
-      "source": "thief",
-      "level": 1,
-      "type": 1,
-      "desc": "Locate traps using RSN or SVY"
-    },
-    "+1 FNS": {
-      "id": "thief_fnsBonus",
-      "source": "thief",
-      "level": 2,
+    "passive_fns_bonus": {
+      "name": "+1 FNS",
       "type": 5,
       "stat": "FNS",
       "bonus": 1,
       "desc": "Increase Finesse by 1!"
     },
-    "Hide": {
-      "id": "thief_hide",
-      "source": "thief",
-      "level": 2,
-      "type": 3,
-      "desc": "*(you must use your oracle and move actions to use this in combat)*\nYou may hide on your turn. Opponents cannot target you while you are hidden. If you successfully attack while hidden, the damage bypasses your opponent's DEF, but you are no longer hidden."
-    },
-    "Disarm": {
-      "id": "thief_disarm",
-      "source": "thief",
-      "level": 3,
-      "type": 0,
-      "desc": "You may use Acquire on an enemy's held items."
-    },
-    "Slip": {
-      "id": "thief_slip",
-      "source": "thief",
-      "level": 3,
-      "type": 4,
-      "check": {
-        "DC": 9,
-        "Stat": "FNS"
-      },
-      "desc": "On a successful FNS check, enemies cannot attack you for leaving the current zone until next turn"
-    },
-    "+1 ANY": {
-      "id": "thief_anyBonus",
-      "source": "thief",
-      "level": 4,
-      "type": 5,
-      "stat": "ANY",
-      "bonus": 1,
-      "desc": "Increase any stat by 1!"
-    },
-    "Disarmor": {
-      "id": "thief_disarmor",
-      "source": "thief",
-      "level": 5,
-      "type": 0,
-      "desc": "You may use Acquire on an enemy's equipped gear."
-    }
-  },
-  "mage": {
-    "Advance": {
-      "id": "mage_advance",
-      "source": "mage",
-      "level": 1,
-      "type": 2,
-      "action_id": "advance",
-      "desc": "Move to an adjacent zone."
-    },
-    "Abdicate": {
-      "id": "mage_abdicate",
-      "source": "mage",
-      "level": 1,
-      "type": 2,
-      "action_id": "abdicate",
-      "desc": "Forfeit your combat action."
-    },
-    "Aggrieve": {
-      "id": "mage_aggrieve",
-      "source": "mage",
-      "level": 1,
-      "type": 2,
-      "action_id": "aggrieve",
-      "desc": "Charge into melee range and attack."
-    },
-    "Assail": {
-      "id": "mage_assail",
-      "source": "mage",
-      "level": 1,
-      "type": 2,
-      "action_id": "assail",
-      "desc": "Attack an enemy in range."
-    },
-    "Abjure": {
-      "id": "mage_abjure",
-      "source": "mage",
-      "level": 1,
-      "type": 2,
-      "action_id": "abjure",
-      "desc": "Attempt to repel an enemy."
-    },
-    "Abscond": {
-      "id": "mage_abscond",
-      "source": "mage",
-      "level": 1,
-      "type": 2,
-      "action_id": "abscond",
-      "desc": "Attempt to flee from combat."
-    },
-    "Affect": {
-      "id": "mage_affect",
-      "source": "mage",
-      "level": 1,
-      "type": 2,
-      "action_id": "affect",
-      "desc": "Declare a freeform action requiring DM input."
-    },
-    "Spellcraft": {
-      "id": "spellcraft_rsn",
-      "source": "mage",
-      "level": 1,
-      "type": 3,
-      "desc": "You can analyze the properties of a spell or ritual with a RSN check.",
-      "dm_notes": "Base DCs are usually:\n Rank - DC\nX - 5\nW - 7\nX - 9\nY - 11\nZ - 13\nSome spells may be easier or harder to analyze at your discretion.\n\nDecrease DC by 2 for each of the following:\n - Player witnessed spell being cast\n - Player has access to written record of the spell (tome, scroll, runes, magic circle, etc)\n - Player is directly affected by the spell"
-    },
-    "Arcane Basics": {
-      "id": "arcane_i",
-      "source": "mage",
-      "level": 1,
-      "type": 6,
-      "rank": "V",
-      "desc": "You can equip gear and weapons with Rank: V"
-    },
-    "+1 RSN": {
-      "id": "mage_rsnBonus",
-      "source": "mage",
-      "level": 2,
+    "passive_rsn_bonus": {
+      "name": "+1 RSN",
       "type": 5,
       "stat": "RSN",
       "bonus": 1,
       "desc": "Increase Reason by 1!"
     },
-    "Arcane Knowledge": {
-      "id": "arcane_ii",
-      "source": "mage",
-      "level": 3,
-      "type": 6,
-      "rank": "W",
-      "desc": "You can equip gear and weapons with Rank: W"
-    },
-    "+1 ANY": {
-      "id": "mage_anyBonus",
-      "source": "mage",
-      "level": 4,
-      "type": 5,
-      "stat": "ANY",
-      "bonus": 1,
-      "desc": "Increase any stat by 1!"
-    },
-    "Distinguished": {
-      "id": "mage_rep",
-      "source": "mage",
-      "level": 4,
-      "type": 7,
-      "desc": "When making a RSN check to persuade an NPC, lower the DC by 2 unless they distrust magic users."
-    },
-    "Arcane Secrets": {
-      "id": "arcane_iii",
-      "source": "mage",
-      "level": 5,
-      "type": 6,
-      "rank": "X",
-      "desc": "You can equip gear and weapons with Rank: X"
-    }
-  },
-  "dilettante": {
-    "Advance": {
-      "id": "dilettante_advance",
-      "source": "dilettante",
-      "level": 1,
-      "type": 2,
-      "action_id": "advance",
-      "desc": "Move to an adjacent zone."
-    },
-    "Abdicate": {
-      "id": "dilettante_abdicate",
-      "source": "dilettante",
-      "level": 1,
-      "type": 2,
-      "action_id": "abdicate",
-      "desc": "Forfeit your combat action."
-    },
-    "Aggrieve": {
-      "id": "dilettante_aggrieve",
-      "source": "dilettante",
-      "level": 1,
-      "type": 2,
-      "action_id": "aggrieve",
-      "desc": "Charge into melee range and attack."
-    },
-    "Assail": {
-      "id": "dilettante_assail",
-      "source": "dilettante",
-      "level": 1,
-      "type": 2,
-      "action_id": "assail",
-      "desc": "Attack an enemy in range."
-    },
-    "Abjure": {
-      "id": "dilettante_abjure",
-      "source": "dilettante",
-      "level": 1,
-      "type": 2,
-      "action_id": "abjure",
-      "desc": "Attempt to repel an enemy."
-    },
-    "Abscond": {
-      "id": "dilettante_abscond",
-      "source": "dilettante",
-      "level": 1,
-      "type": 2,
-      "action_id": "abscond",
-      "desc": "Attempt to flee from combat."
-    },
-    "Affect": {
-      "id": "dilettante_affect",
-      "source": "dilettante",
-      "level": 1,
-      "type": 2,
-      "action_id": "affect",
-      "desc": "Declare a freeform action requiring DM input."
-    },
-    "Light Weapons": {
-      "id": "light_weapons_dilettante",
-      "source": "dilettante",
-      "level": 1,
-      "type": 6,
-      "rank": "D",
-      "desc": "You can equip gear and weapons with Rank: D"
-    },
-    "Knack": {
-      "id": "dilettante_knack",
-      "source": "dilettante",
-      "level": 1,
-      "type": 9,
-      "uses": 1,
-      "desc": "You may either:\n - Make a SVY check in place of another check.\n - Use your SVY save in place of another save.\nGain an additional use at level 3, and again at level 5. Regain all uses at the start of a combat encounter.\n"
-    },
-    "Weapon Forte": {
-      "id": "dilettante_weapon_forte",
-      "source": "dilettante",
-      "level": 1,
-      "type": 9,
-      "desc": "At the start of the day, pick a weapon you own. Use SVY in place of that weapon's normal weapon stat."
-    },
-    "+1 SVY": {
-      "id": "dilettante_svyBonus",
-      "source": "dilettante",
-      "level": 2,
+    "passive_svy_bonus": {
+      "name": "+1 SVY",
       "type": 5,
       "stat": "SVY",
       "bonus": 1,
       "desc": "Increase Savvy by 1!"
     },
-    "Trapwise": {
-      "id": "trapwise",
-      "source": "dilettante",
-      "level": 2,
-      "type": 1,
-      "desc": "Locate traps using RSN or SVY"
-    },
-    "Martial Training": {
-      "id": "martial_ii",
-      "source": "dilettante",
-      "level": 3,
-      "type": 6,
-      "rank": "C",
-      "desc": "You can equip gear and weapons with Rank: C"
-    },
-    "Arcane Basics": {
-      "id": "arcane_i_dilettante",
-      "source": "dilettante",
-      "level": 3,
-      "type": 6,
-      "rank": "V",
-      "desc": "You can equip gear and weapons with Rank: V"
-    },
-    "+1 ANY": {
-      "id": "dilettante_anyBonus",
-      "source": "dilettante",
-      "level": 4,
+    "passive_any_bonus": {
+      "name": "+1 ANY",
       "type": 5,
       "stat": "ANY",
       "bonus": 1,
       "desc": "Increase any stat by 1!"
     },
-    "Martial Expertise": {
-      "id": "martial_iii_dilettante",
-      "source": "dilettante",
-      "level": 5,
-      "type": 6,
-      "rank": "B",
-      "desc": "You can equip gear and weapons with Rank: B"
+    "knight_protector": {
+      "name": "Protector",
+      "type": 4,
+      "desc": "Give +1 DEF to one other party member or NPC. This bonus increases to +2 at level 3, and to +3 at level 5.\nYou may switch targets on your turn as part of an oracle action."
     },
-    "Arcane Knowledge": {
-      "id": "arcane_ii_dilettante",
-      "source": "dilettante",
-      "level": 5,
-      "type": 6,
-      "rank": "W",
-      "desc": "You can equip gear and weapons with Rank: W"
+    "knight_rep": {
+      "name": "Honorable Reputation",
+      "type": 7,
+      "desc": "When making a check to persuade an NPC, lower the DC by 2 unless they hate knights."
+    },
+    "knight_unburdened": {
+      "name": "Unburdened",
+      "type": 9,
+      "desc": "Your dodge is not capped while wearing [Heavy] armor."
+    },
+    "knight_resilience": {
+      "name": "Resilience",
+      "type": 8,
+      "desc": "Once per day, remain at 1hp after taking lethal damage."
+    },
+    "thief_acquire": {
+      "name": "Acquire",
+      "type": 2,
+      "action_id": "affect",
+      "desc": "DC: ? + [target FNS].\nMake a finesse check to steal an unequipped item from an enemy.",
+      "dm_notes": "Base DCs are usually:\n5 - unequipped items\n7 - held items (level 3 or higher)\n9 - equipped items (level 5)\nSome items may be easier or harder to steal at your discretion"
+    },
+    "thief_hide": {
+      "name": "Hide",
+      "type": 3,
+      "desc": "*(you must use your oracle and move actions to use this in combat)*\nYou may hide on your turn. Opponents cannot target you while you are hidden. If you successfully attack while hidden, the damage bypasses your opponent's DEF, but you are no longer hidden."
+    },
+    "thief_disarm": {
+      "name": "Disarm",
+      "type": 0,
+      "desc": "You may use Acquire on an enemy's held items."
+    },
+    "thief_slip": {
+      "name": "Slip",
+      "type": 4,
+      "check": { "DC": 9, "Stat": "FNS" },
+      "desc": "On a successful FNS check, enemies cannot attack you for leaving the current zone until next turn."
+    },
+    "thief_disarmor": {
+      "name": "Disarmor",
+      "type": 0,
+      "desc": "You may use Acquire on an enemy's equipped gear."
+    },
+    "spellcraft": {
+      "name": "Spellcraft",
+      "type": 3,
+      "desc": "You can analyze the properties of a spell or ritual with a RSN check.",
+      "dm_notes": "Base DCs are usually:\n Rank - DC\nV - 5\nW - 7\nX - 9\nY - 11\nZ - 13\nSome spells may be easier or harder to analyze at your discretion.\n\nDecrease DC by 2 for each of the following:\n - Player witnessed spell being cast\n - Player has access to written record of the spell (tome, scroll, runes, magic circle, etc)\n - Player is directly affected by the spell"
+    },
+    "mage_rep": {
+      "name": "Distinguished",
+      "type": 7,
+      "desc": "When making a RSN check to persuade an NPC, lower the DC by 2 unless they distrust magic users."
+    },
+    "dilettante_knack": {
+      "name": "Knack",
+      "type": 9,
+      "uses": 1,
+      "desc": "You may either:\n - Make a SVY check in place of another check.\n - Use your SVY save in place of another save.\nGain an additional use at level 3, and again at level 5. Regain all uses at the start of a combat encounter."
+    },
+    "dilettante_weapon_forte": {
+      "name": "Weapon Forte",
+      "type": 9,
+      "desc": "At the start of the day, pick a weapon you own. Use SVY in place of that weapon's normal weapon stat."
     }
   }
 }

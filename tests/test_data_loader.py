@@ -87,19 +87,6 @@ _VALID_JOB = {
     "max_level":    5,
 }
 
-# Minimal valid jobskills fixture for KNIGHT (used by isolated tests)
-_VALID_KNIGHT_SKILLS = {
-    "knight": {
-        "Attack": {
-            "id": "knight_attack",
-            "source": "knight",
-            "level": 1,
-            "type": 2,
-            "action_id": "attack",
-            "desc": "Basic attack.",
-        }
-    }
-}
 
 
 # ---------------------------------------------------------------------------
@@ -261,18 +248,18 @@ class TestLoadAllIsolated:
             assert cd["KNIGHT"].primary_stat == "PHY"
             assert isinstance(cd["KNIGHT"], JobDef)
 
-    def test_job_skills_loaded_from_skills_json(self):
-        """Skills in jobskills/skills.json are loaded into the JobDef.skills dict."""
+    def test_job_skills_loaded_from_job_file(self):
+        """Skills in a job's 'skills' array are loaded into JobDef.skills."""
         with tempfile.TemporaryDirectory() as tmp:
             actions, conditions, classes, items = _make_data_dir(Path(tmp))
             _write(actions / "attack.json", _VALID_ACTION)
-            _write(classes / "knight.json", _VALID_JOB)
+            job = dict(_VALID_JOB)
+            job["skills"] = [{"id": "knight_protector", "level": 1}]
+            _write(classes / "knight.json", job)
             _write(Path(tmp) / "jobskills" / "skills.json", {
-                "knight": {
-                    "Protector": {
-                        "id": "knight_protector",
-                        "source": "knight",
-                        "level": 1,
+                "definitions": {
+                    "knight_protector": {
+                        "name": "Protector",
                         "type": 4,
                         "desc": "Give +1 DEF to one other party member.",
                     }
@@ -291,13 +278,13 @@ class TestLoadAllIsolated:
         with tempfile.TemporaryDirectory() as tmp:
             actions, conditions, classes, items = _make_data_dir(Path(tmp))
             _write(actions / "attack.json", _VALID_ACTION)
-            _write(classes / "knight.json", _VALID_JOB)
+            job = dict(_VALID_JOB)
+            job["skills"] = [{"id": "passive_phy_bonus", "level": 2}]
+            _write(classes / "knight.json", job)
             _write(Path(tmp) / "jobskills" / "skills.json", {
-                "knight": {
-                    "+1 PHY": {
-                        "id": "knight_phyBonus",
-                        "source": "knight",
-                        "level": 2,
+                "definitions": {
+                    "passive_phy_bonus": {
+                        "name": "+1 PHY",
                         "type": 5,
                         "stat": "PHY",
                         "bonus": 1,
@@ -306,7 +293,7 @@ class TestLoadAllIsolated:
                 }
             })
             _, _, cd, _, _ = load_all(Path(tmp))
-            skill = cd["KNIGHT"].skills["knight_phyBonus"]
+            skill = cd["KNIGHT"].skills["passive_phy_bonus"]
             assert skill.stat == "PHY"
             assert skill.bonus == 1
 
@@ -314,13 +301,13 @@ class TestLoadAllIsolated:
         with tempfile.TemporaryDirectory() as tmp:
             actions, conditions, classes, items = _make_data_dir(Path(tmp))
             _write(actions / "attack.json", _VALID_ACTION)
-            _write(classes / "knight.json", _VALID_JOB)
+            job = dict(_VALID_JOB)
+            job["skills"] = [{"id": "martial_expertise_b", "level": 5}]
+            _write(classes / "knight.json", job)
             _write(Path(tmp) / "jobskills" / "skills.json", {
-                "knight": {
-                    "Martial Expertise": {
-                        "id": "martial_iii",
-                        "source": "knight",
-                        "level": 5,
+                "definitions": {
+                    "martial_expertise_b": {
+                        "name": "Martial Expertise",
                         "type": 6,
                         "rank": "B",
                         "desc": "You can equip gear and weapons with Rank: B",
@@ -328,12 +315,12 @@ class TestLoadAllIsolated:
                 }
             })
             _, _, cd, _, _ = load_all(Path(tmp))
-            skill = cd["KNIGHT"].skills["martial_iii"]
+            skill = cd["KNIGHT"].skills["martial_expertise_b"]
             assert skill.rank == "B"
             assert skill.skill_type == SkillType.WEAPON_RANK.value
 
     def test_shared_skills_merged_into_skill_registry(self):
-        """A skill id shared by two jobs appears in SKILL_REGISTRY and both JobDefs."""
+        """A skill defined once can be granted to multiple jobs."""
         with tempfile.TemporaryDirectory() as tmp:
             actions, conditions, classes, items = _make_data_dir(Path(tmp))
             _write(actions / "attack.json", _VALID_ACTION)
@@ -341,27 +328,19 @@ class TestLoadAllIsolated:
             job2["key"] = "THIEF"
             job2["display_name"] = "Thief"
             job2["primary_stat"] = "FNS"
-            _write(classes / "knight.json", _VALID_JOB)
+            knight = dict(_VALID_JOB)
+            knight["skills"] = [{"id": "trapwise", "level": 1}]
+            job2["skills"] = [{"id": "trapwise", "level": 1}]
+            _write(classes / "knight.json", knight)
             _write(classes / "thief.json", job2)
             _write(Path(tmp) / "jobskills" / "skills.json", {
-                "knight": {
-                    "Trapwise": {
-                        "id": "trapwise",
-                        "source": "knight",
-                        "level": 1,
+                "definitions": {
+                    "trapwise": {
+                        "name": "Trapwise",
                         "type": 1,
                         "desc": "Locate traps.",
                     }
-                },
-                "thief": {
-                    "Trapwise": {
-                        "id": "trapwise",
-                        "source": "thief",
-                        "level": 1,
-                        "type": 1,
-                        "desc": "Locate traps.",
-                    }
-                },
+                }
             })
             _, _, cd, sr, _ = load_all(Path(tmp))
             assert "trapwise" in sr
@@ -601,16 +580,17 @@ class TestValidationErrors:
             actions, conditions, classes, items = _make_data_dir(Path(tmp))
             _write(classes / "knight.json", _VALID_JOB)
             _write(Path(tmp) / "jobskills" / "skills.json", {
-                "knight": {
-                    "Bad Rank": {
-                        "id": "bad_rank",
-                        "source": "knight",
-                        "level": 1,
+                "definitions": {
+                    "bad_rank": {
+                        "name": "Bad Rank",
                         "type": 6,
                         "rank": "S",
                         "desc": "Invalid rank.",
                     }
-                }
+                },
+                "grants": {
+                    "knight": [{"id": "bad_rank", "level": 1}]
+                },
             })
             try:
                 load_all(Path(tmp))
@@ -633,18 +613,18 @@ class TestValidationErrors:
         with tempfile.TemporaryDirectory() as tmp:
             actions, conditions, classes, items = _make_data_dir(Path(tmp))
             _write(actions / "attack.json", _VALID_ACTION)
-            _write(classes / "knight.json", _VALID_JOB)
+            knight = dict(_VALID_JOB)
+            knight["skills"] = [{"id": "ghost_strike", "level": 1}]
+            _write(classes / "knight.json", knight)
             _write(Path(tmp) / "jobskills" / "skills.json", {
-                "knight": {
-                    "Ghost Strike": {
-                        "id": "ghost_strike",
-                        "source": "knight",
-                        "level": 1,
+                "definitions": {
+                    "ghost_strike": {
+                        "name": "Ghost Strike",
                         "type": 2,
                         "action_id": "nonexistent_action",
                         "desc": "Does something.",
                     }
-                }
+                },
             })
             try:
                 load_all(Path(tmp))
