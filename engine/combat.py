@@ -49,7 +49,7 @@ import random
 from dataclasses import dataclass
 from uuid import UUID
 
-from engine.azure_constants import POWER_LEVEL
+from engine.azure_constants import POWER_LEVEL, Stat
 from engine.azure_helpers import get_stat_modifier
 from engine.item import ChargeWeapon
 from models import (
@@ -58,11 +58,11 @@ from models import (
     CombatantState,
     CombatBattlefield,
     GameState,
-    RangeBand,
+    RangeBand, GenericCombatCondition,
 )
 
 from .data_loader import ACTION_REGISTRY, CONDITION_REGISTRY
-from .dice import roll_dice_expr
+from .dice import roll_dice_expr, is_dice_expression
 from .helpers import _err, _now, _ok
 
 # ---------------------------------------------------------------------------
@@ -238,6 +238,78 @@ def apply_condition(
     ))
     state.updated_at = _now()
     return _ok(state, f"{target_name} is now {cond_def.label}.")
+
+def apply_genric_combat_condition(
+    state:        GameState,
+    target_id:    UUID,
+    condition_id: str,
+    combat_changes: dict | None = None,
+    duration:     int | None = None,
+    source_id:    UUID | None = None,
+) -> object:  # EngineResult
+    """
+    Applies a generic status condition to a combatant by ID.
+    The source's name is appended to the condition id, allowing for the condition to stack with alternate sources.
+    duration=None means permanent (removed only by explicit dispel).
+    Applying an existing condition refreshes its duration.
+    """
+
+    #if condition_id not in CONDITION_REGISTRY:
+    #    return _err(state, f"Unknown condition '{condition_id}'.")
+    if state.battlefield is None:
+        return _err(state, "No active battlefield — conditions can only be applied in ROUNDS mode.")
+    cs = state.battlefield.combatants.get(target_id)
+    if cs is None:
+        return _err(state, f"Combatant {target_id} not found on battlefield.")
+
+    #"""
+    # Appends source name to the end of the condition_id so that multiple instances can be applied.
+    # For example: physique_down received from source evil wizard would have id: physique_down-evil_wizard
+    #"""
+    for change in combat_changes:
+        combat_changes[change] *= POWER_LEVEL
+
+    updated_id =  condition_id + "-" + _combatant_name(state, source_id).strip().replace(" ", "_")
+    cs.active_conditions = [c for c in cs.active_conditions if c.condition_id != updated_id]
+    newCondition = GenericCombatCondition(
+        generic_id = condition_id,
+        condition_id = updated_id,
+        combat_changes = combat_changes,
+        duration_rounds=duration,
+        source_id=source_id
+    )
+
+    target_name = _combatant_name(state, target_id)
+    cs.active_conditions.append(newCondition)
+    logMessage = ""
+    if combat_changes is None:
+        state.updated_at = _now()
+        logMessage = f"{target_name} is affected by an unknown status!"
+        return _ok(state, logMessage)
+    for stat in combat_changes:
+        logMessage += f"{target_name}'s {stat} is "
+        modifier = combat_changes.get(stat, 0)
+        if modifier == 0:
+            logMessage += "unchanged.\n"
+        elif modifier < 0:
+            logMessage += f"decreases by {modifier * -1}.\n"
+        elif modifier > 0:
+            logMessage += f"increases by {modifier}.\n"
+        else:
+            logMessage += "somehow altered???\n"
+
+    state.updated_at = _now()
+    return _ok(state, logMessage)
+
+def calculateCombatChangeValues(combat_changes: dict):
+    for stat in combat_changes:
+        delta = combat_changes[stat]
+        isDice = is_dice_expression(delta)
+        if isDice is None:
+            # print(f"[Warning: invalid number/dice expression {delta}]")
+            continue
+        elif isDice:
+            combat_changes[stat] = roll_dice_expr(delta)["total"]
 
 
 # ---------------------------------------------------------------------------
@@ -441,11 +513,22 @@ def _effective_stat_mod(state: GameState, actor_id: UUID, stat: str) -> int:
     base_val = getattr(actor_char.ability_scores, stat, 0)
     base_mod = get_stat_modifier(base_val)
 
-    bonus = sum(
+    char_bonus = sum(
         CONDITION_REGISTRY[c.condition_id].stat_modifiers.get(stat, 0) * c.stacks
         for c in actor_char.active_conditions
         if c.condition_id in CONDITION_REGISTRY
     )
+
+    # Experimental: get bonuses from GenericCombatCondition stored
+    cs = state.battlefield.combatants.get(actor_id) if state.battlefield else None
+    cs_bonus = 0
+    if cs is not None:
+        for c in cs.active_conditions:
+            if isinstance(c, GenericCombatCondition) and c.combat_changes is not None:
+                cs_bonus += c.combat_changes.get(stat,0)
+
+    # add experimental bonuses to condition stat bonuses
+    bonus = char_bonus + cs_bonus
     return base_mod + bonus
 
 
@@ -1006,6 +1089,74 @@ def _hook_block_movement(
         log.append(f"{_combatant_name(state, actor_id)} is entangled and cannot move!")
 
 
+def _hook_combat_changes(
+    state:    GameState,
+    actor_id: UUID,
+    action:   CombatAction | None,
+    log:      list[str],
+    params:   dict,
+) -> None:
+    """
+    changes CombatStats of action.target_id.
+
+    params:
+      combat_changes (dict, required) — modified stat is the key, value is how much to modify it
+      duration       (int, default 3) — duration in rounds; omit for permanent
+    """
+    changes = params.get("combat_changes", None)
+    if not changes:
+        print(params)
+        log.append("[combat_changes: 'combat_changes' param is required]")
+        return
+
+    """
+    match params.get("stat"):
+        case Stat.PHYSIQUE:
+            condition_id = "physique_up"
+        case Stat.FINESSE:
+            condition_id = "finesse_up"
+        case Stat.REASON:
+            condition_id = "reason_up"
+        case Stat.SAVVY:
+            condition_id = "savvy_up"
+        case _:
+            log.append("[stat_up: 'stat' param must be one of: physique, finesse, reason, savvy]")
+            return
+    if not condition_id:
+        log.append("[stat_up: 'condition_id' has somehow failed. Are all <stat>_up functions being loaded correctly?]")
+        return
+    """
+
+    if action is None or action.target_id is None:
+        log.append(f"[combat_change: no target specified]")
+        return
+
+    target_id   = action.target_id
+    actor_name  = _combatant_name(state, actor_id)
+    target_name = _combatant_name(state, target_id)
+
+    cs = state.battlefield.combatants.get(target_id) if state.battlefield else None
+    if cs is None:
+        log.append(f"[combat_change: target not on battlefield]")
+        return
+
+    condition_id = action.action_id
+
+    duration = params.get("duration", 3)
+    apply_genric_combat_condition(
+        state,
+        target_id,
+        condition_id,
+        changes,
+        duration=duration,
+        source_id=actor_id,
+    )
+    #apply_condition(state, target_id, condition_id, duration=duration, source_id=actor_id)
+
+    label = condition_id
+    log.append(f"{actor_name} applies {label} to {target_name}! ({duration} rounds)")
+
+
 def _hook_abscond_roll(
     state:    GameState,
     actor_id: UUID,
@@ -1078,7 +1229,6 @@ def _hook_abscond_roll(
             f"{actor_name} rolls {roll} + {finesse} = {total} vs {threshold} — "
             f"failed to abscond."
         )
-
 
 # ---------------------------------------------------------------------------
 # Hook registry
@@ -1156,6 +1306,7 @@ _HOOK_DISPATCH: dict[str, object] = {
     "apply_condition": _hook_apply_condition,
     "deal_damage":     _hook_deal_damage,
     "skip_action":     _hook_skip_action,
+    "combat_changes":   _hook_combat_changes,
     # Flee
     "abscond_roll":    _hook_abscond_roll,
     # Gear management

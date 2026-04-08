@@ -158,6 +158,16 @@ class Stat(StrEnum):
     REASON = 'reason'
     SAVVY = 'savvy'
 
+class CombatStat(StrEnum):
+    PHYSIQUE = 'physique'
+    FINESSE = 'finesse'
+    REASON = 'reason'
+    SAVVY = 'savvy'
+    MAX_HEALTH = 'max_health'
+    DODGE = 'dodge'
+    DEFENSE = 'defense'
+    RESISTANCE = 'resistance'
+
 class StatPriority(IntEnum):
     NONE = 0
     LEAST = 5
