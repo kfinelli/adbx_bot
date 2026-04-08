@@ -178,6 +178,89 @@ class TestTwoHandedOffHandBlock:
 
 
 # ---------------------------------------------------------------------------
+# Two-Handed: inventory overflow guard
+# ---------------------------------------------------------------------------
+
+class TestTwoHandedInventoryOverflow:
+    def test_equip_two_handed_blocked_when_inventory_full_and_both_hands_occupied(self):
+        """
+        Equipping a two-handed weapon when inventory is full and both hands are
+        occupied would push slots_used over the limit — must be blocked.
+
+        Scenario: main_hand + off_hand both equipped, then inventory filled to
+        the brim (inventory_size slots used by unequipped items), then attempt
+        to equip a two-handed weapon already in inventory.
+        """
+        from engine.character import CharacterManager
+
+        state, char = _make_state_with_char()
+
+        # Force both hands occupied (bypass engine so rank/slot checks don't interfere)
+        _force_equip(char, "shortsword", ItemSlot.MAIN_HAND)
+        _force_equip(char, "buckler", ItemSlot.OFF_HAND)
+
+        # Add the two-handed weapon to inventory (unequipped — takes 1 slot)
+        _add_to_inventory(char, "spear")
+
+        # Fill remaining inventory slots with light items (BUNDLE_SIZE per slot)
+        # Use the known BASE_INVENTORY_SIZE; spear already uses 1 slot.
+        # Physique is 0, so inventory_size == BASE_INVENTORY_SIZE.
+        from engine.azure_constants import BUNDLE_SIZE
+        from engine.data_loader import ITEM_REGISTRY
+        # Find a light item from the registry to fill with
+        light_id = next(
+            iid for iid, d in ITEM_REGISTRY.items()
+            if d.isLight and not isinstance(d, __import__("engine.item", fromlist=["EquipItem"]).EquipItem)
+        )
+        # Fill remaining slots: each light slot holds BUNDLE_SIZE units; spear took 1 slot
+        slots_to_fill = char.inventory_size - char.slots_used
+        if slots_to_fill > 0:
+            char.inventory.append(
+                InventoryItem(item_id=light_id, quantity=slots_to_fill * BUNDLE_SIZE)
+            )
+        assert char.slots_used == char.inventory_size, (
+            f"Expected inventory full: {char.slots_used}/{char.inventory_size}"
+        )
+
+        mgr = CharacterManager()
+        result = mgr.equip_item(state, char.character_id, "spear")
+
+        assert not result.ok
+        assert "inventory" in result.error.lower()
+
+    def test_equip_two_handed_succeeds_when_off_hand_empty_and_inventory_full(self):
+        """
+        With inventory full but off-hand empty, equipping two-handed has no net
+        slot change (only main-hand displaced vs new weapon equipped) — allowed.
+        """
+        from engine.character import CharacterManager
+
+        state, char = _make_state_with_char()
+        _force_equip(char, "shortsword", ItemSlot.MAIN_HAND)
+        _add_to_inventory(char, "spear")
+
+        # Fill to capacity (spear is the only unequipped item using a slot; fill the rest)
+        from engine.azure_constants import BUNDLE_SIZE
+        from engine.data_loader import ITEM_REGISTRY
+        from engine.item import EquipItem
+        light_id = next(
+            iid for iid, d in ITEM_REGISTRY.items()
+            if d.isLight and not isinstance(d, EquipItem)
+        )
+        slots_to_fill = char.inventory_size - char.slots_used
+        if slots_to_fill > 0:
+            char.inventory.append(
+                InventoryItem(item_id=light_id, quantity=slots_to_fill * BUNDLE_SIZE)
+            )
+
+        mgr = CharacterManager()
+        result = mgr.equip_item(state, char.character_id, "spear")
+
+        # shortsword (slot_cost 1) displaced, spear (slot_cost 1) equipped: net 0
+        assert result.ok, result.error
+
+
+# ---------------------------------------------------------------------------
 # Unwieldy: Physique requirement
 # ---------------------------------------------------------------------------
 

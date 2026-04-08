@@ -243,13 +243,12 @@ class CharacterManager:
                 )
 
         # --- Unwieldy check ---
-        if "Unwieldy" in definition.getTags():
-            if char.ability_scores.physique < 400:
-                return None, (
-                    f"{char.name} cannot equip '{definition.name}' "
-                    f"(Unwieldy weapons require 400 Physique; "
-                    f"{char.name} has {char.ability_scores.physique})."
-                )
+        if "Unwieldy" in definition.getTags() and char.ability_scores.physique < 400:
+            return None, (
+                f"{char.name} cannot equip '{definition.name}' "
+                f"(Unwieldy weapons require 400 Physique; "
+                f"{char.name} has {char.ability_scores.physique})."
+            )
 
         return mapped, ""
 
@@ -286,6 +285,29 @@ class CharacterManager:
         definition = ITEM_REGISTRY.get(item_id)
         item_name = definition.name if definition else item_id
         new_tags = definition.getTags() if isinstance(definition, EquipItem) else []
+
+        # --- Two-Handed: inventory pre-flight check ---
+        # Auto-unequipping the off-hand frees no slot (it was equipped), but the
+        # displaced main-hand item and the off-hand item both land in inventory.
+        # Net delta = +slot_cost(mh) + slot_cost(oh) - slot_cost(new weapon).
+        # Fail before mutating anything if that would exceed inventory_size.
+        if "Two-Handed" in new_tags and target_slot == ItemSlot.MAIN_HAND:
+            oh_id_pre = char.equipped_slots.get(ItemSlot.OFF_HAND.value)
+            if oh_id_pre:
+                mh_existing_id = char.equipped_slots.get(ItemSlot.MAIN_HAND.value)
+                mh_def_pre = ITEM_REGISTRY.get(mh_existing_id) if mh_existing_id else None
+                mh_cost = mh_def_pre.slot_cost if mh_def_pre else (1 if mh_existing_id else 0)
+                oh_def_pre = ITEM_REGISTRY.get(oh_id_pre)
+                oh_cost = oh_def_pre.slot_cost if oh_def_pre else 1
+                new_cost = definition.slot_cost if definition else 1
+                if char.slots_used + mh_cost + oh_cost - new_cost > char.inventory_size:
+                    oh_name_pre = oh_def_pre.name if oh_def_pre else oh_id_pre
+                    return _err(
+                        state,
+                        f"Not enough inventory space to equip {item_name}: unequipping "
+                        f"{oh_name_pre} from the off-hand would exceed your inventory limit "
+                        f"({char.slots_used}/{char.inventory_size} slots used). Free a slot first.",
+                    )
 
         # --- Two-Handed: block off-hand equip if main_hand holds a two-handed weapon ---
         if target_slot == ItemSlot.OFF_HAND:
