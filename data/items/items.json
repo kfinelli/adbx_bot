@@ -2201,6 +2201,30 @@
       ],
       "targets_stat": "resistance",
       "type": "Blunt"
+    },
+    {
+      "attack_status": "",
+      "damage": "2d8",
+      "description": "",
+      "held_status": "",
+      "is_light": false,
+      "item_id": "war_maul",
+      "item_type": "weapon",
+      "name": "War Maul",
+      "other_abilities": "",
+      "price": 12,
+      "purchaseable": true,
+      "range": 0,
+      "rank": "D",
+      "slot": "main_hand",
+      "stat": "physique",
+      "tags": [
+        "Heavy",
+        "Two-Handed",
+        "Unwieldy"
+      ],
+      "targets_stat": "defense",
+      "type": "Blunt"
     }
   ]
 }
