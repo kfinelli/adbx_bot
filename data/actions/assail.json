@@ -1,0 +1,15 @@
+{
+  "action_id": "assail",
+  "label": "Assail",
+  "button_style": "danger",
+  "action_type": "attack",
+  "description": "Powerful melee attack that adds your weapon's attack stat to damage. You become Undefended until next round.",
+  "requires_target": true,
+  "requires_destination": false,
+  "range_requirement": "weapon",
+  "effect_tags": [
+    {"tag": "melee_attack", "dice": "1d6", "add_stat_bonus": true},
+    "check_death",
+    {"tag": "apply_condition", "condition": "undefended", "duration": 1, "target": "self"}
+  ]
+}

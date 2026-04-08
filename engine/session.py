@@ -86,6 +86,17 @@ class SessionManager:
         state.turn_number = resumed_at
         state.rounds_started_at_turn = None
         state.battlefield = None
+        # Expire any conditions scoped to rounds (duration_rounds is not None).
+        # Permanent conditions (duration_rounds=None) survive into exploration.
+        for char in state.characters.values():
+            char.active_conditions = [
+                c for c in char.active_conditions if c.duration_rounds is None
+            ]
+        for group in state.npc_roster.groups.values():
+            for npc in group.npcs:
+                npc.active_conditions = [
+                    c for c in npc.active_conditions if c.duration_rounds is None
+                ]
         if state.current_turn:
             state.current_turn.mode = SessionMode.EXPLORATION
             state.current_turn.turn_number = resumed_at

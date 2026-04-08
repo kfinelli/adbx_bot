@@ -1,6 +1,6 @@
 {
-  "action_id": "attack",
-  "label": "Attack",
+  "action_id": "aggrieve",
+  "label": "Aggrieve",
   "button_style": "danger",
   "action_type": "attack",
   "description": "Make a melee attack against a target in range.",

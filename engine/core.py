@@ -43,6 +43,8 @@ class TurnManager:
             due_at=due_at,
         )
         state.current_turn = turn
+        if state.battlefield is not None:
+            state.battlefield.round_log = []
         state.updated_at = _now()
         return _ok(state, f"Turn {state.turn_number} is now open.")
 

@@ -268,6 +268,54 @@ class TestAbscond:
         result = abscond(active_state, char_id, 99)
         assert not result.ok
 
+    def test_abscond_active_npc_blocks_auto_move(self, active_state):
+        """Active NPC in the room prevents auto-resolution even on an auto_move exit."""
+        char_id = list(active_state.party.member_ids)[0]
+        active_state.party.leader_id = char_id
+        set_room(active_state, _make_room("Corridor"))
+        add_exit(active_state, "north", "Auto passage.")
+        exit_ = active_state.current_room.exits[0]
+        update_exit(active_state, exit_.exit_id, label="north", description="Auto passage.",
+                    door_state=exit_.door_state, auto_move=True)
+        npc = _make_npc("Goblin")
+        add_npc(active_state, npc)
+        result = abscond(active_state, char_id, 1)
+        assert result.ok
+        assert result.notify_dm is True
+        assert not result.auto_resolved
+
+    def test_abscond_dead_npc_does_not_block_auto_move(self, active_state):
+        """A dead NPC should not block auto-move."""
+        char_id = list(active_state.party.member_ids)[0]
+        active_state.party.leader_id = char_id
+        set_room(active_state, _make_room("Corridor"))
+        add_exit(active_state, "north", "Auto passage.")
+        exit_ = active_state.current_room.exits[0]
+        update_exit(active_state, exit_.exit_id, label="north", description="Auto passage.",
+                    door_state=exit_.door_state, auto_move=True)
+        npc = _make_npc("Dead Goblin")
+        add_npc(active_state, npc)
+        set_npc_status(active_state, npc.npc_id, "dead")
+        result = abscond(active_state, char_id, 1)
+        assert result.ok
+        assert result.auto_resolved
+
+    def test_abscond_fled_npc_does_not_block_auto_move(self, active_state):
+        """A fled NPC should not block auto-move."""
+        char_id = list(active_state.party.member_ids)[0]
+        active_state.party.leader_id = char_id
+        set_room(active_state, _make_room("Corridor"))
+        add_exit(active_state, "north", "Auto passage.")
+        exit_ = active_state.current_room.exits[0]
+        update_exit(active_state, exit_.exit_id, label="north", description="Auto passage.",
+                    door_state=exit_.door_state, auto_move=True)
+        npc = _make_npc("Fled Goblin")
+        add_npc(active_state, npc)
+        set_npc_status(active_state, npc.npc_id, "fled")
+        result = abscond(active_state, char_id, 1)
+        assert result.ok
+        assert result.auto_resolved
+
 
 # ---------------------------------------------------------------------------
 # NPCs

@@ -1766,7 +1766,7 @@
       "slot": "main_hand",
       "stat": "physique",
       "tags": [
-        "Light"
+        "Agile"
       ],
       "targets_stat": "defense",
       "type": "Sword"
@@ -1857,7 +1857,7 @@
       "slot": "main_hand",
       "stat": "physique",
       "tags": [
-        "Light",
+        "Agile",
         "Throwable 1"
       ],
       "targets_stat": "defense",
@@ -2049,7 +2049,7 @@
       "slot": "main_hand",
       "stat": "physique",
       "tags": [
-        "Light"
+        "Agile"
       ],
       "targets_stat": "defense",
       "type": "Sword"
@@ -2071,7 +2071,7 @@
       "slot": "main_hand",
       "stat": "physique",
       "tags": [
-        "Light"
+        "Agile"
       ],
       "targets_stat": "defense",
       "type": "Blunt"
@@ -2195,11 +2195,35 @@
       "range": 0,
       "rank": "C",
       "slot": "main_hand",
-      "stat": "finesse",
+      "stat": "physique",
       "tags": [
-        "Light"
+        "Agile"
       ],
       "targets_stat": "resistance",
+      "type": "Blunt"
+    },
+    {
+      "attack_status": "",
+      "damage": "2d8",
+      "description": "",
+      "held_status": "",
+      "is_light": false,
+      "item_id": "war_maul",
+      "item_type": "weapon",
+      "name": "War Maul",
+      "other_abilities": "",
+      "price": 12,
+      "purchaseable": true,
+      "range": 0,
+      "rank": "D",
+      "slot": "main_hand",
+      "stat": "physique",
+      "tags": [
+        "Heavy",
+        "Two-Handed",
+        "Unwieldy"
+      ],
+      "targets_stat": "defense",
       "type": "Blunt"
     }
   ]

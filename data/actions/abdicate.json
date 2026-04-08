@@ -1,0 +1,14 @@
+{
+  "action_id": "abdicate",
+  "label": "Abdicate",
+  "button_style": "primary",
+  "action_type": "move",
+  "description": "Move to a range band without provoking opportunity attacks.",
+  "requires_target": false,
+  "requires_destination": true,
+  "range_requirement": null,
+  "effect_tags": [
+    {"tag": "apply_condition", "condition": "abdication-immunity", "duration": 1, "target": "self"},
+    "move_to_band"
+  ]
+}

@@ -11,7 +11,7 @@ import discord
 
 from engine import equip_item, unequip_item
 from engine.azure_constants import UI_SLOTS, ItemSlot
-from engine.data_loader import ITEM_REGISTRY
+from engine.data_loader import CONDITION_REGISTRY, ITEM_REGISTRY
 from engine.item import EquipItem
 from store import save_session_async
 
@@ -37,6 +37,61 @@ def _find_character(state, owner_id: str):
         if char.owner_id == owner_id:
             return char
     return None
+
+
+async def _submit_gear_combat_action(
+    interaction: discord.Interaction,
+    char,
+    state,
+    channel_id: str,
+    action_id: str,
+    action_text: str,
+    *,
+    item_id: str | None = None,
+    slot_value: str | None = None,
+) -> bool:
+    """
+    If in ROUNDS mode, submit the gear change as a combat turn and dispatch the
+    channel update.  Returns True if handled (caller should return immediately).
+    Returns False if not in ROUNDS mode (caller continues with exploration path).
+    """
+    from models import SessionMode
+    if state.mode != SessionMode.ROUNDS:
+        return False
+
+    if state.latest_submission(char.character_id) is not None:
+        await interaction.response.edit_message(
+            content="You've already submitted an action this round.",
+            view=EquipMenuView(char, state, channel_id),
+        )
+        return True
+
+    from engine import submit_turn
+    from engine.combat import CombatAction
+    action = CombatAction(action_id=action_id, weapon_id=item_id, free_text=slot_value)
+    result = submit_turn(state, char.character_id, action_text, combat_action=action.to_dict())
+    await save_session_async(state)
+
+    if not result.ok:
+        await interaction.response.edit_message(
+            content=result.error,
+            view=EquipMenuView(char, state, channel_id),
+        )
+        return True
+
+    await interaction.response.edit_message(content="Action submitted.", view=None)
+    channel = interaction.client.get_channel(int(channel_id))
+    if channel is not None:
+        if result.auto_resolved:
+            from discord_tasks import dispatch_turn_resolved
+            await dispatch_turn_resolved(channel, state, result.message)
+        elif result.notify_dm:
+            from store import notify_dm_of_turn_close
+            await notify_dm_of_turn_close(channel, state, state.turn_number)
+        else:
+            from store import update_status
+            await update_status(channel, state)
+    return True
 
 
 def _character_sheet(char, state) -> str:
@@ -83,7 +138,12 @@ def _character_sheet(char, state) -> str:
             item_name = "(empty)"
         slot_lines.append(f"  {_SLOT_LABELS[slot]}: {item_name}")
 
-    st = char.saving_throws
+    save_cond_bonus = sum(
+        CONDITION_REGISTRY[c.condition_id].stat_modifiers.get("save", 0) * c.stacks
+        for c in char.active_conditions
+        if c.condition_id in CONDITION_REGISTRY
+    )
+    save_base = char.saving_throws.get("save", 0) + save_cond_bonus
     sheet_lines = [
         sep,
         f"{char.name}  \u2014  {char.character_class.value} Level {char.level}{leader_note}",
@@ -94,14 +154,8 @@ def _character_sheet(char, state) -> str:
         f"RSN {a.reason:+d}   SVY {a.savvy:+d}",
         sep,
         "Saves:",
-        "  PHY: {}   FNS: {}".format(
-            st.get("save", 0) + a.physique,
-            st.get("save", 0) + a.finesse,
-        ),
-        "  RSN: {}   SVY: {}".format(
-            st.get("save", 0) + a.reason,
-            st.get("save", 0) + a.savvy,
-        ),
+        f"  PHY: {save_base + a.physique}   FNS: {save_base + a.finesse}",
+        f"  RSN: {save_base + a.reason}   SVY: {save_base + a.savvy}",
         sep,
         "Equipped:",
         *slot_lines,
@@ -188,16 +242,21 @@ class EquipSelectView(discord.ui.View):
             )
             return
 
+        if await _submit_gear_combat_action(
+            interaction, self.char, self.state, self.channel_id,
+            "equip_item", f"equips {defn.name}", item_id=item_id,
+        ):
+            return
         result = equip_item(self.state, self.char.character_id, item_id)
         await save_session_async(self.state)
         if result.ok:
             await interaction.response.edit_message(
-                content=f"✅ {result.message}",
+                content=f"{result.message}",
                 view=EquipMenuView(self.char, self.state, self.channel_id),
             )
         else:
             await interaction.response.edit_message(
-                content=f"❌ {result.error}",
+                content=f"{result.error}",
                 view=EquipMenuView(self.char, self.state, self.channel_id),
             )
 
@@ -235,9 +294,17 @@ class AccessorySlotView(discord.ui.View):
 
     def _make_callback(self, slot: ItemSlot):
         async def callback(interaction: discord.Interaction):
+            defn = ITEM_REGISTRY.get(self.item_id)
+            if await _submit_gear_combat_action(
+                interaction, self.char, self.state, self.channel_id,
+                "equip_item",
+                f"equips {defn.name if defn else self.item_id} into {slot.value}",
+                item_id=self.item_id, slot_value=slot.value,
+            ):
+                return
             result = equip_item(self.state, self.char.character_id, self.item_id, slot=slot)
             await save_session_async(self.state)
-            msg = f"✅ {result.message}" if result.ok else f"❌ {result.error}"
+            msg = f"{result.message}" if result.ok else f"{result.error}"
             await interaction.response.edit_message(
                 content=msg,
                 view=EquipMenuView(self.char, self.state, self.channel_id),
@@ -288,9 +355,17 @@ class UnequipView(discord.ui.View):
 
     def _make_callback(self, slot: ItemSlot):
         async def callback(interaction: discord.Interaction):
+            item_id = self.char.equipped_slots.get(slot.value)
+            defn = ITEM_REGISTRY.get(item_id) if item_id else None
+            if await _submit_gear_combat_action(
+                interaction, self.char, self.state, self.channel_id,
+                "unequip_item", f"unequips {defn.name if defn else slot.value}",
+                slot_value=slot.value,
+            ):
+                return
             result = unequip_item(self.state, self.char.character_id, slot)
             await save_session_async(self.state)
-            msg = f"✅ {result.message}" if result.ok else f"❌ {result.error}"
+            msg = f"{result.message}" if result.ok else f"{result.error}"
             await interaction.response.edit_message(
                 content=msg,
                 view=EquipMenuView(self.char, self.state, self.channel_id),

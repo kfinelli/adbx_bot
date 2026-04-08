@@ -92,20 +92,20 @@ class ActionDef:
     description        : Tooltip / help text.
     requires_target    : True → platform must collect a target_id before submitting.
     requires_destination: True → platform must collect a RangeBand destination.
-    range_requirement  : List of RangeBand values (as strings) the attacker must
-                         occupy to use this action.  Empty list = no restriction.
+    range_requirement  : Maximum band distance from actor to target, or "weapon" to use
+                         the equipped weapon's range, or None for no restriction.
     effect_tags        : Ordered list of hook entries dispatched by _dispatch_hook().
                          Each entry is a plain tag string or a hook object dict.
     """
-    action_id:            str             = ""
-    label:                str             = ""
-    button_style:         str             = "secondary"
-    action_type:          str             = ""
-    description:          str             = ""
-    requires_target:      bool            = False
-    requires_destination: bool            = False
-    range_requirement:    list[str]       = field(default_factory=list)
-    effect_tags:          list[HookEntry] = field(default_factory=list)
+    action_id:            str              = ""
+    label:                str              = ""
+    button_style:         str              = "secondary"
+    action_type:          str              = ""
+    description:          str              = ""
+    requires_target:      bool             = False
+    requires_destination: bool             = False
+    range_requirement:    int | str | None = None
+    effect_tags:          list[HookEntry]  = field(default_factory=list)
 
 
 @dataclass
@@ -136,6 +136,8 @@ class ConditionDef:
     hooks:          dict[str, HookEntry] = field(default_factory=dict)
     stat_modifiers: dict[str, int]       = field(default_factory=dict)
     grants_actions: list[str]            = field(default_factory=list)
+    stackable:      bool                 = False
+    tags:           list[str]            = field(default_factory=list)
 
 
 @dataclass
@@ -242,7 +244,7 @@ _SKILL_REQUIRED = {
 }
 
 _VALID_BUTTON_STYLES  = {"primary", "secondary", "danger", "success"}
-_VALID_ACTION_TYPES   = {"attack", "move", "affect"}
+_VALID_ACTION_TYPES   = {"attack", "move", "affect", "combat"}
 _VALID_DURATION_TYPES = {"rounds", "permanent"}
 _VALID_HOOK_NAMES     = {
     "on_turn_start", "on_turn_end", "on_attack", "on_hit",
@@ -354,7 +356,7 @@ def _load_action(path: Path) -> ActionDef:
         description=data.get("description", ""),
         requires_target=bool(data["requires_target"]),
         requires_destination=bool(data["requires_destination"]),
-        range_requirement=list(data.get("range_requirement", [])),
+        range_requirement=data.get("range_requirement"),
         effect_tags=raw_tags,
     )
 
@@ -398,6 +400,8 @@ def _load_condition(path: Path) -> ConditionDef:
         hooks=hooks,
         stat_modifiers=dict(data.get("stat_modifiers", {})),
         grants_actions=list(data.get("grants_actions", [])),
+        stackable=bool(data.get("stackable", False)),
+        tags=list(data.get("tags", [])),
     )
 
 

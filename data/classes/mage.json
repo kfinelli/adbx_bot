@@ -9,5 +9,5 @@
   "primary_stat": "RSN",
   "max_level": 5,
   "description": "",
-  "combat_actions": ["attack", "move", "charge", "affect"]
+  "combat_actions": ["advance", "abdicate", "aggrieve", "assail", "abjure", "abscond", "affect"]
 }

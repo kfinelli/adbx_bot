@@ -6,6 +6,6 @@
   "description": "Freely describe your action. Always requires DM resolution — turn will not auto-resolve.",
   "requires_target": false,
   "requires_destination": false,
-  "range_requirement": [],
+  "range_requirement": null,
   "effect_tags": []
 }

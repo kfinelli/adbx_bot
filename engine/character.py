@@ -242,6 +242,14 @@ class CharacterManager:
                     f"(requires {rank_label} rank {item_rank})."
                 )
 
+        # --- Unwieldy check ---
+        if "Unwieldy" in definition.getTags() and char.ability_scores.physique < 400:
+            return None, (
+                f"{char.name} cannot equip '{definition.name}' "
+                f"(Unwieldy weapons require 400 Physique; "
+                f"{char.name} has {char.ability_scores.physique})."
+            )
+
         return mapped, ""
 
     def equip_item(
@@ -274,6 +282,47 @@ class CharacterManager:
         if target_slot is None:
             return _err(state, err)
 
+        definition = ITEM_REGISTRY.get(item_id)
+        item_name = definition.name if definition else item_id
+        new_tags = definition.getTags() if isinstance(definition, EquipItem) else []
+
+        # --- Two-Handed: inventory pre-flight check ---
+        # Auto-unequipping the off-hand frees no slot (it was equipped), but the
+        # displaced main-hand item and the off-hand item both land in inventory.
+        # Net delta = +slot_cost(mh) + slot_cost(oh) - slot_cost(new weapon).
+        # Fail before mutating anything if that would exceed inventory_size.
+        if "Two-Handed" in new_tags and target_slot == ItemSlot.MAIN_HAND:
+            oh_id_pre = char.equipped_slots.get(ItemSlot.OFF_HAND.value)
+            if oh_id_pre:
+                mh_existing_id = char.equipped_slots.get(ItemSlot.MAIN_HAND.value)
+                mh_def_pre = ITEM_REGISTRY.get(mh_existing_id) if mh_existing_id else None
+                mh_cost = mh_def_pre.slot_cost if mh_def_pre else (1 if mh_existing_id else 0)
+                oh_def_pre = ITEM_REGISTRY.get(oh_id_pre)
+                oh_cost = oh_def_pre.slot_cost if oh_def_pre else 1
+                new_cost = definition.slot_cost if definition else 1
+                if char.slots_used + mh_cost + oh_cost - new_cost > char.inventory_size:
+                    oh_name_pre = oh_def_pre.name if oh_def_pre else oh_id_pre
+                    return _err(
+                        state,
+                        f"Not enough inventory space to equip {item_name}: unequipping "
+                        f"{oh_name_pre} from the off-hand would exceed your inventory limit "
+                        f"({char.slots_used}/{char.inventory_size} slots used). Free a slot first.",
+                    )
+
+        # --- Two-Handed: block off-hand equip if main_hand holds a two-handed weapon ---
+        if target_slot == ItemSlot.OFF_HAND:
+            mh_id = char.equipped_slots.get(ItemSlot.MAIN_HAND.value)
+            if mh_id:
+                mh_def = ITEM_REGISTRY.get(mh_id)
+                mh_tags = mh_def.getTags() if isinstance(mh_def, EquipItem) else []
+                if "Two-Handed" in mh_tags:
+                    mh_name = mh_def.name if mh_def else mh_id
+                    return _err(
+                        state,
+                        f"{char.name} cannot equip to the off-hand slot while wielding "
+                        f"the two-handed weapon {mh_name}.",
+                    )
+
         # Unequip whatever is currently in that slot
         existing_id = char.equipped_slots.get(target_slot.value)
         if existing_id is not None:
@@ -282,14 +331,25 @@ class CharacterManager:
                 existing.equipped = False
             char.equipped_slots[target_slot.value] = None
 
+        # --- Two-Handed: auto-unequip off-hand when equipping a two-handed weapon ---
+        extra_msg = ""
+        if "Two-Handed" in new_tags and target_slot == ItemSlot.MAIN_HAND:
+            oh_id = char.equipped_slots.get(ItemSlot.OFF_HAND.value)
+            if oh_id:
+                oh_item = next((i for i in char.inventory if i.item_id == oh_id), None)
+                if oh_item:
+                    oh_item.equipped = False
+                oh_def = ITEM_REGISTRY.get(oh_id)
+                oh_name = oh_def.name if oh_def else oh_id
+                char.equipped_slots[ItemSlot.OFF_HAND.value] = None
+                extra_msg = f" (Two-Handed: {oh_name} unequipped from off-hand.)"
+
         # Equip the new item
         inv_item.equipped = True
         char.equipped_slots[target_slot.value] = item_id
 
-        definition = ITEM_REGISTRY.get(item_id)
-        item_name = definition.name if definition else item_id
         state.updated_at = _now()
-        return _ok(state, f"{char.name} equipped {item_name} in the {target_slot.value} slot.")
+        return _ok(state, f"{char.name} equipped {item_name} in the {target_slot.value} slot.{extra_msg}")
 
     def give_item(
         self,

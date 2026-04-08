@@ -1,9 +1,9 @@
 {
-  "action_id": "move",
-  "label": "Move",
+  "action_id": "advance",
+  "label": "Advance",
   "button_style": "primary",
   "action_type": "move",
-  "description": "Move to an adjacent range band.",
+  "description": "Move to a range band as your Act action this round.",
   "requires_target": false,
   "requires_destination": true,
   "range_requirement": null,

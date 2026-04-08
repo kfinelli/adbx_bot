@@ -366,3 +366,45 @@ class TestDualPathCoherency:
             assert final.experience == 2000
         finally:
             session_cache._sessions.pop("ch1", None)
+
+
+# ---------------------------------------------------------------------------
+# active_conditions round-trip
+# ---------------------------------------------------------------------------
+
+class TestActiveConditionsPersistence:
+    def test_character_active_conditions_round_trip(self, db):
+        """active_conditions survive save → load via the characters table."""
+        from engine import apply_condition, start_session
+        from engine.azure_engine import CharacterClass
+        from models import GameState, Party
+
+        s = GameState(platform_channel_id="ch99", dm_user_id="dm")
+        s.party = Party(name="P")
+        create_character(s, "Tester", CharacterClass.KNIGHT, "Pack A", owner_id="u1")
+        start_session(s)
+        char = next(iter(s.characters.values()))
+
+        # Apply a condition directly (outside combat — now allowed)
+        apply_condition(s, char.character_id, "poisoned", duration=3)
+        assert len(char.active_conditions) == 1
+
+        db.save_character(char)
+        reloaded = db.load_character(str(char.character_id))
+        assert len(reloaded.active_conditions) == 1
+        assert reloaded.active_conditions[0].condition_id == "poisoned"
+        assert reloaded.active_conditions[0].duration_rounds == 3
+
+    def test_character_conditions_empty_by_default(self, db):
+        """Characters without conditions save and reload cleanly."""
+        from engine.azure_engine import CharacterClass
+        from models import GameState, Party
+
+        s = GameState(platform_channel_id="ch100", dm_user_id="dm")
+        s.party = Party(name="P")
+        create_character(s, "Clean", CharacterClass.MAGE, "Pack A", owner_id="u2")
+        char = next(iter(s.characters.values()))
+
+        db.save_character(char)
+        reloaded = db.load_character(str(char.character_id))
+        assert reloaded.active_conditions == []

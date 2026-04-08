@@ -80,6 +80,11 @@ _BAND_ORDER: list[RangeBand] = [
 _BAND_INDEX: dict[RangeBand, int] = {b: i for i, b in enumerate(_BAND_ORDER)}
 
 
+def _band_distance(a: RangeBand, b: RangeBand) -> int:
+    """Absolute number of band steps between two range bands."""
+    return abs(_BAND_INDEX[a] - _BAND_INDEX[b])
+
+
 def _adjacent_bands(band: RangeBand) -> list[RangeBand]:
     """Return the bands directly adjacent (one step either side) to band."""
     idx = _BAND_INDEX[band]
@@ -203,21 +208,34 @@ def apply_condition(
     """
     if condition_id not in CONDITION_REGISTRY:
         return _err(state, f"Unknown condition '{condition_id}'.")
-    if state.battlefield is None:
-        return _err(state, "No active battlefield — conditions can only be applied in ROUNDS mode.")
-    cs = state.battlefield.combatants.get(target_id)
-    if cs is None:
-        return _err(state, f"Combatant {target_id} not found on battlefield.")
 
-    cs.active_conditions = [c for c in cs.active_conditions if c.condition_id != condition_id]
-    cs.active_conditions.append(ActiveCondition(
+    target_char = state.characters.get(target_id)
+    target_npc  = _find_npc(state, target_id)
+    combatant   = target_char if target_char else target_npc
+    if combatant is None:
+        return _err(state, f"Combatant {target_id} not found.")
+
+    cond_def    = CONDITION_REGISTRY[condition_id]
+    target_name = _combatant_name(state, target_id)
+
+    # Stackable conditions accumulate stacks rather than being replaced.
+    if cond_def.stackable:
+        existing = next(
+            (c for c in combatant.active_conditions if c.condition_id == condition_id), None
+        )
+        if existing is not None:
+            existing.stacks += 1
+            state.updated_at = _now()
+            return _ok(state, f"{target_name} is now {cond_def.label} ×{existing.stacks}.")
+
+    combatant.active_conditions = [
+        c for c in combatant.active_conditions if c.condition_id != condition_id
+    ]
+    combatant.active_conditions.append(ActiveCondition(
         condition_id=condition_id,
         duration_rounds=duration,
         source_id=source_id,
     ))
-
-    cond_def    = CONDITION_REGISTRY[condition_id]
-    target_name = _combatant_name(state, target_id)
     state.updated_at = _now()
     return _ok(state, f"{target_name} is now {cond_def.label}.")
 
@@ -295,6 +313,34 @@ def calculateCombatChangeValues(combat_changes: dict):
 
 
 # ---------------------------------------------------------------------------
+# instant_move
+# ---------------------------------------------------------------------------
+
+def instant_move(state: GameState, char_id: UUID, destination: RangeBand) -> object:  # EngineResult
+    """
+    Resolve a player's Move action immediately, outside the round submission
+    queue.  The range_band update is visible to subsequent Act submissions this
+    round.  Appends a narrative line to battlefield.round_log.
+    """
+    if state.battlefield is None:
+        return _err(state, "Not in combat.")
+    cs = state.battlefield.combatants.get(char_id)
+    if cs is None:
+        return _err(state, "Not in combat.")
+    if cs.used_move:
+        return _err(state, "You've already moved this round.")
+
+    action = CombatAction(action_id="move", destination=destination)
+    log: list[str] = []
+    _hook_move_to_band(state, char_id, action, log, {})
+
+    cs.used_move = True
+    state.battlefield.round_log.extend(log)
+    state.updated_at = _now()
+    return _ok(state, "\n".join(log) if log else "Move resolved.")
+
+
+# ---------------------------------------------------------------------------
 # auto_resolve_round
 # ---------------------------------------------------------------------------
 
@@ -317,8 +363,8 @@ def auto_resolve_round(state: GameState) -> object:  # EngineResult
     if state.current_turn is None:
         return _err(state, "No current turn to resolve.")
 
-    log: list[str] = []
     bf  = state.battlefield
+    log: list[str] = list(bf.round_log)  # carry forward instant_move entries from this round
 
     # --- 1. Player actions
     player_actions: dict[UUID, CombatAction] = {}
@@ -371,11 +417,19 @@ def auto_resolve_round(state: GameState) -> object:  # EngineResult
         cs.acted_this_round = False
         cs.skip_action      = False
         cs.movement_blocked = False
+        cs.used_move        = False
+        cs.used_oracle      = False
 
     # --- 7. Build narrative
     narrative   = "\n".join(log) if log else "The round passes without incident."
     bf.round_log = log[:]
     state.updated_at = _now()
+
+    # If Abscond succeeded this round, exit combat now (after all actions resolved).
+    if bf.abscond_succeeded:
+        from engine.session import SessionManager  # local import avoids circular dep
+        SessionManager().exit_rounds(state)
+
     return _ok(state, narrative)
 
 
@@ -395,14 +449,18 @@ def _execute_action(
         log.append(f"[Unknown action '{action.action_id}' — skipped]")
         return
 
-    if action_def.range_requirement:
-        cs = state.battlefield.combatants.get(actor_id)
-        if cs and cs.range_band.value not in action_def.range_requirement:
-            log.append(
-                f"{_combatant_name(state, actor_id)} cannot use {action_def.label} "
-                f"from {cs.range_band.value}."
-            )
-            return
+    if isinstance(action_def.range_requirement, int):
+        actor_cs  = state.battlefield.combatants.get(actor_id)
+        target_cs = state.battlefield.combatants.get(action.target_id) if action.target_id else None
+        if actor_cs and target_cs:
+            dist = _band_distance(actor_cs.range_band, target_cs.range_band)
+            if dist > action_def.range_requirement:
+                log.append(
+                    f"{_combatant_name(state, actor_id)} cannot use {action_def.label} "
+                    f"from {actor_cs.range_band.value} — target is {dist} band(s) away "
+                    f"(max {action_def.range_requirement})."
+                )
+                return
 
     for hook_entry in action_def.effect_tags:
         _dispatch_hook(hook_entry, state, actor_id, action, log)
@@ -418,9 +476,6 @@ def _npc_decide(
     cs:     CombatantState,
 ) -> CombatAction | None:
     """Simple NPC AI: move toward players if far; attack lowest-HP player if in range."""
-    attack_def = ACTION_REGISTRY.get("attack")
-    # TODO: FIX THIS AGAIN. THIS WAS ONLY FOR TESTING.
-    # attack_def = ACTION_REGISTRY.get("bulk")
     living_players = [
         (cid, pcs) for cid, pcs in state.battlefield.combatants.items()
         if pcs.is_player and _is_alive(state, cid)
@@ -428,12 +483,11 @@ def _npc_decide(
     if not living_players:
         return None
 
-    if attack_def and (
-        not attack_def.range_requirement
-        or cs.range_band.value in attack_def.range_requirement
-    ):
-        target_id = _lowest_hp_player(state, living_players)
-        if target_id:
+    _NPC_WEAPON_RANGE = 0
+    target_id = _lowest_hp_player(state, living_players)
+    if target_id:
+        target_cs = state.battlefield.combatants.get(target_id)
+        if target_cs and _band_distance(cs.range_band, target_cs.range_band) <= _NPC_WEAPON_RANGE:
             return CombatAction(action_id="attack", target_id=target_id)
 
     destination = _step_toward(cs.range_band, RangeBand.ENGAGE)
@@ -459,17 +513,80 @@ def _effective_stat_mod(state: GameState, actor_id: UUID, stat: str) -> int:
     base_val = getattr(actor_char.ability_scores, stat, 0)
     base_mod = get_stat_modifier(base_val)
 
-    cs = state.battlefield.combatants.get(actor_id) if state.battlefield else None
-    if cs is None:
-        return base_mod
+    char_bonus = sum(
+        CONDITION_REGISTRY[c.condition_id].stat_modifiers.get(stat, 0) * c.stacks
+        for c in actor_char.active_conditions
+        if c.condition_id in CONDITION_REGISTRY
+    )
 
-    bonus = 0
-    for c in cs.active_conditions:
-        if c.condition_id in CONDITION_REGISTRY:
-            bonus += CONDITION_REGISTRY[c.condition_id].stat_modifiers.get(stat, 0)
-        elif isinstance(c, GenericCombatCondition) and c.combat_changes is not None:
-            bonus += c.combat_changes.get(stat,0)
+    # Experimental: get bonuses from GenericCombatCondition stored
+    cs = state.battlefield.combatants.get(actor_id) if state.battlefield else None
+    cs_bonus = 0
+    if cs is not None:
+        for c in cs.active_conditions:
+            if isinstance(c, GenericCombatCondition) and c.combat_changes is not None:
+                cs_bonus += c.combat_changes.get(stat,0)
+
+    # add experimental bonuses to condition stat bonuses
+    bonus = char_bonus + cs_bonus
     return base_mod + bonus
+
+
+def _effective_defense(state: GameState, combatant_id: UUID) -> int:
+    """
+    Defense floored at 0. For Characters, .defense already includes condition
+    modifiers. For NPCs (plain int field), condition modifiers are applied here.
+    """
+    char = state.characters.get(combatant_id)
+    if char:
+        return char.defense  # already includes conditions + floor
+    npc = _find_npc(state, combatant_id)
+    if npc is None:
+        return 0
+    base = npc.defense + sum(
+        CONDITION_REGISTRY[c.condition_id].stat_modifiers.get("defense", 0) * c.stacks
+        for c in npc.active_conditions
+        if c.condition_id in CONDITION_REGISTRY
+    )
+    return max(0, base)
+
+
+def _effective_resistance(state: GameState, combatant_id: UUID) -> int:
+    """
+    Resistance floored at 0. For Characters, .resistance already includes
+    condition modifiers. For NPCs, condition modifiers are applied here.
+    """
+    char = state.characters.get(combatant_id)
+    if char:
+        return char.resistance  # already includes conditions + floor
+    npc = _find_npc(state, combatant_id)
+    if npc is None:
+        return 0
+    base = npc.resistance + sum(
+        CONDITION_REGISTRY[c.condition_id].stat_modifiers.get("resistance", 0) * c.stacks
+        for c in npc.active_conditions
+        if c.condition_id in CONDITION_REGISTRY
+    )
+    return max(0, base)
+
+
+def _effective_finesse(state: GameState, combatant_id: UUID) -> int:
+    """
+    Dodge (finesse) after condition stat_modifiers {"finesse": N}, floored at 0.
+    Base is char.dodge / npc.dodge, which already applies the Heavy tag cap.
+    "abjuring" uses +200 so attacks need a much higher roll to hit.
+    """
+    char = state.characters.get(combatant_id)
+    npc  = _find_npc(state, combatant_id)
+    base = char.dodge if char else (npc.dodge if npc else 0)
+    combatant = char if char else npc
+    if combatant:
+        base += sum(
+            CONDITION_REGISTRY[c.condition_id].stat_modifiers.get("finesse", 0) * c.stacks
+            for c in combatant.active_conditions
+            if c.condition_id in CONDITION_REGISTRY
+        )
+    return max(0, base)
 
 
 # ---------------------------------------------------------------------------
@@ -556,6 +673,32 @@ def _hook_weapon_attack(
     actor_name  = _combatant_name(state, actor_id)
     target_name = _combatant_name(state, target_id)
 
+    # Range check: determine weapon range then compare to band distance
+    actor_cs  = state.battlefield.combatants.get(actor_id)
+    target_cs = state.battlefield.combatants.get(target_id)
+    if actor_cs and target_cs:
+        weapon_range = 0  # default: melee (also used for NPCs without equipped weapons)
+        maybe_char = state.characters.get(actor_id)
+        if maybe_char:
+            weapons = maybe_char.equipped_weapons()
+            if weapons:
+                _, w_def = weapons[0]
+                if action.weapon_id:
+                    w_pair = next(
+                        ((i, d) for i, d in weapons if i.item_id == action.weapon_id),
+                        None,
+                    )
+                    if w_pair:
+                        _, w_def = w_pair
+                weapon_range = getattr(w_def, "range", 0)
+        dist = _band_distance(actor_cs.range_band, target_cs.range_band)
+        if dist > weapon_range:
+            log.append(
+                f"{actor_name} cannot reach {target_name} "
+                f"— {dist} band(s) away, weapon range is {weapon_range}."
+            )
+            return
+
     actor_char = state.characters.get(actor_id)
     actor_npc  = _find_npc(state, actor_id)
     targets_stat = "defense"
@@ -590,6 +733,12 @@ def _hook_weapon_attack(
                     return
                 if current > 0:
                     weapon_inv.charges = current - 1
+            # Consume the weapon on a throwable attack (thrown regardless of hit/miss).
+            if action and action.weapon_id and action.weapon_id.endswith("__throwable"):
+                real_id = action.weapon_id.removesuffix("__throwable")
+                actor_char.inventory = [i for i in actor_char.inventory if i.item_id != real_id]
+                if actor_char.equipped_slots.get("main_hand") == real_id:
+                    actor_char.equipped_slots["main_hand"] = None
         str_mod      = _effective_stat_mod(state, actor_id, stat_name)
         attack_bonus = 0
     elif actor_npc:
@@ -600,13 +749,11 @@ def _hook_weapon_attack(
 
     target_char = state.characters.get(target_id)
     target_npc  = _find_npc(state, target_id)
-    if target_char:
-        target_ac = target_char.ability_scores.finesse
-    elif target_npc:
-        target_ac = target_npc.ability_scores.finesse
-    else:
+    if target_char is None and target_npc is None:
         log.append(f"{actor_name} swings at nothing.")
         return
+
+    target_ac = _effective_finesse(state, target_id)
 
     roll = random.randint(1, 10*POWER_LEVEL) + attack_bonus
     if roll < target_ac:
@@ -616,16 +763,19 @@ def _hook_weapon_attack(
     base_roll = roll_dice_expr(dice)["total"]
     is_crit = random.randint(1, 10) == 1
     crit_bonus = roll_dice_expr(dice)["total"] if is_crit else 0
-    min_damage = max(1, str_mod)
-    damage = max(min_damage, base_roll + crit_bonus + str_mod)
+    stat_bonus = str_mod if params.get("add_stat_bonus") and actor_char else 0
+    min_damage = 1
+    damage = max(min_damage, base_roll + crit_bonus + stat_bonus)
+    mitigation = (
+        _effective_resistance(state, target_id)
+        if targets_stat == "resistance"
+        else _effective_defense(state, target_id)
+    )
+    damage = max(damage - mitigation, 0)
     if target_char:
-        mitigation = target_char.resistance if targets_stat == "resistance" else target_char.defense
-        damage = max(damage - mitigation, 0)
         target_char.hp_current = max(0, target_char.hp_current - damage)
         hp_str = f"{target_char.hp_current}/{target_char.hp_max}"
     else:
-        mitigation = target_npc.resistance if targets_stat == "resistance" else target_npc.defense
-        damage = max(damage - mitigation, 0)
         target_npc.hp_current = max(0, target_npc.hp_current - damage)
         hp_str = f"{target_npc.hp_current}/{target_npc.hp_max}"
 
@@ -684,6 +834,53 @@ def _hook_check_death(
                 )
 
 
+def _opportunity_attacks(
+    state:    GameState,
+    actor_id: UUID,
+    old_band: RangeBand,
+    log:      list[str],
+) -> None:
+    """
+    Fire a free weapon attack from every enemy sharing old_band with actor_id.
+
+    Skipped entirely if the moving actor has any condition tagged
+    "opportunity-attack-immune" (e.g. abdication-immunity).
+    """
+    actor_char = state.characters.get(actor_id)
+    actor_npc  = _find_npc(state, actor_id)
+    actor = actor_char or actor_npc
+    if actor and any(
+        (cond_def := CONDITION_REGISTRY.get(c.condition_id)) is not None
+        and "opportunity-attack-immune" in cond_def.tags
+        for c in actor.active_conditions
+    ):
+        return
+
+    actor_is_player = actor_char is not None
+
+    for enemy_id, cs in list(state.battlefield.combatants.items()):
+        if enemy_id == actor_id:
+            continue
+        if cs.range_band != old_band:
+            continue
+        enemy_char = state.characters.get(enemy_id)
+        enemy_npc  = _find_npc(state, enemy_id)
+        if actor_is_player and enemy_npc is None:
+            continue
+        if not actor_is_player and enemy_char is None:
+            continue
+        if enemy_npc and (enemy_npc.hp_current <= 0 or enemy_npc.status != "active"):
+            continue
+        if enemy_char and enemy_char.hp_current <= 0:
+            continue
+
+        enemy_name = _combatant_name(state, enemy_id)
+        log.append(f"{enemy_name} gets an opportunity attack!")
+        free_action = CombatAction(action_id="attack", target_id=actor_id)
+        _hook_weapon_attack(state, enemy_id, free_action, log, {})
+        _hook_check_death(state, enemy_id, free_action, log, {})
+
+
 def _hook_move_to_band(
     state:    GameState,
     actor_id: UUID,
@@ -702,7 +899,10 @@ def _hook_move_to_band(
     if cs is None:
         return
 
-    for active_cond in cs.active_conditions:
+    actor_char = state.characters.get(actor_id)
+    actor_npc  = _find_npc(state, actor_id)
+    combatant  = actor_char if actor_char else actor_npc
+    for active_cond in (combatant.active_conditions if combatant else []):
         cond_def = CONDITION_REGISTRY.get(active_cond.condition_id)
         if cond_def:
             move_entry = cond_def.hooks.get("on_move")
@@ -718,20 +918,21 @@ def _hook_move_to_band(
 
     actor_name = _combatant_name(state, actor_id)
     old_band   = cs.range_band
+    adjacent   = _adjacent_bands(old_band)
 
-    adjacent = _adjacent_bands(old_band)
-    if action.destination in adjacent:
-        cs.range_band = action.destination
-        log.append(f"{actor_name} moves from {old_band.value} to {action.destination.value}.")
-    elif action.destination == old_band:
+    if action.destination == old_band:
         log.append(f"{actor_name} holds position at {old_band.value}.")
+        return
+
+    if action.destination in adjacent:
+        new_band = action.destination
     else:
-        one_step = _step_toward(old_band, action.destination)
-        cs.range_band = one_step
-        log.append(
-            f"{actor_name} moves toward {action.destination.value} "
-            f"(now at {one_step.value})."
-        )
+        new_band = _step_toward(old_band, action.destination)
+
+    _opportunity_attacks(state, actor_id, old_band, log)
+
+    cs.range_band = new_band
+    log.append(f"{actor_name} moves from {old_band.value} to {new_band.value}.")
 
 
 def _hook_deal_damage(
@@ -758,7 +959,11 @@ def _hook_deal_damage(
     actor_npc  = _find_npc(state, actor_id)
 
     if actor_char:
-        mitigation = actor_char.defense if damage_type == "physical" else actor_char.resistance
+        mitigation = (
+            _effective_resistance(state, actor_id)
+            if damage_type != "physical"
+            else _effective_defense(state, actor_id)
+        )
         damage = max(damage - mitigation, 0)
         actor_char.hp_current = max(0, actor_char.hp_current - damage)
         hp_str = f"{actor_char.hp_current}/{actor_char.hp_max}"
@@ -769,7 +974,11 @@ def _hook_deal_damage(
             log.append(f"{actor_name} takes {damage} {damage_type} damage and falls!")
             return
     elif actor_npc:
-        mitigation = actor_npc.defense if damage_type == "physical" else actor_npc.resistance
+        mitigation = (
+            _effective_resistance(state, actor_id)
+            if damage_type != "physical"
+            else _effective_defense(state, actor_id)
+        )
         damage = max(damage - mitigation, 0)
         actor_npc.hp_current = max(0, actor_npc.hp_current - damage)
         hp_str = f"{actor_npc.hp_current}/{actor_npc.hp_max}"
@@ -805,22 +1014,26 @@ def _hook_apply_condition(
     params:   dict,
 ) -> None:
     """
-    Apply a condition to action.target_id.
+    Apply a condition to action.target_id, or to actor_id if params["target"] == "self".
 
     params:
       condition  (str, required) — condition_id to apply
       duration   (int, default 3) — duration in rounds; omit for permanent
+      target     (str, optional) — "self" to apply to the actor instead of action.target_id
     """
     condition_id = params.get("condition")
     if not condition_id:
         log.append("[apply_condition: 'condition' param is required]")
         return
 
-    if action is None or action.target_id is None:
-        log.append(f"[apply_condition({condition_id}): no target specified]")
-        return
+    if params.get("target") == "self":
+        target_id = actor_id
+    else:
+        if action is None or action.target_id is None:
+            log.append(f"[apply_condition({condition_id}): no target specified]")
+            return
+        target_id = action.target_id
 
-    target_id   = action.target_id
     actor_name  = _combatant_name(state, actor_id)
     target_name = _combatant_name(state, target_id)
 
@@ -834,7 +1047,10 @@ def _hook_apply_condition(
 
     cond_def = CONDITION_REGISTRY.get(condition_id)
     label    = cond_def.label if cond_def else condition_id
-    log.append(f"{actor_name} applies {label} to {target_name}! ({duration} rounds)")
+    if target_id == actor_id:
+        log.append(f"{actor_name} is now {label}! ({duration} rounds)")
+    else:
+        log.append(f"{actor_name} applies {label} to {target_name}! ({duration} rounds)")
 
 
 def _hook_skip_action(
@@ -941,6 +1157,79 @@ def _hook_combat_changes(
     log.append(f"{actor_name} applies {label} to {target_name}! ({duration} rounds)")
 
 
+def _hook_abscond_roll(
+    state:    GameState,
+    actor_id: UUID,
+    action:   CombatAction | None,
+    log:      list[str],
+    params:   dict,
+) -> None:
+    """
+    Flee attempt: 1d1000 + Finesse vs 500 + highest enemy Finesse.
+    Difficulty reduced by the actor's accumulated 'abscond_bonus' condition modifier.
+    Enemies at ENGAGE range block escape entirely.
+    Applies the stacking 'absconding' condition to all player combatants on every
+    attempt (win or lose), so each subsequent try gets easier.
+    Sets bf.abscond_succeeded = True on success; auto_resolve_round calls exit_rounds.
+
+    params: (none)
+    """
+    bf = state.battlefield
+    if bf is None:
+        return
+
+    actor_name = _combatant_name(state, actor_id)
+
+    # Positional block: any enemy at ENGAGE prevents escape
+    for cid, cs in bf.combatants.items():
+        if not cs.is_player and cs.range_band == RangeBand.ENGAGE:
+            npc = _find_npc(state, cid)
+            blocker = npc.name if npc else "An enemy"
+            log.append(f"{actor_name} tries to flee but {blocker} is blocking the way!")
+            return
+
+    # Roll
+    roll    = random.randint(1, 1000)
+    finesse = _effective_finesse(state, actor_id)
+    total   = roll + finesse
+
+    # Threshold: 500 + highest enemy Finesse − accumulated abscond_bonus
+    enemy_finesse = max(
+        (npc.ability_scores.finesse
+         for cid2, cs2 in bf.combatants.items()
+         if not cs2.is_player
+         for npc in [_find_npc(state, cid2)]
+         if npc is not None),
+        default=0,
+    )
+    actor_char = state.characters.get(actor_id)
+    bonus = 0
+    if actor_char:
+        bonus = sum(
+            CONDITION_REGISTRY[c.condition_id].stat_modifiers.get("abscond_bonus", 0) * c.stacks
+            for c in actor_char.active_conditions
+            if c.condition_id in CONDITION_REGISTRY
+        )
+    threshold = max(0, 500 + enemy_finesse - bonus)
+
+    # Apply stacking absconding condition to all allies (before logging outcome)
+    for cid3, cs3 in bf.combatants.items():
+        if cs3.is_player:
+            apply_condition(state, cid3, "absconding", duration=999)
+
+    # Outcome
+    if total >= threshold:
+        log.append(
+            f"{actor_name} rolls {roll} + {finesse} = **{total}** vs {threshold} — "
+            f"the party flees!"
+        )
+        bf.abscond_succeeded = True
+    else:
+        log.append(
+            f"{actor_name} rolls {roll} + {finesse} = {total} vs {threshold} — "
+            f"failed to abscond."
+        )
+
 # ---------------------------------------------------------------------------
 # Hook registry
 # ---------------------------------------------------------------------------
@@ -952,6 +1241,60 @@ def _hook_combat_changes(
 #   4. Add a test in tests/test_combat_engine.py.
 # See CONTRIBUTING.md for the full walkthrough.
 #
+def _hook_resolve_equip(
+    state:    GameState,
+    actor_id: UUID,
+    action:   CombatAction | None,
+    log:      list[str],
+    params:   dict,
+) -> None:
+    """
+    Equip an item during round resolution.
+    action.weapon_id = item_id to equip
+    action.free_text = ItemSlot.value string for target slot, or "" for auto-detect
+    """
+    from engine.azure_constants import ItemSlot
+    from engine.character import CharacterManager
+
+    if action is None or not action.weapon_id:
+        log.append(f"[equip_item: no item_id for {_combatant_name(state, actor_id)}]")
+        return
+    slot = None
+    if action.free_text:
+        try:
+            slot = ItemSlot(action.free_text)
+        except ValueError:
+            log.append(f"[equip_item: unknown slot '{action.free_text}' — using auto]")
+    result = CharacterManager().equip_item(state, actor_id, action.weapon_id, slot=slot)
+    log.append(result.message if result.ok else f"[equip failed: {result.error}]")
+
+
+def _hook_resolve_unequip(
+    state:    GameState,
+    actor_id: UUID,
+    action:   CombatAction | None,
+    log:      list[str],
+    params:   dict,
+) -> None:
+    """
+    Unequip an item during round resolution.
+    action.free_text = ItemSlot.value string (e.g. "main_hand")
+    """
+    from engine.azure_constants import ItemSlot
+    from engine.character import CharacterManager
+
+    if action is None or not action.free_text:
+        log.append(f"[unequip_item: no slot for {_combatant_name(state, actor_id)}]")
+        return
+    try:
+        slot = ItemSlot(action.free_text)
+    except ValueError:
+        log.append(f"[unequip_item: unknown slot '{action.free_text}']")
+        return
+    result = CharacterManager().unequip_item(state, actor_id, slot)
+    log.append(result.message if result.ok else f"[unequip failed: {result.error}]")
+
+
 _HOOK_DISPATCH: dict[str, object] = {
     # Attack
     "melee_attack":    _hook_weapon_attack,
@@ -964,6 +1307,11 @@ _HOOK_DISPATCH: dict[str, object] = {
     "deal_damage":     _hook_deal_damage,
     "skip_action":     _hook_skip_action,
     "combat_changes":   _hook_combat_changes,
+    # Flee
+    "abscond_roll":    _hook_abscond_roll,
+    # Gear management
+    "resolve_equip":   _hook_resolve_equip,
+    "resolve_unequip": _hook_resolve_unequip,
 }
 
 
@@ -975,8 +1323,11 @@ def _fire_turn_start_hooks(state: GameState, log: list[str]) -> None:
     """Fire on_turn_start hooks for all combatants before the action loop."""
     if state.battlefield is None:
         return
-    for combatant_id, cs in list(state.battlefield.combatants.items()):
-        for cond in cs.active_conditions:
+    for combatant_id in list(state.battlefield.combatants):
+        char      = state.characters.get(combatant_id)
+        npc       = _find_npc(state, combatant_id)
+        combatant = char if char else npc
+        for cond in (combatant.active_conditions if combatant else []):
             cond_def = CONDITION_REGISTRY.get(cond.condition_id)
             if cond_def:
                 entry = cond_def.hooks.get("on_turn_start")
@@ -997,9 +1348,15 @@ def _tick_conditions(state: GameState, log: list[str]) -> None:
     if state.battlefield is None:
         return
 
-    for combatant_id, cs in list(state.battlefield.combatants.items()):
+    for combatant_id in list(state.battlefield.combatants):
+        char      = state.characters.get(combatant_id)
+        npc       = _find_npc(state, combatant_id)
+        combatant = char if char else npc
+        if combatant is None:
+            continue
+
         still_active: list[ActiveCondition] = []
-        for cond in cs.active_conditions:
+        for cond in combatant.active_conditions:
             cond_def = CONDITION_REGISTRY.get(cond.condition_id)
             if cond_def:
                 entry = cond_def.hooks.get("on_turn_end")
@@ -1016,7 +1373,7 @@ def _tick_conditions(state: GameState, log: list[str]) -> None:
                 name = _combatant_name(state, combatant_id)
                 log.append(f"{name}'s {cond_name} condition has expired.")
 
-        cs.active_conditions = still_active
+        combatant.active_conditions = still_active
 
 
 # ---------------------------------------------------------------------------

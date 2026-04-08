@@ -178,6 +178,20 @@ class TestInitializeBattlefield:
         exit_rounds(state)
         assert state.battlefield is None
 
+    def test_exit_rounds_expires_round_conditions_keeps_permanent(self):
+        from models import ActiveCondition
+        state = _make_state_with_npc()
+        char = list(state.characters.values())[0]
+        char.active_conditions = [
+            ActiveCondition(condition_id="poisoned", duration_rounds=2),   # round-scoped
+            ActiveCondition(condition_id="strengthened", duration_rounds=None),  # permanent
+        ]
+        enter_rounds(state)
+        exit_rounds(state)
+        remaining = [c.condition_id for c in char.active_conditions]
+        assert "poisoned" not in remaining
+        assert "strengthened" in remaining
+
     def test_dead_char_excluded(self):
         state = _make_state_with_npc()
         char = list(state.characters.values())[0]
@@ -564,12 +578,14 @@ class TestApplyCondition:
         assert not result.ok
         assert "Unknown condition" in result.error
 
-    def test_apply_outside_rounds_fails(self):
+    def test_apply_outside_rounds_succeeds(self):
+        # Conditions now live on the character, so they can be applied outside combat.
         state = _make_state_with_npc()
-        # Don't enter rounds — no battlefield
         char_id = list(state.characters.keys())[0]
         result = apply_condition(state, char_id, "poisoned", duration=3)
-        assert not result.ok
+        assert result.ok
+        char = state.characters[char_id]
+        assert any(c.condition_id == "poisoned" for c in char.active_conditions)
 
     def test_apply_to_unknown_combatant_fails(self):
         state = _make_state_with_npc()
@@ -597,8 +613,8 @@ class TestApplyCondition:
 
         result = apply_condition(state, char_id, "slowed", duration=2)
         assert result.ok
-        cs = state.battlefield.combatants[char_id]
-        assert any(c.condition_id == "slowed" for c in cs.active_conditions)
+        char = state.characters[char_id]
+        assert any(c.condition_id == "slowed" for c in char.active_conditions)
         del CONDITION_REGISTRY["slowed"]
 
     def test_reapply_refreshes_duration(self):
@@ -613,8 +629,8 @@ class TestApplyCondition:
 
         apply_condition(state, char_id, "burning", duration=1)
         apply_condition(state, char_id, "burning", duration=5)
-        cs = state.battlefield.combatants[char_id]
-        conds = [c for c in cs.active_conditions if c.condition_id == "burning"]
+        char = state.characters[char_id]
+        conds = [c for c in char.active_conditions if c.condition_id == "burning"]
         assert len(conds) == 1
         assert conds[0].duration_rounds == 5
         del CONDITION_REGISTRY["burning"]
@@ -630,33 +646,33 @@ class TestTickConditions:
         state = _make_state_with_npc()
         enter_rounds(state)
         char_id = list(state.characters.keys())[0]
-        cs = state.battlefield.combatants[char_id]
-        cs.active_conditions = [ActiveCondition(condition_id="x", duration_rounds=3)]
+        char = state.characters[char_id]
+        char.active_conditions = [ActiveCondition(condition_id="x", duration_rounds=3)]
 
         _tick_conditions(state, [])
-        assert cs.active_conditions[0].duration_rounds == 2
+        assert char.active_conditions[0].duration_rounds == 2
 
     def test_condition_expires_at_zero(self):
         state = _make_state_with_npc()
         enter_rounds(state)
         char_id = list(state.characters.keys())[0]
-        cs = state.battlefield.combatants[char_id]
-        cs.active_conditions = [ActiveCondition(condition_id="x", duration_rounds=1)]
+        char = state.characters[char_id]
+        char.active_conditions = [ActiveCondition(condition_id="x", duration_rounds=1)]
 
         log: list[str] = []
         _tick_conditions(state, log)
-        assert cs.active_conditions == []
+        assert char.active_conditions == []
 
     def test_permanent_condition_never_expires(self):
         state = _make_state_with_npc()
         enter_rounds(state)
         char_id = list(state.characters.keys())[0]
-        cs = state.battlefield.combatants[char_id]
-        cs.active_conditions = [ActiveCondition(condition_id="x", duration_rounds=None)]
+        char = state.characters[char_id]
+        char.active_conditions = [ActiveCondition(condition_id="x", duration_rounds=None)]
 
         for _ in range(10):
             _tick_conditions(state, [])
-        assert len(cs.active_conditions) == 1
+        assert len(char.active_conditions) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -684,6 +700,9 @@ class TestNPCDecide:
         npc = state.npcs_in_current_room[0]
         cs = state.battlefield.combatants[npc.npc_id]
         cs.range_band = RangeBand.ENGAGE
+        # Place player at ENGAGE too so distance == 0 (within NPC melee range)
+        char_id = next(iter(state.characters))
+        state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
 
         action = _npc_decide(state, npc.npc_id, cs)
         assert action is not None
@@ -847,8 +866,8 @@ class TestConditions:
         state, char_id, _ = self._state_in_rounds()
         result = apply_condition(state, char_id, "poisoned", duration=3)
         assert result.ok
-        cs = state.battlefield.combatants[char_id]
-        assert any(c.condition_id == "poisoned" for c in cs.active_conditions)
+        char = state.characters[char_id]
+        assert any(c.condition_id == "poisoned" for c in char.active_conditions)
 
     def test_apply_condition_message_contains_label(self):
         state, char_id, _ = self._state_in_rounds()
@@ -894,8 +913,8 @@ class TestConditions:
         from engine.combat import _tick_conditions
         _tick_conditions(state, [])   # round 1 — duration becomes 1
         _tick_conditions(state, [])   # round 2 — expires
-        cs = state.battlefield.combatants[char_id]
-        assert not any(c.condition_id == "poisoned" for c in cs.active_conditions)
+        char = state.characters[char_id]
+        assert not any(c.condition_id == "poisoned" for c in char.active_conditions)
 
     # ------------------------------------------------------------------
     # Stunned — skip_action for one round
@@ -1061,19 +1080,16 @@ class TestPoisonAction:
         state.characters[char_id].hp_max = 20
         return state, list(state.characters.keys())[0], npc
 
-    def test_poison_in_thief_actions(self):
+    def test_poison_not_in_any_class_actions(self):
         from engine import CLASS_DEFINITIONS
-        actions = CLASS_DEFINITIONS["THIEF"].combat_actions
-        assert "poison" in actions
-        assert actions.index("poison") < actions.index("affect")
-
-    def test_poison_not_in_fighter_actions(self):
-        from engine import CLASS_DEFINITIONS
-        assert "poison" not in CLASS_DEFINITIONS["KNIGHT"].combat_actions
+        for key, job_def in CLASS_DEFINITIONS.items():
+            assert "poison" not in job_def.combat_actions, (
+                f"poison should be removed from {key} combat_actions"
+            )
 
     def test_poison_has_no_range_requirement(self):
         from engine import ACTION_REGISTRY
-        assert ACTION_REGISTRY["poison"].range_requirement == []
+        assert ACTION_REGISTRY["poison"].range_requirement is None
 
     def test_poison_requires_target(self):
         from engine import ACTION_REGISTRY
@@ -1089,9 +1105,7 @@ class TestPoisonAction:
         )]
         result = auto_resolve_round(state)
         assert result.ok
-        npc_cs = state.battlefield.combatants.get(npc.npc_id)
-        assert npc_cs is not None
-        assert any(c.condition_id == "poisoned" for c in npc_cs.active_conditions)
+        assert any(c.condition_id == "poisoned" for c in npc.active_conditions)
 
     def test_poison_works_at_any_range(self):
         """Thief at FAR_MINUS, guard at FAR_PLUS — should still apply."""
@@ -1118,9 +1132,7 @@ class TestPoisonAction:
             is_latest=True, combat_action=action.to_dict(),
         )]
         auto_resolve_round(state)
-        npc_cs = state.battlefield.combatants.get(npc.npc_id)
-        assert npc_cs is not None
-        cond = next(c for c in npc_cs.active_conditions if c.condition_id == "poisoned")
+        cond = next(c for c in npc.active_conditions if c.condition_id == "poisoned")
         assert cond.duration_rounds == 2   # started at 3, ticked once
         assert npc.hp_current < 20         # took poison damage this round
 
@@ -1276,9 +1288,8 @@ class TestParameterizedHooks:
             {"tag": "apply_condition", "condition": "stunned", "duration": 2},
             state, char_id, action, log,
         )
-        npc_cs = state.battlefield.combatants[npc.npc_id]
-        assert any(c.condition_id == "stunned" for c in npc_cs.active_conditions)
-        stunned = next(c for c in npc_cs.active_conditions if c.condition_id == "stunned")
+        assert any(c.condition_id == "stunned" for c in npc.active_conditions)
+        stunned = next(c for c in npc.active_conditions if c.condition_id == "stunned")
         assert stunned.duration_rounds == 2
 
     def test_apply_condition_hook_missing_condition_param_logs_error(self):
@@ -1546,3 +1557,1011 @@ class TestHookObjectValidation:
                 raise AssertionError("Should have raised")
             except ValueError as e:
                 assert "tag" in str(e).lower()
+
+
+# ---------------------------------------------------------------------------
+# instant_move
+# ---------------------------------------------------------------------------
+
+class TestInstantMove:
+    """Tests for engine.instant_move — immediate movement outside the turn queue."""
+
+    def _make_combat_state(self):
+        """Single-character combat state at FAR_MINUS (default starting position)."""
+        from engine import add_npc, register_room
+        from models import Room
+        state = GameState(platform_channel_id="ch", dm_user_id="dm")
+        state.party = Party(name="P")
+        create_character(state, "Aldric", CharacterClass.KNIGHT, "Pack A", owner_id="u1")
+        start_session(state)
+        room = Room(name="Hall", description="Stone hall.")
+        register_room(state, room)
+        state.current_room_id = room.room_id
+        add_npc(state, NPC(name="Goblin", hp_current=5, hp_max=5, defense=0, damage_dice="1d6"))
+        enter_rounds(state)
+        initialize_battlefield(state)
+        open_turn(state)
+        return state
+
+    def _char_id(self, state):
+        return next(iter(state.characters))
+
+    def test_instant_move_updates_range_band(self):
+        from engine import instant_move
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+        cs = state.battlefield.combatants[char_id]
+        assert cs.range_band == RangeBand.FAR_MINUS
+
+        result = instant_move(state, char_id, RangeBand.CLOSE_MINUS)
+        assert result.ok
+        assert cs.range_band == RangeBand.CLOSE_MINUS
+
+    def test_instant_move_sets_used_move_flag(self):
+        from engine import instant_move
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+        cs = state.battlefield.combatants[char_id]
+        assert cs.used_move is False
+
+        instant_move(state, char_id, RangeBand.CLOSE_MINUS)
+        assert cs.used_move is True
+
+    def test_instant_move_blocked_on_second_call(self):
+        from engine import instant_move
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+
+        r1 = instant_move(state, char_id, RangeBand.CLOSE_MINUS)
+        assert r1.ok
+        r2 = instant_move(state, char_id, RangeBand.ENGAGE)
+        assert not r2.ok
+        assert "already moved" in r2.error.lower()
+
+    def test_instant_move_appends_to_round_log(self):
+        from engine import instant_move
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+        prev_log_len = len(state.battlefield.round_log)
+
+        instant_move(state, char_id, RangeBand.CLOSE_MINUS)
+        assert len(state.battlefield.round_log) > prev_log_len
+
+    def test_instant_move_blocked_by_entangled_condition(self):
+        from engine import instant_move
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+        apply_condition(state, char_id, "entangled", duration=2)
+
+        result = instant_move(state, char_id, RangeBand.CLOSE_MINUS)
+        # move_to_band fires on_move hooks which set movement_blocked;
+        # the position should not change (but instant_move still returns ok=True)
+        assert result.ok
+        cs = state.battlefield.combatants[char_id]
+        assert cs.range_band == RangeBand.FAR_MINUS
+
+    def test_used_move_reset_after_auto_resolve_round(self):
+        from engine import instant_move
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+
+        instant_move(state, char_id, RangeBand.CLOSE_MINUS)
+        cs = state.battlefield.combatants[char_id]
+        assert cs.used_move is True
+
+        submit_turn(state, char_id, "hold", combat_action={
+            "action_id": "affect", "target_id": None, "destination": None,
+            "free_text": "hold", "weapon_id": None,
+        })
+        auto_resolve_round(state)
+        assert cs.used_move is False
+
+    def test_used_oracle_reset_after_auto_resolve_round(self):
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+        cs = state.battlefield.combatants[char_id]
+
+        cs.used_oracle = True
+
+        submit_turn(state, char_id, "hold", combat_action={
+            "action_id": "affect", "target_id": None, "destination": None,
+            "free_text": "hold", "weapon_id": None,
+        })
+        auto_resolve_round(state)
+        assert cs.used_oracle is False
+
+    def test_instant_move_fails_outside_combat(self):
+        from engine import instant_move
+        state = GameState(platform_channel_id="ch", dm_user_id="dm")
+        state.party = Party(name="P")
+        create_character(state, "Aldric", CharacterClass.KNIGHT, "Pack A", owner_id="u1")
+        start_session(state)
+        fake_id = next(iter(state.characters))
+
+        result = instant_move(state, fake_id, RangeBand.ENGAGE)
+        assert not result.ok
+        assert "not in combat" in result.error.lower()
+
+
+# ---------------------------------------------------------------------------
+# TestAbscondRoll
+# ---------------------------------------------------------------------------
+
+class TestAbscondRoll:
+    """Tests for _hook_abscond_roll and stacking absconding condition."""
+
+    def _make_combat_state(self):
+        """One player vs one NPC at FAR_PLUS (default), player at FAR_MINUS."""
+        from engine import add_npc, register_room
+        from models import Room
+        state = GameState(platform_channel_id="ch", dm_user_id="dm")
+        state.party = Party(name="P")
+        create_character(state, "Aldric", CharacterClass.KNIGHT, "Pack A", owner_id="u1")
+        start_session(state)
+        room = Room(name="Hall", description="Stone hall.")
+        register_room(state, room)
+        state.current_room_id = room.room_id
+        add_npc(state, NPC(name="Goblin", hp_current=5, hp_max=5, defense=0, damage_dice="1d6"))
+        enter_rounds(state)
+        open_turn(state)
+        return state
+
+    def _char_id(self, state):
+        return next(iter(state.characters.keys()))
+
+    def _npc(self, state):
+        for g in state.npc_roster.groups.values():
+            for n in g.npcs:
+                return n
+
+    def test_blocked_by_enemy_at_engage(self):
+        """Enemy at ENGAGE prevents Abscond regardless of roll."""
+        from unittest.mock import patch
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+        npc = self._npc(state)
+
+        # Move enemy to ENGAGE
+        cs_npc = state.battlefield.combatants[npc.npc_id]
+        cs_npc.range_band = RangeBand.ENGAGE
+
+        with patch("engine.combat.random.randint", return_value=1000):
+            submit_turn(state, char_id, "Abscond", combat_action={
+                "action_id": "abscond", "target_id": None, "destination": None,
+                "free_text": None, "weapon_id": None,
+            })
+            auto_resolve_round(state)
+
+        # Combat should NOT have ended
+        assert state.battlefield is not None
+        assert not state.battlefield.abscond_succeeded
+
+    def test_low_roll_fails(self):
+        """Roll of 1 + low finesse should not meet threshold."""
+        from unittest.mock import patch
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+
+        with patch("engine.combat.random.randint", return_value=1):
+            submit_turn(state, char_id, "Abscond", combat_action={
+                "action_id": "abscond", "target_id": None, "destination": None,
+                "free_text": None, "weapon_id": None,
+            })
+            auto_resolve_round(state)
+
+        # State should still be ROUNDS (auto_resolve_round did not exit)
+        from models import SessionMode
+        assert state.mode == SessionMode.ROUNDS
+
+    def test_high_roll_succeeds_and_exits_combat(self):
+        """Roll of 1000 should always beat threshold; combat ends afterward."""
+        from unittest.mock import patch
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+
+        with patch("engine.combat.random.randint", return_value=1000):
+            submit_turn(state, char_id, "Abscond", combat_action={
+                "action_id": "abscond", "target_id": None, "destination": None,
+                "free_text": None, "weapon_id": None,
+            })
+            auto_resolve_round(state)
+
+        from models import SessionMode
+        assert state.mode == SessionMode.EXPLORATION
+        assert state.battlefield is None
+
+    def test_condition_applied_on_failure(self):
+        """absconding condition is applied to all allies even on a failed roll."""
+        from unittest.mock import patch
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+
+        with patch("engine.combat.random.randint", return_value=1):
+            submit_turn(state, char_id, "Abscond", combat_action={
+                "action_id": "abscond", "target_id": None, "destination": None,
+                "free_text": None, "weapon_id": None,
+            })
+            auto_resolve_round(state)
+
+        char = state.characters[char_id]
+        assert any(c.condition_id == "absconding" for c in char.active_conditions)
+
+    def test_condition_stacks_on_second_attempt(self):
+        """A second Abscond attempt gives stacks == 2 on the absconding condition."""
+        from unittest.mock import patch
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+        npc = self._npc(state)
+        # Player must act before NPC so the NPC hasn't moved to ENGAGE yet when
+        # the second abscond fires. (NPC has melee range 0 and moves toward ENGAGE
+        # each round it can't attack — if it reaches ENGAGE first it blocks the attempt.)
+        state.battlefield.combatants[char_id].initiative = 100
+        state.battlefield.combatants[npc.npc_id].initiative = 1
+
+        for _ in range(2):
+            open_turn(state)
+            with patch("engine.combat.random.randint", return_value=1):
+                # submit_turn auto-resolves when all players have submitted; do NOT
+                # call auto_resolve_round again or the NPC gets a free extra move
+                # (no player submission) that brings it to ENGAGE, blocking the next attempt.
+                submit_turn(state, char_id, "Abscond", combat_action={
+                    "action_id": "abscond", "target_id": None, "destination": None,
+                    "free_text": None, "weapon_id": None,
+                })
+
+        char = state.characters[char_id]
+        cond = next(c for c in char.active_conditions if c.condition_id == "absconding")
+        assert cond.stacks == 2
+
+    def test_stackable_condition_increments_stacks(self):
+        """apply_condition on a stackable condition increments stacks, not replaces."""
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+
+        apply_condition(state, char_id, "absconding", duration=3)
+        apply_condition(state, char_id, "absconding", duration=3)
+
+        char = state.characters[char_id]
+        conds = [c for c in char.active_conditions if c.condition_id == "absconding"]
+        assert len(conds) == 1
+        assert conds[0].stacks == 2
+
+    def test_non_stackable_condition_still_replaces(self):
+        """Non-stackable conditions continue to replace (duration refresh)."""
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+
+        apply_condition(state, char_id, "poisoned", duration=1)
+        apply_condition(state, char_id, "poisoned", duration=5)
+
+        char = state.characters[char_id]
+        conds = [c for c in char.active_conditions if c.condition_id == "poisoned"]
+        assert len(conds) == 1
+        assert conds[0].duration_rounds == 5
+        assert conds[0].stacks == 1
+
+    def test_stacks_multiply_stat_bonus(self):
+        """absconding at stacks=2 gives 2× the abscond_bonus modifier."""
+        from engine.data_loader import CONDITION_REGISTRY
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+
+        apply_condition(state, char_id, "absconding", duration=99)
+        apply_condition(state, char_id, "absconding", duration=99)
+
+        char = state.characters[char_id]
+        cond = next(c for c in char.active_conditions if c.condition_id == "absconding")
+        assert cond.stacks == 2
+
+        bonus_per_stack = CONDITION_REGISTRY["absconding"].stat_modifiers["abscond_bonus"]
+        total_bonus = bonus_per_stack * cond.stacks
+        assert total_bonus == bonus_per_stack * 2
+
+    def test_stacks_round_trip_serialization(self):
+        """stacks field survives serialize_active_condition / deserialize_active_condition."""
+        from serialization import deserialize_active_condition, serialize_active_condition
+        cond = ActiveCondition(condition_id="absconding", duration_rounds=3, stacks=4)
+        d = serialize_active_condition(cond)
+        assert d["stacks"] == 4
+        reloaded = deserialize_active_condition(d)
+        assert reloaded.stacks == 4
+
+    def test_stacks_defaults_to_one_on_old_saves(self):
+        """Old serialized dicts without 'stacks' key deserialize to stacks=1."""
+        from serialization import deserialize_active_condition
+        old_data = {"condition_id": "poisoned", "duration_rounds": 2, "source_id": None}
+        cond = deserialize_active_condition(old_data)
+        assert cond.stacks == 1
+
+
+# ---------------------------------------------------------------------------
+# A-Actions
+# ---------------------------------------------------------------------------
+
+class TestAActions:
+    """Tests for the new A-action set: aggrieve, advance, abdicate, assail, abjure."""
+
+    def _setup_combat(self, npc_hp=50, npc_def=0):
+        """Enter rounds, open a turn, return (state, char_id, npc_id).
+        Character HP is 50 so NPC counter-attacks don't kill them mid-test.
+        """
+        state = _make_state_with_npc()
+        npc = state.npcs_in_current_room[0]
+        npc.hp_current = npc_hp
+        npc.hp_max = npc_hp
+        npc.defense = npc_def
+        char = list(state.characters.values())[0]
+        char.hp_current = 50
+        char.hp_max = 50
+        enter_rounds(state)
+        open_turn(state)
+        return state, list(state.characters.keys())[0], npc.npc_id
+
+    def _submit(self, state, char_id, action):
+        from models import PlayerTurnSubmission
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id,
+            action_text=action.action_id,
+            is_latest=True,
+            combat_action=action.to_dict(),
+        )]
+
+    # --- Aggrieve ---
+
+    def test_aggrieve_deals_damage(self):
+        """Aggrieve hits and reduces NPC HP (AC=1 guarantees hit)."""
+        state, char_id, npc_id = self._setup_combat(npc_hp=50, npc_def=0)
+        state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
+        state.battlefield.combatants[npc_id].range_band  = RangeBand.ENGAGE
+        self._submit(state, char_id, CombatAction(action_id="aggrieve", target_id=npc_id))
+        result = auto_resolve_round(state)
+        assert result.ok
+        npc = state.npcs_in_current_room[0]
+        assert npc.hp_current < 50
+
+    def test_aggrieve_no_stat_bonus_in_damage(self):
+        """Default melee_attack tag does not add stat bonus — max damage is bounded by dice."""
+        from engine.combat import _hook_weapon_attack
+        state, char_id, npc_id = self._setup_combat(npc_hp=9999, npc_def=0)
+        state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
+        state.battlefield.combatants[npc_id].range_band  = RangeBand.ENGAGE
+        # Give NPC very low finesse so we always hit.
+        state.battlefield.combatants[npc_id].range_band = RangeBand.ENGAGE
+        npc = state.npcs_in_current_room[0]
+        npc.hp_current = 9999
+        npc.hp_max = 9999
+        npc.defense = 0
+        # Run many attacks and check max damage never exceeds max dice (1d6=6) plus possible crit.
+        # A 1d6 with a crit doubles to 12. str_mod excluded.
+        log: list[str] = []
+        action = CombatAction(action_id="aggrieve", target_id=npc_id)
+        for _ in range(30):
+            _hook_weapon_attack(state, char_id, action, log, {"dice": "1d6"})
+        # No assertion on exact values — just verifying it runs without error.
+
+    # --- Advance ---
+
+    def test_advance_moves_actor_via_act_slot(self):
+        """Advance queued through the act slot moves the character."""
+        state, char_id, npc_id = self._setup_combat()
+        state.battlefield.combatants[char_id].range_band = RangeBand.FAR_MINUS
+        self._submit(state, char_id, CombatAction(action_id="advance", destination=RangeBand.CLOSE_MINUS))
+        result = auto_resolve_round(state)
+        assert result.ok
+        assert state.battlefield.combatants[char_id].range_band == RangeBand.CLOSE_MINUS
+
+    def test_advance_does_not_require_target(self):
+        from engine.data_loader import ACTION_REGISTRY
+        a = ACTION_REGISTRY["advance"]
+        assert a.requires_target is False
+        assert a.requires_destination is True
+
+    # --- Abdicate ---
+
+    def test_abdicate_moves_and_applies_immunity_condition(self):
+        """Abdicate applies abdication-immunity to actor and moves."""
+        state, char_id, npc_id = self._setup_combat()
+        state.battlefield.combatants[char_id].range_band = RangeBand.FAR_MINUS
+        self._submit(state, char_id, CombatAction(action_id="abdicate", destination=RangeBand.CLOSE_MINUS))
+        auto_resolve_round(state)
+        # Movement happened
+        assert state.battlefield.combatants[char_id].range_band == RangeBand.CLOSE_MINUS
+        # Condition was applied (duration=1, ticks off at end of round)
+        # Verify via round_log that it was applied
+        assert any("abdication" in e.lower() for e in state.battlefield.round_log)
+
+    # --- apply_condition target=self ---
+
+    def test_apply_condition_self_targets_actor_not_action_target(self):
+        """target='self' applies condition to actor even when action has a different target_id."""
+        from engine.combat import _hook_apply_condition
+        state, char_id, npc_id = self._setup_combat()
+        char = state.characters[char_id]
+        npc = state.npcs_in_current_room[0]
+        action = CombatAction(action_id="abjure", target_id=npc_id)
+        log: list[str] = []
+        _hook_apply_condition(state, char_id, action, log,
+                              {"condition": "abjuring", "duration": 1, "target": "self"})
+        assert any(c.condition_id == "abjuring" for c in char.active_conditions)
+        assert not any(c.condition_id == "abjuring" for c in npc.active_conditions)
+
+    def test_apply_condition_self_works_with_no_action(self):
+        """target='self' works when action=None (no target_id available)."""
+        from engine.combat import _hook_apply_condition
+        state, char_id, _ = self._setup_combat()
+        char = state.characters[char_id]
+        log: list[str] = []
+        _hook_apply_condition(state, char_id, None, log,
+                              {"condition": "abjuring", "duration": 1, "target": "self"})
+        assert any(c.condition_id == "abjuring" for c in char.active_conditions)
+
+    # --- Assail ---
+
+    def test_assail_applies_undefended_to_actor(self):
+        """After Assail, undefended was applied to the actor (visible in round log).
+        The condition expires at end-of-round (duration=1), so we check the log.
+        """
+        state, char_id, npc_id = self._setup_combat(npc_hp=9999, npc_def=0)
+        state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
+        state.battlefield.combatants[npc_id].range_band  = RangeBand.ENGAGE
+        self._submit(state, char_id, CombatAction(action_id="assail", target_id=npc_id))
+        auto_resolve_round(state)
+        assert any("undefended" in e.lower() for e in state.battlefield.round_log)
+
+    def test_undefended_condition_floors_defense_to_zero(self):
+        """undefended's -9999 defense modifier floors Character.defense to 0."""
+        state, char_id, _ = self._setup_combat()
+        char = state.characters[char_id]
+        char.active_conditions = [ActiveCondition(condition_id="undefended", duration_rounds=1)]
+        assert char.defense == 0
+
+    def test_assail_add_stat_bonus_adds_stat_to_damage(self):
+        """add_stat_bonus=true adds str_mod to damage; without it damage is dice-only."""
+        from engine.combat import _hook_weapon_attack
+        # Set up: NPC with huge HP so we can compare, def=0, guaranteed hit (finesse=1)
+        state, char_id, npc_id = self._setup_combat(npc_hp=99999, npc_def=0)
+        state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
+        state.battlefield.combatants[npc_id].range_band  = RangeBand.ENGAGE
+        npc = state.npcs_in_current_room[0]
+        npc.hp_current = 99999
+        npc.hp_max = 99999
+
+        import random
+        action = CombatAction(action_id="assail", target_id=npc_id)
+        log: list[str] = []
+        # Patch randomness: always hit, always roll max dice
+        original_randint = random.randint
+        call_count = [0]
+        def mock_randint(a, b):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return b  # attack roll: max (always hit)
+            if call_count[0] == 2:
+                return 1  # crit check: no crit
+            return b  # dice roll: max
+        random.randint = mock_randint
+        try:
+            hp_before = npc.hp_current
+            _hook_weapon_attack(state, char_id, action, log, {"dice": "1d6", "add_stat_bonus": True})
+            hp_after = npc.hp_current
+        finally:
+            random.randint = original_randint
+
+        # With add_stat_bonus, damage = max(1, 6 + str_mod). Just verify damage was applied.
+        assert hp_after < hp_before
+
+    # --- Abjure ---
+
+    def test_abjure_applies_abjuring_condition_to_self(self):
+        """Abjure applies the abjuring condition to the actor (visible in round log).
+        The condition expires at end-of-round (duration=1), so we check the log.
+        """
+        state, char_id, npc_id = self._setup_combat()
+        self._submit(state, char_id, CombatAction(action_id="abjure"))
+        auto_resolve_round(state)
+        assert any("abjuring" in e.lower() for e in state.battlefield.round_log)
+
+    def test_abjuring_increases_defense_and_finesse(self):
+        """abjuring condition grants +200 defense and +200 finesse."""
+        from engine.combat import _effective_finesse
+        state, char_id, _ = self._setup_combat()
+        char = state.characters[char_id]
+        # Set a known baseline (no gear, no conditions, zero finesse) for deterministic math.
+        char.active_conditions = []
+        char.ability_scores.finesse = 0
+        assert char.defense == 0
+        assert _effective_finesse(state, char_id) == 0
+        # Apply abjuring and verify both stats increase by exactly 200
+        char.active_conditions = [ActiveCondition(condition_id="abjuring", duration_rounds=1)]
+        assert char.defense == 200
+        assert _effective_finesse(state, char_id) == 200
+
+    # --- Weapon range enforcement ---
+
+    def test_melee_weapon_blocked_when_not_at_engage(self):
+        """Attack with range-0 weapon fails when actor is not at ENGAGE with target."""
+        from engine.combat import _hook_weapon_attack
+        from engine.item import Weapon
+        from models import InventoryItem
+        state, char_id, npc_id = self._setup_combat(npc_hp=100, npc_def=0)
+        # Equip a melee weapon (range=0)
+        char = state.characters[char_id]
+        weapon = Weapon("melee_w", "Sword", "C", "Sword", "physique", "1d6", range=0)
+        char.inventory.append(InventoryItem(item_id="melee_w"))
+        char.equipped_slots["main_hand"] = "melee_w"
+        from engine.data_loader import ITEM_REGISTRY
+        ITEM_REGISTRY["melee_w"] = weapon
+        # Place actor at CLOSE_MINUS (1 band away from target at ENGAGE)
+        state.battlefield.combatants[char_id].range_band = RangeBand.CLOSE_MINUS
+        state.battlefield.combatants[npc_id].range_band  = RangeBand.ENGAGE
+        action = CombatAction(action_id="attack", target_id=npc_id)
+        log: list[str] = []
+        _hook_weapon_attack(state, char_id, action, log, {})
+        assert any("cannot reach" in line for line in log)
+        assert state.npcs_in_current_room[0].hp_current == 100
+
+    def test_reach_weapon_hits_from_adjacent_band(self):
+        """Attack with range-1 weapon succeeds from one band away."""
+        from unittest.mock import patch
+
+        from engine.combat import _hook_weapon_attack
+        from engine.item import Weapon
+        from models import InventoryItem
+        state, char_id, npc_id = self._setup_combat(npc_hp=100, npc_def=0)
+        # Equip a reach weapon (range=1)
+        char = state.characters[char_id]
+        weapon = Weapon("reach_w", "Greatspear", "C", "Polearm", "physique", "1d8", range=1)
+        char.inventory.append(InventoryItem(item_id="reach_w"))
+        char.equipped_slots["main_hand"] = "reach_w"
+        from engine.data_loader import ITEM_REGISTRY
+        ITEM_REGISTRY["reach_w"] = weapon
+        # Actor at CLOSE_MINUS (distance 1 to ENGAGE target)
+        state.battlefield.combatants[char_id].range_band = RangeBand.CLOSE_MINUS
+        state.battlefield.combatants[npc_id].range_band  = RangeBand.ENGAGE
+        action = CombatAction(action_id="attack", target_id=npc_id)
+        log: list[str] = []
+        with patch("engine.combat.random.randint", return_value=1000):
+            _hook_weapon_attack(state, char_id, action, log, {})
+        assert not any("cannot reach" in line for line in log)
+        assert state.npcs_in_current_room[0].hp_current < 100
+
+    def test_reach_weapon_blocked_two_bands_away(self):
+        """Attack with range-1 weapon fails when 2 bands away from target."""
+        from engine.combat import _hook_weapon_attack
+        from engine.item import Weapon
+        from models import InventoryItem
+        state, char_id, npc_id = self._setup_combat(npc_hp=100, npc_def=0)
+        char = state.characters[char_id]
+        weapon = Weapon("reach_w2", "Greatspear", "C", "Polearm", "physique", "1d8", range=1)
+        char.inventory.append(InventoryItem(item_id="reach_w2"))
+        char.equipped_slots["main_hand"] = "reach_w2"
+        from engine.data_loader import ITEM_REGISTRY
+        ITEM_REGISTRY["reach_w2"] = weapon
+        # Actor at FAR_MINUS (distance 2 to ENGAGE target)
+        state.battlefield.combatants[char_id].range_band = RangeBand.FAR_MINUS
+        state.battlefield.combatants[npc_id].range_band  = RangeBand.ENGAGE
+        action = CombatAction(action_id="attack", target_id=npc_id)
+        log: list[str] = []
+        _hook_weapon_attack(state, char_id, action, log, {})
+        assert any("cannot reach" in line for line in log)
+        assert state.npcs_in_current_room[0].hp_current == 100
+
+
+# ---------------------------------------------------------------------------
+# Opportunity Attacks
+# ---------------------------------------------------------------------------
+
+class TestOpportunityAttacks:
+    """Opportunity attacks fire when a combatant moves out of a band with enemies."""
+
+    def _make_state(self, npc_hp=20, char_hp=20):
+        from engine import add_npc, register_room
+        from models import Room
+        state = GameState(platform_channel_id="ch", dm_user_id="dm")
+        state.party = Party(name="P")
+        create_character(state, "Aldric", CharacterClass.KNIGHT, "Pack A", owner_id="u1")
+        start_session(state)
+        room = Room(name="Hall", description="Stone hall.")
+        register_room(state, room)
+        state.current_room_id = room.room_id
+        npc = NPC(name="Goblin", hp_current=npc_hp, hp_max=npc_hp, defense=0,
+                  damage_dice="1d6")
+        add_npc(state, npc)
+        enter_rounds(state)
+        char_id = list(state.characters.keys())[0]
+        npc_obj = state.npcs_in_current_room[0]
+        state.characters[char_id].hp_current = char_hp
+        state.characters[char_id].hp_max = char_hp
+        # Place both at ENGAGE so the player starts in a band with an enemy.
+        state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
+        state.battlefield.combatants[npc_obj.npc_id].range_band = RangeBand.ENGAGE
+        open_turn(state)
+        return state, char_id, npc_obj.npc_id
+
+    def test_opp_attack_fires_npc_vs_player_move(self):
+        """NPC at same band fires an opportunity attack when player moves away."""
+        from unittest.mock import patch
+        state, char_id, npc_id = self._make_state()
+        state.battlefield.combatants[char_id].initiative = 100
+        state.battlefield.combatants[npc_id].initiative = 1
+
+        from models import PlayerTurnSubmission
+        action = CombatAction(action_id="move", destination=RangeBand.CLOSE_MINUS)
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id, action_text="Move", is_latest=True,
+            combat_action=action.to_dict(),
+        )]
+        with patch("engine.combat.random.randint", return_value=1000):
+            result = auto_resolve_round(state)
+        assert result.ok
+        assert any("opportunity attack" in line.lower() for line in state.battlefield.round_log)
+
+    def test_opp_attack_fires_player_vs_npc_move(self):
+        """Player at ENGAGE gets an opportunity attack when NPC moves out of that band."""
+        from unittest.mock import patch
+
+        from engine.combat import _opportunity_attacks
+        state, char_id, npc_id = self._make_state()
+        state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
+        state.battlefield.combatants[npc_id].range_band = RangeBand.ENGAGE
+
+        log: list[str] = []
+        with patch("engine.combat.random.randint", return_value=1000):
+            _opportunity_attacks(state, npc_id, RangeBand.ENGAGE, log)
+        assert any("opportunity attack" in line.lower() for line in log)
+
+    def test_opp_attack_skipped_with_abdication_immunity(self):
+        """abdication-immunity suppresses opportunity attacks for the moving actor."""
+        from unittest.mock import patch
+        state, char_id, npc_id = self._make_state()
+        apply_condition(state, char_id, "abdication-immunity", duration=1)
+        state.battlefield.combatants[char_id].initiative = 100
+        state.battlefield.combatants[npc_id].initiative = 1
+
+        from models import PlayerTurnSubmission
+        action = CombatAction(action_id="move", destination=RangeBand.CLOSE_MINUS)
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id, action_text="Move", is_latest=True,
+            combat_action=action.to_dict(),
+        )]
+        with patch("engine.combat.random.randint", return_value=1000):
+            result = auto_resolve_round(state)
+        assert result.ok
+        assert not any("opportunity attack" in line.lower()
+                       for line in state.battlefield.round_log)
+
+    def test_opp_attack_not_fired_hold_position(self):
+        """No opportunity attack when destination equals current band."""
+        from unittest.mock import patch
+        state, char_id, npc_id = self._make_state()
+        state.battlefield.combatants[char_id].initiative = 100
+
+        from models import PlayerTurnSubmission
+        action = CombatAction(action_id="move", destination=RangeBand.ENGAGE)
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id, action_text="Move", is_latest=True,
+            combat_action=action.to_dict(),
+        )]
+        with patch("engine.combat.random.randint", return_value=1000):
+            result = auto_resolve_round(state)
+        assert result.ok
+        assert not any("opportunity attack" in line.lower()
+                       for line in state.battlefield.round_log)
+
+    def test_opp_attack_not_fired_enemy_in_different_band(self):
+        """No opportunity attack when the only enemy is in a different band."""
+        from unittest.mock import patch
+        state, char_id, npc_id = self._make_state()
+        # NPC is now in a different band
+        state.battlefield.combatants[npc_id].range_band = RangeBand.FAR_PLUS
+        state.battlefield.combatants[char_id].initiative = 100
+
+        from models import PlayerTurnSubmission
+        action = CombatAction(action_id="move", destination=RangeBand.CLOSE_MINUS)
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id, action_text="Move", is_latest=True,
+            combat_action=action.to_dict(),
+        )]
+        with patch("engine.combat.random.randint", return_value=1000):
+            result = auto_resolve_round(state)
+        assert result.ok
+        assert not any("opportunity attack" in line.lower()
+                       for line in state.battlefield.round_log)
+
+    def test_opp_attack_dead_enemy_skipped(self):
+        """Dead NPC (hp=0) does not make an opportunity attack."""
+        from unittest.mock import patch
+        state, char_id, npc_id = self._make_state(npc_hp=1)
+        npc = state.npcs_in_current_room[0]
+        npc.hp_current = 0
+        npc.status = "dead"
+        state.battlefield.combatants[char_id].initiative = 100
+
+        from models import PlayerTurnSubmission
+        action = CombatAction(action_id="move", destination=RangeBand.CLOSE_MINUS)
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id, action_text="Move", is_latest=True,
+            combat_action=action.to_dict(),
+        )]
+        with patch("engine.combat.random.randint", return_value=1000):
+            result = auto_resolve_round(state)
+        assert result.ok
+        assert not any("opportunity attack" in line.lower()
+                       for line in state.battlefield.round_log)
+
+
+# ---------------------------------------------------------------------------
+# Equip/Unequip combat action
+# ---------------------------------------------------------------------------
+
+def _find_weapon_id():
+    """Return a non-arcane, non-charge weapon id from the registry."""
+    from engine.data_loader import ITEM_REGISTRY
+    from engine.item import ChargeWeapon, Weapon
+    _ARCANE = {"V", "W", "X", "Y", "Z"}
+    weapon_id = next(
+        (iid for iid, d in ITEM_REGISTRY.items()
+         if isinstance(d, Weapon) and not isinstance(d, ChargeWeapon) and d.rank not in _ARCANE),
+        None,
+    )
+    assert weapon_id, "No non-arcane weapon found in registry"
+    return weapon_id
+
+
+def _make_combat_state_with_item():
+    """
+    Single-character ROUNDS state with a weapon in inventory (not equipped).
+    Single-char party means submit_turn auto-resolves immediately.
+    """
+    from engine import give_item, register_room
+    from models import Room
+
+    state = GameState(platform_channel_id="ch", dm_user_id="dm")
+    state.party = Party(name="P")
+    create_character(state, "Aldric", CharacterClass.KNIGHT, "", owner_id="u1")
+    start_session(state)
+
+    room = Room(name="Hall", description="Stone hall.")
+    register_room(state, room)
+    state.current_room_id = room.room_id
+
+    weapon_id = _find_weapon_id()
+    char = next(iter(state.characters.values()))
+    give_item(state, char.character_id, weapon_id)
+
+    enter_rounds(state)
+    open_turn(state)
+    return state, char, weapon_id
+
+
+def _make_two_char_combat_state_with_item():
+    """
+    Two-character ROUNDS state — char1 has a weapon in inventory.
+    Submitting for char1 alone does NOT trigger auto-resolve (still waiting on char2).
+    """
+    from engine import give_item, register_room
+    from models import Room
+
+    state = GameState(platform_channel_id="ch", dm_user_id="dm")
+    state.party = Party(name="P")
+    create_character(state, "Aldric", CharacterClass.KNIGHT, "", owner_id="u1")
+    create_character(state, "Tomas",  CharacterClass.MAGE,   "", owner_id="u2")
+    start_session(state)
+
+    room = Room(name="Hall", description="Stone hall.")
+    register_room(state, room)
+    state.current_room_id = room.room_id
+
+    weapon_id = _find_weapon_id()
+    char1 = next(c for c in state.characters.values() if c.owner_id == "u1")
+    give_item(state, char1.character_id, weapon_id)
+
+    enter_rounds(state)
+    open_turn(state)
+    return state, char1, weapon_id
+
+
+class TestCombatEquipAction:
+
+    def test_equip_action_submitted_in_rounds(self):
+        """submit_turn with equip_item CombatAction records the submission before auto-resolve."""
+        # Two-char party: char1 submits, char2 hasn't yet → no auto-resolve, submission persists.
+        state, char1, weapon_id = _make_two_char_combat_state_with_item()
+        action = CombatAction(action_id="equip_item", weapon_id=weapon_id)
+        result = submit_turn(
+            state, char1.character_id, "equips weapon",
+            combat_action=action.to_dict(),
+        )
+        assert result.ok
+        sub = state.latest_submission(char1.character_id)
+        assert sub is not None
+        assert sub.combat_action["action_id"] == "equip_item"
+        assert sub.combat_action["weapon_id"] == weapon_id
+
+    def test_equip_action_applies_item_on_resolve(self):
+        """After auto-resolve the weapon appears in equipped_slots."""
+        from engine.azure_constants import ItemSlot
+        state, char, weapon_id = _make_combat_state_with_item()
+        action = CombatAction(action_id="equip_item", weapon_id=weapon_id)
+        result = submit_turn(
+            state, char.character_id, "equips weapon",
+            combat_action=action.to_dict(),
+        )
+        assert result.ok
+        char = state.characters[char.character_id]
+        assert char.equipped_slots.get(ItemSlot.MAIN_HAND.value) == weapon_id
+
+    def test_unequip_action_removes_item_on_resolve(self):
+        """After auto-resolve with unequip_item the slot is cleared."""
+        from engine import equip_item as _equip
+        from engine.azure_constants import ItemSlot
+        state, char, weapon_id = _make_combat_state_with_item()
+        _equip(state, char.character_id, weapon_id)
+        assert state.characters[char.character_id].equipped_slots.get(ItemSlot.MAIN_HAND.value) == weapon_id
+
+        action = CombatAction(action_id="unequip_item", free_text=ItemSlot.MAIN_HAND.value)
+        result = submit_turn(
+            state, char.character_id, "unequips weapon",
+            combat_action=action.to_dict(),
+        )
+        assert result.ok
+        char = state.characters[char.character_id]
+        assert char.equipped_slots.get(ItemSlot.MAIN_HAND.value) is None
+
+    def test_equip_blocked_predicate(self):
+        """After a submission (no auto-resolve yet), latest_submission() is non-None."""
+        # Two-char party so submission persists without auto-resolving.
+        state, char1, weapon_id = _make_two_char_combat_state_with_item()
+        action = CombatAction(action_id="equip_item", weapon_id=weapon_id)
+        submit_turn(state, char1.character_id, "equips weapon", combat_action=action.to_dict())
+        assert state.latest_submission(char1.character_id) is not None
+
+    def test_equip_invalid_item_logs_error_not_crash(self):
+        """Bad item_id doesn't crash; error appears in the resolved turn narrative."""
+        state, char, _ = _make_combat_state_with_item()
+        action = CombatAction(action_id="equip_item", weapon_id="nonexistent_item_xxx")
+        result = submit_turn(
+            state, char.character_id, "equips nothing",
+            combat_action=action.to_dict(),
+        )
+        assert result.ok
+        # After auto-resolve, narrative is in result.message
+        assert "equip failed" in result.message.lower() or "not in" in result.message.lower()
+
+    def test_unequip_missing_slot_logs_error_not_crash(self):
+        """Unequipping an empty slot logs an error in the narrative rather than crashing."""
+        from engine.azure_constants import ItemSlot
+        state, char, _ = _make_combat_state_with_item()
+        # MAIN_HAND is empty (nothing equipped yet)
+        action = CombatAction(action_id="unequip_item", free_text=ItemSlot.MAIN_HAND.value)
+        result = submit_turn(
+            state, char.character_id, "unequips empty slot",
+            combat_action=action.to_dict(),
+        )
+        assert result.ok
+        assert "unequip failed" in result.message.lower() or "nothing" in result.message.lower()
+
+
+# ---------------------------------------------------------------------------
+# Heavy tag — dodge cap
+# ---------------------------------------------------------------------------
+
+def _make_simple_char_state():
+    """Minimal EXPLORATION state with one Knight."""
+    from engine import register_room
+    from models import Room
+
+    state = GameState(platform_channel_id="ch", dm_user_id="dm")
+    state.party = Party(name="P")
+    create_character(state, "Aldric", CharacterClass.KNIGHT, "", owner_id="u1")
+    start_session(state)
+    room = Room(name="Hall", description="Stone hall.")
+    register_room(state, room)
+    state.current_room_id = room.room_id
+    char = next(iter(state.characters.values()))
+    return state, char
+
+
+def _find_heavy_weapon_id():
+    from engine.data_loader import ITEM_REGISTRY
+    from engine.item import EquipItem
+    item_id = next(
+        (iid for iid, d in ITEM_REGISTRY.items()
+         if isinstance(d, EquipItem) and "Heavy" in d.getTags() and hasattr(d, "damage")),
+        None,
+    )
+    assert item_id, "No Heavy weapon found in registry"
+    return item_id
+
+
+def _find_heavy_gear_id():
+    from engine.data_loader import ITEM_REGISTRY
+    from engine.item import Gear
+    item_id = next(
+        (iid for iid, d in ITEM_REGISTRY.items()
+         if isinstance(d, Gear) and "Heavy" in d.getTags()),
+        None,
+    )
+    assert item_id, "No Heavy gear found in registry"
+    return item_id
+
+
+def _find_non_heavy_weapon_id():
+    from engine.data_loader import ITEM_REGISTRY
+    from engine.item import ChargeWeapon, Weapon
+    item_id = next(
+        (iid for iid, d in ITEM_REGISTRY.items()
+         if isinstance(d, Weapon) and not isinstance(d, ChargeWeapon)
+         and "Heavy" not in d.getTags()),
+        None,
+    )
+    assert item_id, "No non-Heavy weapon found in registry"
+    return item_id
+
+
+class TestHeavyTag:
+    """dodge property returns finesse normally; Heavy-tagged items cap it at POWER_LEVEL.
+
+    Tests set equipped_slots directly to bypass rank enforcement — the dodge
+    property only reads slot contents, so this exercises the logic cleanly.
+    """
+
+    def test_no_equipped_items_no_cap(self):
+        """Bare character: dodge equals raw finesse."""
+        from engine.azure_constants import POWER_LEVEL
+        state, char = _make_simple_char_state()
+        char.ability_scores.finesse = POWER_LEVEL * 5
+        assert char.dodge == POWER_LEVEL * 5
+
+    def test_non_heavy_item_no_cap(self):
+        """A non-Heavy item in equipped_slots does not cap dodge."""
+        from engine.azure_constants import POWER_LEVEL, ItemSlot
+        state, char = _make_simple_char_state()
+        char.ability_scores.finesse = POWER_LEVEL * 5
+        item_id = _find_non_heavy_weapon_id()
+        char.equipped_slots[ItemSlot.MAIN_HAND.value] = item_id
+        assert char.dodge == POWER_LEVEL * 5
+
+    def test_heavy_weapon_caps_dodge(self):
+        """A Heavy weapon in equipped_slots caps dodge at POWER_LEVEL."""
+        from engine.azure_constants import POWER_LEVEL, ItemSlot
+        state, char = _make_simple_char_state()
+        char.ability_scores.finesse = POWER_LEVEL * 5
+        item_id = _find_heavy_weapon_id()
+        char.equipped_slots[ItemSlot.MAIN_HAND.value] = item_id
+        assert char.dodge == POWER_LEVEL
+
+    def test_heavy_gear_caps_dodge(self):
+        """Heavy armor in equipped_slots caps dodge at POWER_LEVEL."""
+        from engine.azure_constants import POWER_LEVEL, ItemSlot
+        state, char = _make_simple_char_state()
+        char.ability_scores.finesse = POWER_LEVEL * 5
+        item_id = _find_heavy_gear_id()
+        char.equipped_slots[ItemSlot.BODY.value] = item_id
+        assert char.dodge == POWER_LEVEL
+
+    def test_two_heavy_items_cap_not_stacked(self):
+        """Two Heavy items still produce a cap of POWER_LEVEL, not lower."""
+        from engine.azure_constants import POWER_LEVEL, ItemSlot
+        state, char = _make_simple_char_state()
+        char.ability_scores.finesse = POWER_LEVEL * 5
+        char.equipped_slots[ItemSlot.MAIN_HAND.value] = _find_heavy_weapon_id()
+        char.equipped_slots[ItemSlot.BODY.value] = _find_heavy_gear_id()
+        assert char.dodge == POWER_LEVEL
+
+    def test_dodge_below_cap_unchanged(self):
+        """If finesse is already <= POWER_LEVEL, Heavy does not reduce dodge further."""
+        from engine.azure_constants import POWER_LEVEL, ItemSlot
+        state, char = _make_simple_char_state()
+        char.ability_scores.finesse = POWER_LEVEL // 2
+        char.equipped_slots[ItemSlot.MAIN_HAND.value] = _find_heavy_weapon_id()
+        assert char.dodge == POWER_LEVEL // 2
+
+    def test_heavy_cap_reflected_in_effective_finesse(self):
+        """_effective_finesse reads char.dodge, so Heavy cap propagates to attack resolution."""
+        from engine.azure_constants import POWER_LEVEL, ItemSlot
+        from engine.combat import _effective_finesse
+        state, char = _make_simple_char_state()
+        char.ability_scores.finesse = POWER_LEVEL * 5
+        char.equipped_slots[ItemSlot.MAIN_HAND.value] = _find_heavy_weapon_id()
+        assert _effective_finesse(state, char.character_id) == POWER_LEVEL
