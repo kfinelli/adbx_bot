@@ -90,7 +90,7 @@ class ActionDef:
     button_style       : Discord button style: primary/secondary/danger/success.
     action_type        : Logical category: attack | move | affect.
     description        : Tooltip / help text.
-    requires_target    : True → platform must collect a target_id before submitting.
+    requires_target    : "self", "allies", "enemies", or None
     requires_destination: True → platform must collect a RangeBand destination.
     range_requirement  : Maximum band distance from actor to target, or "weapon" to use
                          the equipped weapon's range, or None for no restriction.
@@ -102,7 +102,7 @@ class ActionDef:
     button_style:         str              = "secondary"
     action_type:          str              = ""
     description:          str              = ""
-    requires_target:      bool             = False
+    requires_target:      str              = "none"
     requires_destination: bool             = False
     range_requirement:    int | str | None = None
     effect_tags:          list[HookEntry]  = field(default_factory=list)
@@ -245,6 +245,7 @@ _SKILL_REQUIRED = {
 
 _VALID_BUTTON_STYLES  = {"primary", "secondary", "danger", "success"}
 _VALID_ACTION_TYPES   = {"attack", "move", "affect", "combat"}
+_VALID_ACTION_TARGET  = {"self", "allies", "enemies", "none"}
 _VALID_DURATION_TYPES = {"rounds", "permanent"}
 _VALID_HOOK_NAMES     = {
     "on_turn_start", "on_turn_end", "on_attack", "on_hit",
@@ -344,6 +345,12 @@ def _load_action(path: Path) -> ActionDef:
             f"{path}: invalid action_type '{atype}'; must be one of {_VALID_ACTION_TYPES}"
         )
 
+    atarget = data["requires_target"]
+    if atarget not in _VALID_ACTION_TARGET:
+        raise ValueError(
+            f"{path}: invalid action_type '{atarget}'; must be one of {_VALID_ACTION_TARGET}"
+        )
+
     raw_tags = list(data["effect_tags"])
     for i, entry in enumerate(raw_tags):
         _validate_effect_tag(entry, path, i)
@@ -354,7 +361,7 @@ def _load_action(path: Path) -> ActionDef:
         button_style=style,
         action_type=atype,
         description=data.get("description", ""),
-        requires_target=bool(data["requires_target"]),
+        requires_target=data["requires_target"],
         requires_destination=bool(data["requires_destination"]),
         range_requirement=data.get("range_requirement"),
         effect_tags=raw_tags,

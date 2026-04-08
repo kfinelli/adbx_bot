@@ -760,7 +760,7 @@ class ClassActionView(discord.ui.View):
     """
     Per-player ephemeral view listing the character's available combat actions.
     Each button either:
-      • opens TargetSelectView (requires_target actions)
+      • opens TargetSelectView (requires_target != "none" actions)
       • opens DestinationSelectView (requires_destination actions)
       • opens AffectModal (affect type)
     Built dynamically from ACTION_REGISTRY entries in action_ids.
@@ -820,12 +820,20 @@ class ClassActionView(discord.ui.View):
                 )
                 return
 
-            if action_def.requires_target:
+            combatant_targets = []
+            if action_def.requires_target == "self":
+                # add the owner to the targets
+                combatant_targets = [owner_char]
+            elif action_def.requires_target == "allies":
+                # Build target select from active characters
+                combatant_targets = state.activeCharacters()
+            elif action_def.requires_target == "enemies":
                 # Build target select from living NPCs in current room
-                npc_targets = [
+                combatant_targets = [
                     n for n in state.npcs_in_current_room if n.status != "dead"
                 ]
-                if not npc_targets:
+            if action_def.requires_target != "none":
+                if not combatant_targets:
                     await interaction.response.send_message(
                         "No valid targets in this room.", ephemeral=True
                     )
@@ -834,7 +842,7 @@ class ClassActionView(discord.ui.View):
                     action_id=action_id,
                     char_id=self.char_id,
                     channel_id=self.channel_id,
-                    npc_targets=npc_targets,
+                    combatant_targets=combatant_targets,
                     then_destination=action_def.requires_destination,
                 )
                 await interaction.response.edit_message(
@@ -887,7 +895,7 @@ class TargetSelectView(discord.ui.View):
         action_id:        str,
         char_id:          UUID,
         channel_id:       str,
-        npc_targets,
+        combatant_targets,
         then_destination: bool = False,
     ):
         super().__init__(timeout=180)
@@ -898,11 +906,11 @@ class TargetSelectView(discord.ui.View):
 
         options = [
             discord.SelectOption(
-                label=npc.name,
-                value=str(npc.npc_id),
-                description=f"HP: {npc.hp_current}/{npc.hp_max}",
+                label=getattr(combatant, name, ""),
+                value=str(getattr(combatant, npc_id, combatant.character_id)),
+                description=f"HP: {combatant.hp_current}/{combatant.hp_max}",
             )
-            for npc in npc_targets[:25]   # Discord SelectMenu max 25 options
+            for combatant in combatant_targets[:25]   # Discord SelectMenu max 25 options
         ]
 
         select = discord.ui.Select(

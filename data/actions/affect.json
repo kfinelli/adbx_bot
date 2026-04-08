@@ -4,7 +4,7 @@
   "button_style": "secondary",
   "action_type": "affect",
   "description": "Freely describe your action. Always requires DM resolution — turn will not auto-resolve.",
-  "requires_target": false,
+  "requires_target": "none",
   "requires_destination": false,
   "range_requirement": null,
   "effect_tags": []
