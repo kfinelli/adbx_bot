@@ -117,7 +117,7 @@ class CombatAction:
     A fully specified combat action ready for resolution.
 
     action_id     : Key into ACTION_REGISTRY.
-    target_id     : UUID of the target combatant (when ActionDef.requires_target).
+    target_id     : UUID of the target combatant (when ActionDef.requires_target is not "none").
     destination   : RangeBand to move to (when ActionDef.requires_destination).
     free_text     : Player-supplied description for "affect" actions.
     is_affect     : True when this is a free-text Affect submission.

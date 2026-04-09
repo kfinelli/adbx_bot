@@ -4,7 +4,7 @@
   "button_style": "primary",
   "action_type": "move",
   "description": "Move to a range band without provoking opportunity attacks.",
-  "requires_target": false,
+  "requires_target": "none",
   "requires_destination": true,
   "range_requirement": null,
   "effect_tags": [

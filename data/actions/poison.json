@@ -4,7 +4,7 @@
   "button_style": "secondary",
   "action_type": "attack",
   "description": "Apply poison to a target at any range. The target takes 1d4 damage at the end of each round.",
-  "requires_target": true,
+  "requires_target": "enemies",
   "requires_destination": false,
   "range_requirement": null,
   "effect_tags": [
