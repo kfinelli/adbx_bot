@@ -1093,7 +1093,7 @@ class TestPoisonAction:
 
     def test_poison_requires_target(self):
         from engine import ACTION_REGISTRY
-        assert ACTION_REGISTRY["poison"].requires_target == "enemies" 
+        assert ACTION_REGISTRY["poison"].requires_target == "enemies"
 
     def test_poison_applies_condition_to_target(self):
         state, char_id, npc = self._thief_state()

@@ -69,7 +69,7 @@ from engine import (
     say,
     submit_turn,
 )
-from models import RangeBand, SessionMode, TurnStatus
+from models import GameState, RangeBand, SessionMode, TurnStatus
 from store import (
     get_session,
     notify_dm_of_turn_close,
