@@ -68,6 +68,7 @@ from engine import (
     say,
     submit_turn,
 )
+from engine.azure_constants import SkillType
 from models import GameState, RangeBand, SessionMode, TurnStatus
 from store import (
     get_session,

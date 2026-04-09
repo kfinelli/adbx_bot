@@ -85,6 +85,20 @@ Slash commands may take a few minutes to appear in Discord after the first sync.
 
 ---
 
+## Running tests
+
+Non-discord tests:
+
+```bash
+pytest
+```
+
+discord integration tests: 
+
+```bash
+pytest -s -m "discord_integration"
+```
+
 ## Playing a Session
 
 ### DM Setup (do this as DM)
