@@ -90,7 +90,7 @@ class ActionDef:
     button_style       : Discord button style: primary/secondary/danger/success.
     action_type        : Logical category: attack | move | affect.
     description        : Tooltip / help text.
-    requires_target    : "self", "allies", "enemies", or None
+    requires_target    : "self" | "allies" | "enemies" | "none"
     requires_destination: True → platform must collect a RangeBand destination.
     range_requirement  : Maximum band distance from actor to target, or "weapon" to use
                          the equipped weapon's range, or None for no restriction.
@@ -348,7 +348,7 @@ def _load_action(path: Path) -> ActionDef:
     atarget = data["requires_target"]
     if atarget not in _VALID_ACTION_TARGET:
         raise ValueError(
-            f"{path}: invalid action_type '{atarget}'; must be one of {_VALID_ACTION_TARGET}"
+            f"{path}: invalid requires_target '{atarget}'; must be one of {_VALID_ACTION_TARGET}"
         )
 
     raw_tags = list(data["effect_tags"])

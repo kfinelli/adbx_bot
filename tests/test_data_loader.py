@@ -58,7 +58,7 @@ _VALID_ACTION = {
     "button_style":         "danger",
     "action_type":          "attack",
     "description":          "Melee attack.",
-    "requires_target":      True,
+    "requires_target":      "enemies",
     "requires_destination": False,
     "range_requirement":    "weapon",
     "effect_tags":          [{"tag": "melee_attack", "dice": "1d6"}],
@@ -104,7 +104,7 @@ class TestProductionDataFiles:
         assert a.label == "Attack"
         assert a.button_style == "danger"
         assert a.action_type == "attack"
-        assert a.requires_target is True
+        assert a.requires_target == "enemies"
         assert a.requires_destination is False
         tags = [e["tag"] if isinstance(e, dict) else e for e in a.effect_tags]
         assert "melee_attack" in tags
@@ -114,14 +114,14 @@ class TestProductionDataFiles:
         a = ACTION_REGISTRY["move"]
         assert a.action_type == "move"
         assert a.requires_destination is True
-        assert a.requires_target is False
+        assert a.requires_target == "none"
         tags = [e["tag"] if isinstance(e, dict) else e for e in a.effect_tags]
         assert "move_to_band" in tags
 
     def test_action_affect_values(self):
         a = ACTION_REGISTRY["affect"]
         assert a.action_type == "affect"
-        assert a.requires_target is False
+        assert a.requires_target == "none"
         assert a.requires_destination is False
         assert a.effect_tags == []
 

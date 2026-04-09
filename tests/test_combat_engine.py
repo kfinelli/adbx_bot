@@ -1526,7 +1526,7 @@ class TestHookObjectValidation:
             (p / "classes").mkdir()
             (p / "actions" / "stab.json").write_text(json.dumps({
                 "action_id": "stab", "label": "Stab", "button_style": "danger",
-                "action_type": "attack", "requires_target": True,
+                "action_type": "attack", "requires_target": "enemies",
                 "requires_destination": False, "range_requirement": [],
                 "effect_tags": [{"tag": "melee_attack", "dice": "1d4"}, "check_death"],
             }))
@@ -1548,7 +1548,7 @@ class TestHookObjectValidation:
             (p / "classes").mkdir()
             (p / "actions" / "bad.json").write_text(json.dumps({
                 "action_id": "bad", "label": "Bad", "button_style": "danger",
-                "action_type": "attack", "requires_target": False,
+                "action_type": "attack", "requires_target": "none",
                 "requires_destination": False, "range_requirement": [],
                 "effect_tags": [{"dice": "1d6"}],   # missing "tag"
             }))
@@ -1953,7 +1953,7 @@ class TestAActions:
     def test_advance_does_not_require_target(self):
         from engine.data_loader import ACTION_REGISTRY
         a = ACTION_REGISTRY["advance"]
-        assert a.requires_target is False
+        assert a.requires_target == "none"
         assert a.requires_destination is True
 
     # --- Abdicate ---
@@ -2145,6 +2145,65 @@ class TestAActions:
         _hook_weapon_attack(state, char_id, action, log, {})
         assert any("cannot reach" in line for line in log)
         assert state.npcs_in_current_room[0].hp_current == 100
+
+    # --- Strengthen ---
+
+    def test_strengthen_requires_allies(self):
+        from engine.data_loader import ACTION_REGISTRY
+        assert ACTION_REGISTRY["strengthen"].requires_target == "allies"
+
+    def test_strengthen_applies_condition_to_ally(self):
+        """Strengthen applies the strengthened condition to the target ally."""
+        from engine import add_npc, register_room
+        from models import Room
+        state = GameState(platform_channel_id="ch", dm_user_id="dm")
+        state.party = Party(name="P")
+        create_character(state, "Caster", CharacterClass.MAGE,  "Pack A", owner_id="u1")
+        create_character(state, "Ally",   CharacterClass.KNIGHT, "Pack A", owner_id="u2")
+        start_session(state)
+        room = Room(name="Hall", description="Hall.")
+        register_room(state, room)
+        state.current_room_id = room.room_id
+        add_npc(state, NPC(name="Goblin", hp_current=5, hp_max=5, defense=0))
+        enter_rounds(state)
+        open_turn(state)
+        char_ids = list(state.characters.keys())
+        # Pin initiatives so caster (char_ids[0]) acts first
+        state.battlefield.combatants[char_ids[0]].initiative = 100
+        state.battlefield.combatants[char_ids[1]].initiative = 50
+        caster_id = char_ids[0]
+        ally_id    = char_ids[1]
+        from models import PlayerTurnSubmission
+        state.current_turn.submissions = [
+            PlayerTurnSubmission(
+                character_id=caster_id, action_text="Strengthen",
+                is_latest=True,
+                combat_action=CombatAction(action_id="strengthen", target_id=ally_id).to_dict(),
+            ),
+            PlayerTurnSubmission(
+                character_id=ally_id, action_text="Advance",
+                is_latest=True,
+                combat_action=CombatAction(action_id="advance",
+                                           destination=RangeBand.CLOSE_MINUS).to_dict(),
+            ),
+        ]
+        result = auto_resolve_round(state)
+        assert result.ok
+        ally = state.characters[ally_id]
+        assert any(c.condition_id == "strengthened" for c in ally.active_conditions)
+
+    def test_apply_condition_self_tag_applies_to_actor_not_target(self):
+        """apply_condition with target='self' in assail applies undefended to actor, not the NPC."""
+        from engine.combat import _hook_apply_condition
+        state, char_id, npc_id = self._setup_combat()
+        char = state.characters[char_id]
+        npc  = state.npcs_in_current_room[0]
+        action = CombatAction(action_id="assail", target_id=npc_id)
+        log: list[str] = []
+        _hook_apply_condition(state, char_id, action, log,
+                              {"condition": "undefended", "duration": 1, "target": "self"})
+        assert any(c.condition_id == "undefended" for c in char.active_conditions)
+        assert not any(c.condition_id == "undefended" for c in npc.active_conditions)
 
 
 # ---------------------------------------------------------------------------

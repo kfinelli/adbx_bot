@@ -820,22 +820,30 @@ class ClassActionView(discord.ui.View):
                 )
                 return
 
-            combatant_targets = []
             if action_def.requires_target == "self":
-                # add the owner to the targets
-                combatant_targets = [owner_char]
-            elif action_def.requires_target == "allies":
-                # Build target select from active characters
-                combatant_targets = state.activeCharacters()
-            elif action_def.requires_target == "enemies":
-                # Build target select from living NPCs in current room
-                combatant_targets = [
-                    n for n in state.npcs_in_current_room if n.status != "dead"
-                ]
-            if action_def.requires_target != "none":
+                # Target is the actor; skip selection entirely
+                partial = CombatAction(action_id=action_id, target_id=owner_char.character_id)
+                current_band = (
+                    state.battlefield.combatants[self.char_id].range_band
+                    if state.battlefield and self.char_id in state.battlefield.combatants
+                    else None
+                )
+                await _dispatch_with_target(
+                    interaction, self.char_id, self.channel_id, partial,
+                    action_def.requires_destination, current_band, state, owner_char.name,
+                )
+                return
+
+            elif action_def.requires_target in ("allies", "enemies"):
+                if action_def.requires_target == "allies":
+                    combatant_targets = state.active_characters
+                else:
+                    combatant_targets = [
+                        n for n in state.npcs_in_current_room if n.status != "dead"
+                    ]
                 if not combatant_targets:
                     await interaction.response.send_message(
-                        "No valid targets in this room.", ephemeral=True
+                        "No valid targets.", ephemeral=True
                     )
                     return
                 view = TargetSelectView(
@@ -876,6 +884,53 @@ class ClassActionView(discord.ui.View):
 
 
 # ---------------------------------------------------------------------------
+# Combat: target dispatch helper
+# ---------------------------------------------------------------------------
+
+async def _dispatch_with_target(
+    interaction:      discord.Interaction,
+    char_id:          UUID,
+    channel_id:       str,
+    partial:          CombatAction,
+    then_destination: bool,
+    current_band,
+    state:            GameState,
+    owner_name:       str,
+) -> None:
+    """After a target is known, route to weapon picker → destination → submit."""
+    owner_char_obj = state.characters.get(char_id)
+    weapons = owner_char_obj.equipped_weapons() if owner_char_obj else []
+
+    if len(weapons) > 1:
+        view = WeaponPickerView(
+            char_id=char_id,
+            channel_id=channel_id,
+            weapons=weapons,
+            partial=partial,
+            then_destination=then_destination,
+            current_band=current_band,
+        )
+        await interaction.response.edit_message(
+            content=f"**{owner_name}** — select a weapon:",
+            view=view,
+        )
+    elif then_destination:
+        view = DestinationSelectView(
+            action_id=partial.action_id,
+            char_id=char_id,
+            channel_id=channel_id,
+            current_band=current_band,
+            partial_action=partial,
+        )
+        await interaction.response.edit_message(
+            content=f"**{owner_name}** — select destination:",
+            view=view,
+        )
+    else:
+        await _submit_combat_action(interaction, char_id, channel_id, partial)
+
+
+# ---------------------------------------------------------------------------
 # Combat: TargetSelectView  (transient ephemeral — timeout=180)
 # ---------------------------------------------------------------------------
 
@@ -906,8 +961,8 @@ class TargetSelectView(discord.ui.View):
 
         options = [
             discord.SelectOption(
-                label=getattr(combatant, name, ""),
-                value=str(getattr(combatant, npc_id, combatant.character_id)),
+                label=combatant.name,
+                value=str(getattr(combatant, "character_id", None) or combatant.npc_id),
                 description=f"HP: {combatant.hp_current}/{combatant.hp_max}",
             )
             for combatant in combatant_targets[:25]   # Discord SelectMenu max 25 options
@@ -942,36 +997,10 @@ class TargetSelectView(discord.ui.View):
             else None
         )
 
-        owner_char_obj = state.characters.get(self.char_id)
-        weapons = owner_char_obj.equipped_weapons() if owner_char_obj else []
-
-        if len(weapons) > 1:
-            view = WeaponPickerView(
-                char_id=self.char_id,
-                channel_id=self.channel_id,
-                weapons=weapons,
-                partial=partial,
-                then_destination=self.then_destination,
-                current_band=current_band,
-            )
-            await interaction.response.edit_message(
-                content=f"**{owner_char.name}** — select a weapon:",
-                view=view,
-            )
-        elif self.then_destination:
-            view = DestinationSelectView(
-                action_id=self.action_id,
-                char_id=self.char_id,
-                channel_id=self.channel_id,
-                current_band=current_band,
-                partial_action=partial,
-            )
-            await interaction.response.edit_message(
-                content=f"**{owner_char.name}** — select destination:",
-                view=view,
-            )
-        else:
-            await _submit_combat_action(interaction, self.char_id, self.channel_id, partial)
+        await _dispatch_with_target(
+            interaction, self.char_id, self.channel_id, partial,
+            self.then_destination, current_band, state, owner_char.name,
+        )
 
 
 # ---------------------------------------------------------------------------
