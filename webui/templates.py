@@ -9,6 +9,7 @@ a `name` attribute matching what the server expects.
 from __future__ import annotations
 
 from engine.azure_constants import XP_THRESHOLDS
+from engine.character import CharacterManager
 from engine.data_loader import ITEM_REGISTRY
 from models import (
     Character,
@@ -1544,6 +1545,17 @@ def character_sheet_panel(character: Character) -> str:
     slots_pct = int(character.slots_used / character.inventory_size * 100) if character.inventory_size else 0
     bar_color = "#c9a84c" if slots_pct < 80 else "#f44336"
 
+    active_skills = CharacterManager.get_active_skills(character)
+    if active_skills:
+        skill_rows = "".join(
+            f'<tr><td style="font-weight:500;white-space:nowrap;padding-right:1rem">{s.name}</td>'
+            f'<td class="muted" style="font-size:0.9rem">{s.description}</td></tr>'
+            for s in active_skills
+        )
+    else:
+        skill_rows = '<tr><td colspan="2" class="muted">None</td></tr>'
+    skills_html = f'<table style="margin-bottom:0.75rem">{skill_rows}</table>'
+
     return f"""
 <div class="card" style="max-width:640px">
   <div class="section-header" style="margin-bottom:0.25rem">
@@ -1561,6 +1573,9 @@ def character_sheet_panel(character: Character) -> str:
 
   <div style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.4rem">Combat</div>
   {combat_grid}
+
+  <div style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.4rem">Skills</div>
+  {skills_html}
 
   <hr class="divider">
 
