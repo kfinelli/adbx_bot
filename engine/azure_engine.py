@@ -1,36 +1,7 @@
 from enum import Enum
 
-from engine.azure_constants import POWER_LEVEL, Stat
+from engine.azure_constants import POWER_LEVEL  # noqa: F401  (re-exported for callers)
 from engine.azure_helpers import JOBS
-from engine.dice import d
-from engine.hero import Character
-
-
-def rollStats():
-    dieSize = 4 * POWER_LEVEL
-    penalty = 5 * POWER_LEVEL
-    baseStats = {
-        Stat.PHYSIQUE: 0,
-        Stat.FINESSE: 0,
-        Stat.REASON: 0,
-        Stat.SAVVY: 0
-    }
-    for stat in baseStats:
-        baseStats[stat] = d(dieSize) + d(dieSize) - penalty
-    return baseStats
-
-
-def createCharacter(name, stats, jobID):
-    char = Character(name)
-    char.baseStats = stats
-    char.addNewJob(jobID, True)
-    char.refreshSheet(True)
-
-    return char
-
-def loadCharacterFromJSON(jsonData):
-    pass
-
 
 """
 Status Classes
