@@ -30,10 +30,10 @@ from engine import (
     start_session,
 )
 from engine.azure_constants import DEFAULT_ROOM_XP
-from engine.azure_engine import CharacterClass
 from engine.combat import CombatAction
 from models import (
     NPC,
+    CharacterClass,
     CharacterStatus,
     GameState,
     Party,

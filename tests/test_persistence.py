@@ -376,8 +376,7 @@ class TestActiveConditionsPersistence:
     def test_character_active_conditions_round_trip(self, db):
         """active_conditions survive save → load via the characters table."""
         from engine import apply_condition, start_session
-        from engine.azure_engine import CharacterClass
-        from models import GameState, Party
+        from models import CharacterClass, GameState, Party
 
         s = GameState(platform_channel_id="ch99", dm_user_id="dm")
         s.party = Party(name="P")
@@ -397,8 +396,7 @@ class TestActiveConditionsPersistence:
 
     def test_character_conditions_empty_by_default(self, db):
         """Characters without conditions save and reload cleanly."""
-        from engine.azure_engine import CharacterClass
-        from models import GameState, Party
+        from models import CharacterClass, GameState, Party
 
         s = GameState(platform_channel_id="ch100", dm_user_id="dm")
         s.party = Party(name="P")

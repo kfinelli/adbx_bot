@@ -17,10 +17,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from uuid import UUID, uuid4
 
-# CharacterClass is generated in azure_engine.py from job JSON files.
-# Import it here so the rest of the codebase can import from models as before.
-from engine.azure_engine import CharacterClass
-from engine.data_loader import CONDITION_REGISTRY, ITEM_REGISTRY
+from engine.data_loader import CONDITION_REGISTRY, ITEM_REGISTRY, CharacterClass
 from engine.item import ContainerItem, EquipItem, Gear, Weapon
 
 log = logging.getLogger(__name__)

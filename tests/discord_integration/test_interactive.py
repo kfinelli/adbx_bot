@@ -15,7 +15,7 @@ import discord
 import pytest
 
 from engine import create_character, open_turn, start_session
-from engine.azure_engine import CharacterClass
+from models import CharacterClass
 from tests.discord_integration._config import TEST_CHANNEL_ID, TEST_DM_USER_ID
 
 TIMEOUT = 90  # seconds to wait for each human action

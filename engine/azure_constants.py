@@ -179,3 +179,13 @@ class RechargePeriod(StrEnum):
     ENCOUNTER = 'encounter'
     INFINITE = 'infinite'
     NEVER = 'never'
+
+
+def getLowerWeaponRanks(rank: str) -> set[str]:
+    lowerweaponranks = {
+        "A": {"E","D","C","B","A"}, "B": {"E","D","C","B"},
+        "C": {"E","D","C"}, "D": {"E","D"}, "E": {"E"},
+        "V": {"V"}, "W": {"V","W"}, "X": {"V","W","X"},
+        "Y": {"V","W","X","Y"}, "Z": {"V","W","X","Y","Z"},
+    }
+    return lowerweaponranks.get(rank, {"E"})

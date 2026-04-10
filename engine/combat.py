@@ -50,7 +50,6 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from engine.azure_constants import POWER_LEVEL
-from engine.azure_helpers import get_stat_modifier
 from engine.item import ChargeWeapon
 from models import (
     NPC,
@@ -169,7 +168,7 @@ def initialize_battlefield(state: GameState) -> CombatBattlefield:
     for char_id, char in state.characters.items():
         if char.status.value != "active":
             continue
-        dex_mod = get_stat_modifier(char.ability_scores.finesse)
+        dex_mod = char.ability_scores.finesse
         bf.combatants[char_id] = CombatantState(
             combatant_id=char_id,
             is_player=True,
@@ -439,7 +438,7 @@ def _effective_stat_mod(state: GameState, actor_id: UUID, stat: str) -> int:
         return 0
 
     base_val = getattr(actor_char.ability_scores, stat, 0)
-    base_mod = get_stat_modifier(base_val)
+    base_mod = base_val
 
     bonus = sum(
         CONDITION_REGISTRY[c.condition_id].stat_modifiers.get(stat, 0) * c.stacks

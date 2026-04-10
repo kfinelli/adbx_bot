@@ -52,6 +52,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from enum import Enum as _Enum
 from pathlib import Path
 
 from engine.azure_constants import SkillType
@@ -672,3 +673,10 @@ def load_all(data_dir: Path = _DATA_DIR) -> tuple[
 # Load at import time — any data error raises immediately so the bot
 # won't start with inconsistent game data.
 ACTION_REGISTRY, CONDITION_REGISTRY, CLASS_DEFINITIONS, SKILL_REGISTRY, ITEM_REGISTRY = load_all()
+
+# CharacterClass enum: member name = uppercase job key, value = display_name.
+# e.g. CharacterClass.KNIGHT.value == "Knight"
+CharacterClass = _Enum(
+    "CharacterClass",
+    {job.key: job.display_name for job in CLASS_DEFINITIONS.values()},
+)

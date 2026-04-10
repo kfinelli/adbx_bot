@@ -6,11 +6,11 @@ from engine.azure_constants import (
     ACCESSORY_SLOTS,
     DEFAULT_EQUIPPED_SLOTS,
     GEAR_SLOT_MAP,
+    POWER_LEVEL,
     ItemSlot,
     SkillType,
+    getLowerWeaponRanks,
 )
-from engine.azure_engine import CREATION_RULES, POWER_LEVEL
-from engine.azure_helpers import getLowerWeaponRanks
 from engine.data_loader import CLASS_DEFINITIONS, ITEM_REGISTRY, SkillDef
 from engine.item import ChargeWeapon, ContainerItem, EquipItem, Weapon
 from models import (
@@ -70,10 +70,10 @@ class CharacterManager:
             return _err(state, "Character name cannot be empty.")
 
         scores = ability_scores if ability_scores is not None else roll_stat_block()
-        rules  = CREATION_RULES[character_class]
+        job_def   = CLASS_DEFINITIONS[character_class.name]
 
-        hp_max    = max(rules.hitDie   * POWER_LEVEL + scores.physique, 100) # Minimum level 1 hit points
-        base_save = rules.baseSave * POWER_LEVEL
+        hp_max    = max(job_def.hit_die   * POWER_LEVEL + scores.physique, 100) # Minimum level 1 hit points
+        base_save = job_def.base_save * POWER_LEVEL
 
         job_key = character_class.name.lower()  # e.g. "knight"
         character = Character(

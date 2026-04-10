@@ -17,8 +17,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from engine import create_character, start_session
-from engine.azure_engine import CharacterClass
-from models import GameState, Party
+from models import CharacterClass, GameState, Party
 
 # ---------------------------------------------------------------------------
 # Helpers

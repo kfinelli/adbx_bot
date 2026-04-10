@@ -40,9 +40,9 @@ from engine import (
     start_session,
     submit_turn,
 )
-from engine.azure_engine import CharacterClass
 from models import (
     NPC,
+    CharacterClass,
     DoorState,
     GameState,
     Party,
