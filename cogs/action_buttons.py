@@ -1475,13 +1475,91 @@ class _OracleModal(discord.ui.Modal):
 
 
 # ---------------------------------------------------------------------------
+# PRE_START view — Arrive button shown in the lobby status message
+# ---------------------------------------------------------------------------
+
+class PreStartView(discord.ui.View):
+    """Persistent view shown while the session is in PRE_START mode."""
+
+    def __init__(self, channel_id: str):
+        super().__init__(timeout=None)
+        self.channel_id = channel_id
+
+    @discord.ui.button(
+        label="Arrive",
+        style=discord.ButtonStyle.primary,
+        custom_id="pre_start:arrive",
+    )
+    async def arrive_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        from cogs.arrive import CharacterNameModal, CharacterSelectionView
+        from store import get_characters_by_owner
+
+        state = get_session(self.channel_id)
+        if state is None:
+            await interaction.response.send_message(
+                "Session not found.", ephemeral=True
+            )
+            return
+
+        if state.mode.value != "PRE_START":
+            await interaction.response.send_message(
+                "The session has already started. New characters cannot join mid-session.",
+                ephemeral=True,
+            )
+            return
+
+        owner_id = str(interaction.user.id)
+
+        for char in state.characters.values():
+            if char.owner_id == owner_id:
+                await interaction.response.send_message(
+                    f"You already have a character (**{char.name}**) in this session.",
+                    ephemeral=True,
+                )
+                return
+
+        existing_chars = get_characters_by_owner(owner_id)
+        if existing_chars:
+            try:
+                dm_channel = await interaction.user.create_dm()
+                view = CharacterSelectionView(
+                    channel_id=self.channel_id,
+                    owner_id=owner_id,
+                    existing_chars=existing_chars,
+                )
+                await dm_channel.send(
+                    "You have existing characters. Would you like to select one or create a new character?",
+                    view=view,
+                )
+                await interaction.response.send_message(
+                    "Check your DMs to select an existing character or create a new one!",
+                    ephemeral=True,
+                )
+            except discord.Forbidden:
+                await interaction.response.send_message(
+                    "I couldn't DM you. Please enable DMs from server members and try again.",
+                    ephemeral=True,
+                )
+        else:
+            modal = CharacterNameModal(
+                channel_id=self.channel_id,
+                owner_id=owner_id,
+            )
+            await interaction.response.send_modal(modal)
+
+
+# ---------------------------------------------------------------------------
 # View factory — called by store.py
 # ---------------------------------------------------------------------------
 
 def build_action_view(state) -> discord.ui.View | None:
     """
     Return the appropriate action view for the current session state,
-    or None if no buttons should be shown (PRE_START, on hold, etc.).
+    or None if no buttons should be shown (on hold, etc.).
 
     Called by store._build_view() → store.update_status() / repost_status().
     """
@@ -1489,7 +1567,7 @@ def build_action_view(state) -> discord.ui.View | None:
         return None
 
     if state.mode == SessionMode.PRE_START:
-        return None
+        return PreStartView(channel_id=str(state.platform_channel_id))
 
     channel_id   = str(state.platform_channel_id)
     turn_is_open = (
