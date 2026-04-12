@@ -1505,7 +1505,7 @@ class PreStartView(discord.ui.View):
             )
             return
 
-        if state.mode.value != "PRE_START":
+        if state.mode != SessionMode.PRE_START:
             await interaction.response.send_message(
                 "The session has already started. New characters cannot join mid-session.",
                 ephemeral=True,
