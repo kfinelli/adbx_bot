@@ -551,6 +551,7 @@ class NPC:
     morale:         int               = 7           # B/X morale score
     saving_throw:   int               = 15          # single value for simplicity
     hit_dice:       int               = 1           # used to compute XP on kill (hit_dice * 100)
+    weapon_range:   int               = 0           # max band-step distance for attacks (0 = ENGAGE only)
     status:            str               = "active"    # free-form: active/dead/fled/charmed/etc.
     notes:             str               = ""          # DM-facing
     active_conditions: list[ActiveCondition] = field(default_factory=list)
