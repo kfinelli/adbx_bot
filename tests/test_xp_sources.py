@@ -299,6 +299,22 @@ class TestNpcHitDiceSerialization:
         loaded = deserialize_npc(data)
         assert loaded.hit_dice == 1
 
+    def test_weapon_range_round_trips(self):
+        npc = NPC(name="Archer", hp_max=8, hp_current=8, defense=0,
+                  damage_dice="1d6", weapon_range=2)
+        data = serialize_npc(npc)
+        loaded = deserialize_npc(data)
+        assert loaded.weapon_range == 2
+
+    def test_missing_weapon_range_defaults_to_0(self):
+        """Old NPC JSON without weapon_range migrates to 0 (melee-only)."""
+        npc = NPC(name="Brute", hp_max=10, hp_current=10, defense=1,
+                  damage_dice="1d8", weapon_range=3)
+        data = serialize_npc(npc)
+        del data["weapon_range"]      # simulate old format
+        loaded = deserialize_npc(data)
+        assert loaded.weapon_range == 0
+
     def test_room_exploration_xp_round_trips(self):
         room = Room(name="Library", description="Dusty shelves.", exploration_xp=500)
         data = serialize_room(room)

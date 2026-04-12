@@ -704,10 +704,17 @@ def _hook_abscond_roll(
         return
 
     actor_name = _combatant_name(state, actor_id)
+    actor_cs   = bf.combatants.get(actor_id)
 
-    # Positional block: any enemy at ENGAGE prevents escape
+    # Positional block: enemy blocks only if they're between the actor and the
+    # exit at FAR_MINUS — i.e., their band index is <= the actor's band index.
+    # An enemy "ahead" of the actor (higher band index, deeper into FAR_PLUS)
+    # has already been passed and cannot block.
+    from engine.combat import _BAND_INDEX
     for cid, cs in bf.combatants.items():
-        if not cs.is_player and cs.range_band == RangeBand.ENGAGE:
+        if cs.is_player:
+            continue
+        if actor_cs and _BAND_INDEX[cs.range_band] <= _BAND_INDEX[actor_cs.range_band]:
             npc = _find_npc(state, cid)
             blocker = npc.name if npc else "An enemy"
             log.append(f"{actor_name} tries to flee but {blocker} is blocking the way!")
@@ -866,38 +873,47 @@ def _fire_turn_start_hooks(state: GameState, log: list[str]) -> None:
                     _dispatch_hook(entry, state, combatant_id, None, log)
 
 
+def _tick_actor_conditions(state: GameState, actor_id: UUID, log: list[str]) -> None:
+    """
+    Fire on_turn_end hooks and decrement/expire conditions for one combatant.
+    Called immediately after each combatant acts (or is skipped) in initiative
+    order, so that a 1-round condition applied at the start of a round is still
+    active for its full turn before expiring.
+    """
+    char      = state.characters.get(actor_id)
+    npc       = _find_npc(state, actor_id)
+    combatant = char if char else npc
+    if combatant is None:
+        return
+
+    still_active: list[ActiveCondition] = []
+    for cond in combatant.active_conditions:
+        cond_def = CONDITION_REGISTRY.get(cond.condition_id)
+        if cond_def:
+            entry = cond_def.hooks.get("on_turn_end")
+            if entry:
+                _dispatch_hook(entry, state, actor_id, None, log)
+
+        if cond.duration_rounds is None:
+            still_active.append(cond)
+        elif cond.duration_rounds > 1:
+            cond.duration_rounds -= 1
+            still_active.append(cond)
+        else:
+            cond_name = cond_def.label if cond_def else cond.condition_id
+            name = _combatant_name(state, actor_id)
+            log.append(f"{name}'s {cond_name} condition has expired.")
+
+    combatant.active_conditions = still_active
+
+
 def _tick_conditions(state: GameState, log: list[str]) -> None:
     """
-    End-of-round condition processing:
-      - Fire on_turn_end hooks.
-      - Decrement duration_rounds; remove expired conditions.
+    Bulk end-of-round tick: fires on_turn_end hooks and decrements/expires
+    conditions for every combatant.  Kept for reference; the round pipeline
+    uses per-actor ticking via _tick_actor_conditions instead.
     """
     if state.battlefield is None:
         return
-
     for combatant_id in list(state.battlefield.combatants):
-        char      = state.characters.get(combatant_id)
-        npc       = _find_npc(state, combatant_id)
-        combatant = char if char else npc
-        if combatant is None:
-            continue
-
-        still_active: list[ActiveCondition] = []
-        for cond in combatant.active_conditions:
-            cond_def = CONDITION_REGISTRY.get(cond.condition_id)
-            if cond_def:
-                entry = cond_def.hooks.get("on_turn_end")
-                if entry:
-                    _dispatch_hook(entry, state, combatant_id, None, log)
-
-            if cond.duration_rounds is None:
-                still_active.append(cond)
-            elif cond.duration_rounds > 1:
-                cond.duration_rounds -= 1
-                still_active.append(cond)
-            else:
-                cond_name = cond_def.label if cond_def else cond.condition_id
-                name = _combatant_name(state, combatant_id)
-                log.append(f"{name}'s {cond_name} condition has expired.")
-
-        combatant.active_conditions = still_active
+        _tick_actor_conditions(state, combatant_id, log)
