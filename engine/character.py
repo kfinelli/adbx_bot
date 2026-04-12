@@ -7,6 +7,7 @@ from engine.azure_constants import (
     DEFAULT_EQUIPPED_SLOTS,
     GEAR_SLOT_MAP,
     POWER_LEVEL,
+    STARTING_GOLD,
     ItemSlot,
     SkillType,
     getLowerWeaponRanks,
@@ -87,7 +88,7 @@ class CharacterManager:
             hp_current=hp_max,
             movement_speed=120,
             saving_throws={"save": base_save},
-            gold=100, #Placeholder value to test arrive shopping
+            gold=STARTING_GOLD,
             inventory=[],
             equipped_slots=dict(DEFAULT_EQUIPPED_SLOTS),  # fresh copy per character
         )

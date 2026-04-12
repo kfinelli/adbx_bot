@@ -28,6 +28,9 @@ DEFAULT_ROOM_XP: int = 100   # XP per character for entering an unvisited room
 #Number of light items can fit in a bundle by default.
 BUNDLE_SIZE = 10
 
+# Gold for new characters
+STARTING_GOLD = 1000
+
 #Multipliers
 POWER_LEVEL = 100
 LEVEL_MULTIPLIER = 2
