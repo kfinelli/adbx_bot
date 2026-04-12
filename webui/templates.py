@@ -8,6 +8,8 @@ a `name` attribute matching what the server expects.
 
 from __future__ import annotations
 
+import html as _html
+
 from engine.azure_constants import XP_THRESHOLDS
 from engine.character import CharacterManager
 from engine.data_loader import ITEM_REGISTRY
@@ -223,9 +225,7 @@ def session_page(
 <div class="layout">
   {_sidebar(channel_id, sessions)}
   <div class="main">
-    <div id="dashboard">
-      {dashboard_fragment(state, flash, error, view_room_id, edit_id)}
-    </div>
+    {dashboard_fragment(state, flash, error, view_room_id, edit_id)}
   </div>
 </div>"""
     return page("DM Panel", body)
@@ -1200,6 +1200,9 @@ def npc_panel(
         nid = str(npc.npc_id)
         npc_base = f"{base_url}&edit={nid}"
         if edit_id == nid:
+            _e_name  = _html.escape(npc.name, quote=True)
+            _e_desc  = _html.escape(npc.description or "", quote=True)
+            _e_notes = _html.escape(npc.notes or "", quote=True)
             rows += f"""
 <tr>
   <td colspan="3">
@@ -1207,7 +1210,7 @@ def npc_panel(
           hx-target="#dashboard" hx-swap="outerHTML">
       <input type="hidden" name="view_room_id" value="{view_room_id}">
       <div class="row">
-        <div><label>Name</label><input type="text" name="name" value="{npc.name}" required></div>
+        <div><label>Name</label><input type="text" name="name" value="{_e_name}" required></div>
         <div><label>HP Max</label><input type="number" name="hp_max" value="{npc.hp_max}" min="1" style="width:60px"></div>
         <div><label>HP Now</label><input type="number" name="hp_current" value="{npc.hp_current}" min="0" style="width:60px"></div>
         <div><label>DEF</label><input type="number" name="defense" value="{npc.defense}" min="0" style="width:55px"></div>
@@ -1216,9 +1219,9 @@ def npc_panel(
         <div><label>HD</label><input type="number" name="hit_dice" value="{npc.hit_dice}" min="1" style="width:55px"></div>
       </div>
       <label>Description</label>
-      <input type="text" name="description" value="{npc.description}">
+      <input type="text" name="description" value="{_e_desc}">
       <label>Notes</label>
-      <input type="text" name="notes" value="{npc.notes or ''}">
+      <input type="text" name="notes" value="{_e_notes}">
       <div class="row" style="margin-top:0.5rem">
         <button type="submit">Save</button>
         <a href="{base_url}" style="align-self:center;font-size:0.85rem;color:#888">cancel</a>
@@ -1228,10 +1231,13 @@ def npc_panel(
 </tr>"""
         else:
             npc_combat_sub = _combat_subpanel(state, nid, channel_id, view_room_id, is_player=False)
+            _e_name   = _html.escape(npc.name)
+            _e_desc   = _html.escape(npc.description or "")
+            _e_status = _html.escape(str(npc.status), quote=True)
             rows += f"""
 <tr>
-  <td><strong>{npc.name}</strong><br>
-      <span class="muted">{npc.description}</span>
+  <td><strong>{_e_name}</strong><br>
+      <span class="muted">{_e_desc}</span>
       {npc_combat_sub}</td>
   <td class="hp-bar">{npc.hp_current}/{npc.hp_max}</td>
   <td style="white-space:nowrap">
@@ -1248,14 +1254,14 @@ def npc_panel(
           hx-target="#dashboard" hx-swap="outerHTML" style="margin-bottom:4px">
       <input type="hidden" name="view_room_id" value="{view_room_id}">
       <div class="row">
-        <input type="text" name="status" value="{npc.status}" placeholder="status">
+        <input type="text" name="status" value="{_e_status}" placeholder="status">
         <button class="btn-sm" type="submit">Status</button>
       </div>
     </form>
     <a href="{npc_base}" class="btn-sm">Edit</a>
     <form style="display:inline" hx-post="/session/{channel_id}/npc/{nid}/delete"
           hx-target="#dashboard" hx-swap="outerHTML"
-          hx-confirm="Remove {npc.name}?">
+          hx-confirm="Remove {_e_name}?">
       <input type="hidden" name="view_room_id" value="{view_room_id}">
       <button class="btn-sm btn-danger" type="submit">Del</button>
     </form>

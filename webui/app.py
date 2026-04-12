@@ -605,14 +605,16 @@ async def route_npc_sethp(
     channel_id: str,
     npc_id: str,
     hp: Annotated[int, Form()],
+    view_room_id: Annotated[str, Form()] = "",
 ):
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse("Session not found.", status_code=404)
     result = set_npc_hp(state, UUID(npc_id), hp)
     if not result.ok:
-        return _respond(channel_id, error=result.error)
-    return _respond(channel_id)
+        return _respond(channel_id, error=result.error, view_room_id=view_room_id)
+    await save_session_async(state)
+    return _respond(channel_id, view_room_id=view_room_id)
 
 
 @app.post("/session/{channel_id}/npc/{npc_id}/setstatus", response_class=HTMLResponse)
@@ -620,14 +622,16 @@ async def route_npc_setstatus(
     channel_id: str,
     npc_id: str,
     status: Annotated[str, Form()],
+    view_room_id: Annotated[str, Form()] = "",
 ):
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse("Session not found.", status_code=404)
     result = set_npc_status(state, UUID(npc_id), status)
     if not result.ok:
-        return _respond(channel_id, error=result.error)
-    return _respond(channel_id)
+        return _respond(channel_id, error=result.error, view_room_id=view_room_id)
+    await save_session_async(state)
+    return _respond(channel_id, view_room_id=view_room_id)
 
 @app.post("/session/{channel_id}/oracle/{number}/answer", response_class=HTMLResponse)
 async def route_oracle_answer(
