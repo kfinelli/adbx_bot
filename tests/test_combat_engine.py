@@ -1122,10 +1122,16 @@ class TestPoisonAction:
         # New log format: "Rogue applies Poisoned to Guard! (3 rounds)"
         assert "applies" in result.message.lower() or "poison" in result.message.lower()
 
-    def test_poison_tick_fires_same_round_applied(self):
-        """Condition is applied mid-round; _tick_conditions runs at end so
-        first damage tick happens immediately — duration decrements to 2."""
+    def test_poison_tick_fires_after_npc_turn(self):
+        """With per-actor ticking, the NPC's conditions tick after the NPC's
+        own turn in initiative order.  Pin player initiative higher so the
+        Rogue applies poison first; the NPC then acts and ticks — duration
+        decrements to 2 and poison damage fires in the same round."""
         state, char_id, npc = self._thief_state()
+        # Pin initiatives: Rogue acts first, NPC second
+        state.battlefield.combatants[char_id].initiative = 20
+        npc_cs = state.battlefield.combatants[npc.npc_id]
+        npc_cs.initiative = 5
         action = CombatAction(action_id="poison", target_id=npc.npc_id)
         from models import PlayerTurnSubmission
         state.current_turn.submissions = [PlayerTurnSubmission(
@@ -1134,7 +1140,7 @@ class TestPoisonAction:
         )]
         auto_resolve_round(state)
         cond = next(c for c in npc.active_conditions if c.condition_id == "poisoned")
-        assert cond.duration_rounds == 2   # started at 3, ticked once
+        assert cond.duration_rounds == 2   # started at 3, ticked once after NPC's turn
         assert npc.hp_current < 20         # took poison damage this round
 
     def test_poison_narrative_mentions_target(self):
@@ -1716,15 +1722,26 @@ class TestAbscondRoll:
                 return n
 
     def test_blocked_by_enemy_at_engage(self):
-        """Enemy at ENGAGE prevents Abscond regardless of roll."""
+        """Enemy at ENGAGE blocks Abscond only when between actor and exit.
+
+        The exit is at FAR_MINUS.  An enemy blocks only if their band index <=
+        the actor's band index (enemy is between actor and FAR_MINUS).  When
+        the actor is at FAR_PLUS and the enemy is at ENGAGE, the enemy is
+        between them and FAR_MINUS → should block.  When the actor is already
+        at FAR_MINUS, the enemy at ENGAGE is not between them and the exit →
+        should NOT block.
+        """
         from unittest.mock import patch
         state = self._make_combat_state()
         char_id = self._char_id(state)
         npc = self._npc(state)
 
-        # Move enemy to ENGAGE
-        cs_npc = state.battlefield.combatants[npc.npc_id]
-        cs_npc.range_band = RangeBand.ENGAGE
+        cs_actor = state.battlefield.combatants[char_id]
+        cs_npc   = state.battlefield.combatants[npc.npc_id]
+
+        # Actor deep in room, enemy at ENGAGE — enemy between actor and exit.
+        cs_actor.range_band = RangeBand.FAR_PLUS
+        cs_npc.range_band   = RangeBand.ENGAGE
 
         with patch("engine.combat.random.randint", return_value=1000):
             submit_turn(state, char_id, "Abscond", combat_action={
@@ -1733,9 +1750,32 @@ class TestAbscondRoll:
             })
             auto_resolve_round(state)
 
-        # Combat should NOT have ended
+        # Enemy at ENGAGE is between FAR_PLUS actor and FAR_MINUS exit → block
         assert state.battlefield is not None
         assert not state.battlefield.abscond_succeeded
+
+    def test_not_blocked_when_already_at_exit(self):
+        """Enemy at ENGAGE does NOT block actor already at FAR_MINUS (the exit)."""
+        from unittest.mock import patch
+        state = self._make_combat_state()
+        char_id = self._char_id(state)
+        npc = self._npc(state)
+
+        cs_npc = state.battlefield.combatants[npc.npc_id]
+        cs_npc.range_band = RangeBand.ENGAGE  # enemy ahead, not blocking exit
+
+        # Actor stays at FAR_MINUS (default) — already at exit position
+        with patch("engine.combat.random.randint", return_value=1000):
+            submit_turn(state, char_id, "Abscond", combat_action={
+                "action_id": "abscond", "target_id": None, "destination": None,
+                "free_text": None, "weapon_id": None,
+            })
+            auto_resolve_round(state)
+
+        # High roll succeeds — enemy at ENGAGE did not block actor at FAR_MINUS
+        from models import SessionMode
+        assert state.mode == SessionMode.EXPLORATION
+        assert state.battlefield is None
 
     def test_low_roll_fails(self):
         """Roll of 1 + low finesse should not meet threshold."""

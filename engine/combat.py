@@ -60,7 +60,8 @@ from .combat_hooks import (
     _hook_move_to_band,
     _hook_weapon_attack,  # noqa: F401 — re-exported for tests
     _opportunity_attacks,  # noqa: F401 — re-exported for tests
-    _tick_conditions,
+    _tick_actor_conditions,
+    _tick_conditions,  # noqa: F401 — kept for callers that use bulk tick
 )
 from .data_loader import ACTION_REGISTRY, CONDITION_REGISTRY
 from .helpers import _err, _now, _ok
@@ -316,29 +317,36 @@ def auto_resolve_round(state: GameState) -> object:  # EngineResult
     # --- 2b. on_turn_start hooks (e.g. stunned → skip_action flag)
     _fire_turn_start_hooks(state, log)
 
-    # --- 3. Sort by initiative (descending)
-    all_actors: list[tuple[UUID, CombatAction]] = [
-        *player_actions.items(),
-        *npc_actions.items(),
-    ]
-    all_actors.sort(
-        key=lambda pair: bf.combatants[pair[0]].initiative if pair[0] in bf.combatants else 0,
+    # --- 3. Sort ALL combatants by initiative (descending).
+    # We iterate every combatant in the battlefield — not just those with
+    # submissions — so that conditions are ticked in initiative order even for
+    # combatants who had no action this round.
+    all_combatant_ids: list[UUID] = sorted(
+        bf.combatants.keys(),
+        key=lambda cid: bf.combatants[cid].initiative,
         reverse=True,
     )
+    # Build a lookup of actions keyed by actor_id for O(1) access.
+    action_map: dict[UUID, CombatAction] = {**player_actions, **npc_actions}
 
-    # --- 4. Execute actions
-    for actor_id, action in all_actors:
+    # --- 4. Execute actions + per-actor condition tick
+    for actor_id in all_combatant_ids:
         cs = bf.combatants.get(actor_id)
         if cs is None or not _is_alive(state, actor_id):
             continue
-        if cs.skip_action:
-            log.append(f"{_combatant_name(state, actor_id)} is stunned and cannot act this round!")
-            continue
-        _execute_action(state, actor_id, action, log)
-        cs.acted_this_round = True
+        action = action_map.get(actor_id)
+        if action is not None:
+            if cs.skip_action:
+                log.append(f"{_combatant_name(state, actor_id)} is stunned and cannot act this round!")
+            else:
+                _execute_action(state, actor_id, action, log)
+                cs.acted_this_round = True
+        # Tick this combatant's conditions after their turn (or skipped turn).
+        # Per-actor ticking ensures 1-round conditions last a full turn rather
+        # than expiring immediately at end of round (issue #80).
+        _tick_actor_conditions(state, actor_id, log)
 
-    # --- 5. Tick conditions
-    _tick_conditions(state, log)
+    # --- 5. (No bulk _tick_conditions — handled per-actor above.)
 
     # --- 6. Reset single-round flags
     for cs in bf.combatants.values():
@@ -411,11 +419,12 @@ def _npc_decide(
     if not living_players:
         return None
 
-    _NPC_WEAPON_RANGE = 0
+    npc_obj       = _find_npc(state, npc_id)
+    npc_range     = npc_obj.weapon_range if npc_obj else 0
     target_id = _lowest_hp_player(state, living_players)
     if target_id:
         target_cs = state.battlefield.combatants.get(target_id)
-        if target_cs and _band_distance(cs.range_band, target_cs.range_band) <= _NPC_WEAPON_RANGE:
+        if target_cs and _band_distance(cs.range_band, target_cs.range_band) <= npc_range:
             return CombatAction(action_id="attack", target_id=target_id)
 
     destination = _step_toward(cs.range_band, RangeBand.ENGAGE)
