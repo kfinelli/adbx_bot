@@ -119,7 +119,7 @@ class ItemSelectView(discord.ui.View):
         self.selected_item_id: str | None = None
 
         # Add buttons for each item (up to Discord limit)
-        for item_id, name, price in items[:24]:
+        for item_id, name, price in items[:23]:
             btn = discord.ui.Button(
                 label=f"{name} ({price} gp)",
                 style=discord.ButtonStyle.secondary,
