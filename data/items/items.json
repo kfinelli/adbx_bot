@@ -517,6 +517,25 @@
       "rank": "V",
       "slot": "main_hand",
       "tags": []
+    },
+    {
+      "attack_status": "",
+      "contained_items": [
+        "viviu_1",
+        "viviu_2",
+        "viviu_3"
+      ],
+      "description": "",
+      "held_status": "",
+      "is_light": false,
+      "item_id": "intro_to_healing",
+      "item_type": "container",
+      "name": "Introduction to Healing",
+      "other_abilities": "",
+      "price": 100,
+      "purchaseable": true,
+      "rank": "V",
+      "tags": []
     }
   ],
   "Head": [
@@ -1523,6 +1542,63 @@
       ],
       "targets_stat": "defense",
       "type": "Blunt"
+    },
+    {
+      "attack_status": "",
+      "charges": -1,
+      "description": "Heals 10 damage",
+      "held_status": "",
+      "is_light": false,
+      "item_id": "viviu_1",
+      "item_type": "utility_spell",
+      "max_charges": -1,
+      "name": "Viviu-1",
+      "other_abilities": "Requires one turn to cast",
+      "price": 0,
+      "purchaseable": false,
+      "rank": "V",
+      "recharge_period": "infinite",
+      "tags": [
+        "White"
+      ]
+    },
+    {
+      "attack_status": "",
+      "charges": 5,
+      "description": "Heals 100 damage",
+      "held_status": "",
+      "is_light": false,
+      "item_id": "viviu_2",
+      "item_type": "utility_spell",
+      "max_charges": 5,
+      "name": "Viviu-2",
+      "other_abilities": "Requires one turn to cast",
+      "price": 0,
+      "purchaseable": false,
+      "rank": "V",
+      "recharge_period": "day",
+      "tags": [
+        "White"
+      ]
+    },
+    {
+      "attack_status": "",
+      "charges": 2,
+      "description": "Heals 1000 damage",
+      "held_status": "",
+      "is_light": false,
+      "item_id": "viviu_3",
+      "item_type": "utility_spell",
+      "max_charges": 2,
+      "name": "Viviu-3",
+      "other_abilities": "Requires one turn to cast",
+      "price": 0,
+      "purchaseable": false,
+      "rank": "V",
+      "recharge_period": "day",
+      "tags": [
+        "White"
+      ]
     }
   ],
   "Offhand/Accessory": [

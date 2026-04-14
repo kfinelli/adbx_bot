@@ -204,6 +204,13 @@ def _normalise_item(row: dict) -> dict:
         item["recharge_period"] = recharge_period
         item["destroy_on_empty"] = False
 
+    # --- utility spell fields ---
+    if item["item_type"] == "utility_spell":
+        max_charges, recharge_period = _parse_uses(row.get("uses", "-"))
+        item["max_charges"]     = max_charges
+        item["charges"]         = max_charges
+        item["recharge_period"] = recharge_period
+
     # --- gear fields ---
     if item["item_type"] == "gear":
         raw_slot = str(row.get("slot", "")).strip().lower()
