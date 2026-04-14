@@ -743,7 +743,7 @@ class TestUtilitySpellCharacterSheet:
             cdefn = ITEM_REGISTRY.get(child.item_id)
             cname = cdefn.name if cdefn else child.item_id
             if child.charges is not None and cdefn is not None and hasattr(cdefn, "maxCharges"):
-                charges = f" (\u221e)" if cdefn.maxCharges < 0 else f" ({child.charges}/{cdefn.maxCharges})"
+                charges = " (\u221e)" if cdefn.maxCharges < 0 else f" ({child.charges}/{cdefn.maxCharges})"
             else:
                 charges = ""
             desc = f" \u2014 {cdefn.description}" if isinstance(cdefn, UtilitySpell) and cdefn.description else ""
