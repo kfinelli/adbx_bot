@@ -1,8 +1,0 @@
-{
-  "condition_id": "passive_rsn_bonus",
-  "label": "RSN Bonus",
-  "duration_type": "permanent",
-  "stackable": true,
-  "hooks": {},
-  "stat_modifiers": { "reason": 1 }
-}

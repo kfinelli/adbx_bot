@@ -639,22 +639,22 @@ class CharacterManager:
         """Apply one level-up to char. Mutates char and job_exp in place."""
         import random
 
-        from engine.azure_constants import POWER_LEVEL
+        from engine.azure_constants import POWER_LEVEL, StatPriority
 
         _STAT_MAP = {"PHY": "physique", "FNS": "finesse", "RSN": "reason", "SVY": "savvy"}
         _VALID_STATS = {"PHY", "FNS", "RSN", "SVY"}
-        _PASSIVE_COND_MAP = {
-            "physique": "passive_phy_bonus",
-            "finesse":  "passive_fns_bonus",
-            "reason":   "passive_rsn_bonus",
-            "savvy":    "passive_svy_bonus",
-        }
 
         # HP gain: roll d(hit_die * POWER_LEVEL), matching hero.py formula
-        # TODO: make HP gain possible to recalculate by preserving random results
         hp_gain = random.randint(1, job_def.hit_die * POWER_LEVEL)
         job_exp.hp_bonus += hp_gain
         char.hp_max += hp_gain
+
+        # Primary stat gain: random roll based on stat priority
+        primary_attr = _STAT_MAP.get(job_def.primary_stat, "physique")
+        stat_gain = random.randint(1, StatPriority.GREATEST)
+        job_exp.stat_bonuses[primary_attr] += stat_gain
+        setattr(char.ability_scores, primary_attr,
+                getattr(char.ability_scores, primary_attr) + stat_gain)
 
         # Increment level
         job_exp.level += 1
@@ -681,21 +681,13 @@ class CharacterManager:
                     continue
                 bonus = skill.bonus
                 job_exp.stat_bonuses[attr] += bonus
-                cond_id = _PASSIVE_COND_MAP[attr]
-                existing = next(
-                    (c for c in char.active_conditions if c.condition_id == cond_id), None
-                )
-                if existing is not None:
-                    existing.stacks += bonus
-                else:
-                    from models import ActiveCondition
-                    char.active_conditions.append(ActiveCondition(
-                        condition_id=cond_id,
-                        duration_rounds=None,  # permanent
-                    ))
+                setattr(char.ability_scores, attr,
+                        getattr(char.ability_scores, attr) + bonus)
                 skill_stat_changes[attr] = skill_stat_changes.get(attr, 0) + bonus
 
-        combined_stat_changes = dict(skill_stat_changes)
+        combined_stat_changes = {primary_attr: stat_gain}
+        for attr, bonus in skill_stat_changes.items():
+            combined_stat_changes[attr] = combined_stat_changes.get(attr, 0) + bonus
 
         return LevelUpResult(
             character_id=char.character_id,

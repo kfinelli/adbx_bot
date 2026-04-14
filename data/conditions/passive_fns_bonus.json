@@ -1,8 +1,0 @@
-{
-  "condition_id": "passive_fns_bonus",
-  "label": "FNS Bonus",
-  "duration_type": "permanent",
-  "stackable": true,
-  "hooks": {},
-  "stat_modifiers": { "finesse": 1 }
-}
