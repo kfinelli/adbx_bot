@@ -5,8 +5,6 @@ Dice rolling utilities for the dungeon crawler engine.
 import random
 import re
 
-from engine.azure_constants import POWER_LEVEL
-
 
 def print_dice_results(results):
   diceOutput = ""

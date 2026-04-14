@@ -118,7 +118,7 @@ def _parse_tags(tags_str: str) -> list[str]:
     s = s.strip("[]")
     if not s:
         return []
-    return [t.strip() for t in s.split("][") if t.strip()]
+    return [t.strip().title() for t in s.split("][") if t.strip()]
 
 def _parse_contained_items(tags_str: str) -> list[str]:
     """Parse "fulmin1,fulmin2" → ["fulmin1", "fulmin2"]. Empty string → []."""
