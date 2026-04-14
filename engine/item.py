@@ -318,6 +318,38 @@ class ContainerItem(EquipItem):
         return exportData
 
 
+class UtilitySpell(EquipItem):
+    """
+    A non-combat spell that lives inside a ContainerItem spellbook.
+    No equipment slot — inventory-only via container_id.
+    Effects are narrated by the DM; no engine effect code.
+    """
+    ITEM_TYPE = ItemType.UTILITY_SPELL.value
+
+    def __init__(self, item_id, name, rank="", tags=None,
+                 description="", otherAbilities="",
+                 maxCharges=-1, rechargePeriod=RechargePeriod.NEVER,
+                 purchaseable=False, price=0, isLight=False, **kwargs):
+        super().__init__(
+            item_id=item_id, name=name, rank=rank,
+            tags=tags or [], description=description,
+            otherAbilities=otherAbilities, isLight=isLight,
+            purchaseable=purchaseable, price=price,
+        )
+        self.slot = None
+        self.maxCharges = maxCharges
+        self.rechargePeriod = rechargePeriod
+
+    def toDictionary(self):
+        exportData = super().toDictionary()
+        exportData.update({
+            ItemData.ITEM_TYPE.value: UtilitySpell.ITEM_TYPE,
+            ItemData.MAX_CHARGES.value: self.maxCharges,
+            ItemData.RECHARGE_PERIOD.value: self.rechargePeriod,
+        })
+        return exportData
+
+
 def parseChargeString(charge_str):
     recharge = RechargePeriod.NEVER
 
@@ -442,6 +474,16 @@ def createItemFromData(itemData):
                 **base, **equip,
                 contained_item_ids = itemData.get(ItemData.CONTAINED_ITEMS, []),
                 slot               = itemData.get(ItemData.SLOT, None),
+            )
+
+        case ItemType.UTILITY_SPELL:
+            return UtilitySpell(
+                **base,
+                rank            = itemData.get(ItemData.RANK, ""),
+                tags            = itemData.get(ItemData.TAGS, []),
+                otherAbilities  = itemData.get(ItemData.OTHER_ABILITIES, ""),
+                maxCharges      = itemData.get(ItemData.MAX_CHARGES, -1),
+                rechargePeriod  = itemData.get(ItemData.RECHARGE_PERIOD, RechargePeriod.NEVER),
             )
 
         case _:

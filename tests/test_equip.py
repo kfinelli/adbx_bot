@@ -18,7 +18,7 @@ import pytest
 from engine import create_character, equip_item, give_item, remove_item, unequip_item
 from engine.azure_constants import UI_SLOTS, ItemSlot
 from engine.data_loader import ITEM_REGISTRY
-from engine.item import ChargeWeapon, ContainerItem, Gear, Weapon
+from engine.item import ChargeWeapon, ContainerItem, Gear, UtilitySpell, Weapon
 from models import (
     CharacterClass,
     InventoryItem,
@@ -630,3 +630,139 @@ class TestSpellbookChargeTracking:
                 i.item_id == spell_id and i.container_id == spellbook_id
                 for i in char.inventory
             )
+
+
+# ---------------------------------------------------------------------------
+# UtilitySpell tests
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def utility_spell_id():
+    """Return an item_id for a UtilitySpell in ITEM_REGISTRY, or None."""
+    for item_id, defn in ITEM_REGISTRY.items():
+        if isinstance(defn, UtilitySpell):
+            return item_id
+    return None
+
+
+@pytest.fixture
+def utility_spellbook_id():
+    """Return a slot-less ContainerItem that contains utility spells."""
+    for item_id, defn in ITEM_REGISTRY.items():
+        if (
+            isinstance(defn, ContainerItem)
+            and defn.slot is None
+            and any(
+                isinstance(ITEM_REGISTRY.get(sid), UtilitySpell)
+                for sid in defn.contained_item_ids
+            )
+        ):
+            return item_id
+    return None
+
+
+class TestUtilitySpellLoading:
+    def test_utility_spell_in_registry(self, utility_spell_id):
+        assert utility_spell_id is not None, "No UtilitySpell found in ITEM_REGISTRY — check items.json"
+        defn = ITEM_REGISTRY[utility_spell_id]
+        assert isinstance(defn, UtilitySpell)
+        assert defn.slot is None
+        assert defn.description != "" or defn.otherAbilities != "" or defn.maxCharges is not None
+
+    def test_utility_spell_fields_populated(self):
+        """viviu_2 is a known finite-charge utility spell — verify its fields."""
+        defn = ITEM_REGISTRY.get("viviu_2")
+        assert defn is not None, "viviu_2 not in ITEM_REGISTRY"
+        assert isinstance(defn, UtilitySpell)
+        assert defn.maxCharges == 5
+        assert defn.description == "Heals 100 damage"
+        assert defn.rank == "V"
+
+    def test_infinite_charge_utility_spell(self):
+        """viviu_1 has max_charges -1 (infinite)."""
+        defn = ITEM_REGISTRY.get("viviu_1")
+        assert defn is not None
+        assert defn.maxCharges == -1
+
+
+class TestUtilitySpellbookGive:
+    def test_give_utility_spellbook_adds_contained_spells(self, state_mage, utility_spellbook_id):
+        assert utility_spellbook_id is not None, "No slot-less ContainerItem with utility spells found"
+        char = _get_char(state_mage)
+        give_item(state_mage, char.character_id, utility_spellbook_id)
+
+        book_def = ITEM_REGISTRY[utility_spellbook_id]
+        for spell_id in book_def.contained_item_ids:
+            spell_inv = next(
+                (i for i in char.inventory
+                 if i.item_id == spell_id and i.container_id == utility_spellbook_id),
+                None,
+            )
+            assert spell_inv is not None, f"Spell {spell_id} not added to inventory"
+            spell_def = ITEM_REGISTRY.get(spell_id)
+            if isinstance(spell_def, UtilitySpell) and spell_def.maxCharges > 0:
+                assert spell_inv.charges == spell_def.maxCharges
+
+    def test_utility_spells_not_independently_equippable(self, state_mage, utility_spellbook_id):
+        """Contained utility spells should have container_id set and no slot."""
+        assert utility_spellbook_id is not None
+        char = _get_char(state_mage)
+        give_item(state_mage, char.character_id, utility_spellbook_id)
+
+        book_def = ITEM_REGISTRY[utility_spellbook_id]
+        for spell_id in book_def.contained_item_ids:
+            spell_inv = next(
+                (i for i in char.inventory
+                 if i.item_id == spell_id and i.container_id == utility_spellbook_id),
+                None,
+            )
+            assert spell_inv is not None
+            assert spell_inv.container_id == utility_spellbook_id
+            assert not spell_inv.equipped
+
+
+class TestUtilitySpellCharacterSheet:
+    def test_character_sheet_shows_utility_spell_description(self, state_mage, utility_spellbook_id):
+        """Character sheet should include spell name, charges, and description under its container."""
+        assert utility_spellbook_id is not None
+        char = _get_char(state_mage)
+        give_item(state_mage, char.character_id, utility_spellbook_id)
+
+        from cogs.character_views import _character_sheet
+        sheet = _character_sheet(char, state_mage)
+
+        book_def = ITEM_REGISTRY[utility_spellbook_id]
+        for spell_id in book_def.contained_item_ids:
+            spell_def = ITEM_REGISTRY.get(spell_id)
+            if not isinstance(spell_def, UtilitySpell):
+                continue
+            assert spell_def.name in sheet
+            if spell_def.description:
+                assert spell_def.description in sheet
+
+
+class TestUtilitySpellPersistence:
+    def test_persistence_round_trip(self, state_mage, utility_spellbook_id):
+        """Contained utility spell charges and container_id survive serialize/deserialize."""
+        assert utility_spellbook_id is not None
+        char = _get_char(state_mage)
+        give_item(state_mage, char.character_id, utility_spellbook_id)
+
+        restored = deserialize_state(serialize_state(state_mage))
+        rest_char = next(iter(restored.characters.values()))
+
+        book_def = ITEM_REGISTRY[utility_spellbook_id]
+        for spell_id in book_def.contained_item_ids:
+            orig = next(
+                (i for i in char.inventory
+                 if i.item_id == spell_id and i.container_id == utility_spellbook_id),
+                None,
+            )
+            restored_inv = next(
+                (i for i in rest_char.inventory
+                 if i.item_id == spell_id and i.container_id == utility_spellbook_id),
+                None,
+            )
+            assert restored_inv is not None, f"Spell {spell_id} lost after round-trip"
+            assert restored_inv.charges == orig.charges
+            assert restored_inv.container_id == utility_spellbook_id

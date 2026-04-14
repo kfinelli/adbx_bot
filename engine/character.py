@@ -454,7 +454,7 @@ class CharacterManager:
                 # Add each contained spell as its own InventoryItem with per-character charges.
                 for spell_id in defn.contained_item_ids:
                     spell_def = ITEM_REGISTRY.get(spell_id)
-                    spell_charges = spell_def.maxCharges if isinstance(spell_def, ChargeWeapon) else None
+                    spell_charges = spell_def.maxCharges if hasattr(spell_def, "maxCharges") else None
                     char.inventory.append(InventoryItem(
                         item_id=spell_id,
                         quantity=1,

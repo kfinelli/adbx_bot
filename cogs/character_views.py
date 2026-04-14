@@ -13,7 +13,7 @@ from engine import equip_item, unequip_item
 from engine.azure_constants import UI_SLOTS, ItemSlot
 from engine.character import CharacterManager
 from engine.data_loader import CONDITION_REGISTRY, ITEM_REGISTRY
-from engine.item import EquipItem
+from engine.item import EquipItem, UtilitySpell
 from store import save_session_async
 
 # Human-readable labels for each slot.
@@ -125,7 +125,8 @@ def _character_sheet(char, state) -> str:
                     _charges = f" ({_child.charges}/{_cdefn.maxCharges})"
             else:
                 _charges = ""
-            _inv_parts.append(f"    \u2514 {_cname}{_charges}")
+            _desc = f" — {_cdefn.description}" if isinstance(_cdefn, UtilitySpell) and _cdefn.description else ""
+            _inv_parts.append(f"    \u2514 {_cname}{_charges}{_desc}")
     inv_lines = "\n".join(_inv_parts) if _inv_parts else "  (empty)"
 
     # Equipped slots summary

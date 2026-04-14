@@ -77,6 +77,7 @@ class ItemType(StrEnum):
     WEAPON = "weapon"
     CHARGE_WEAPON = "charge_weapon"
     CONTAINER = "container"
+    UTILITY_SPELL = "utility_spell"
 
 class SkillType(Enum):
     SIMPLE = 0
