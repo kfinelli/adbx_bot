@@ -172,17 +172,17 @@ class TestLevelUpSkillEffects:
         # Knight gets +1 PHY at level 2 — skills_granted should be non-empty
         assert len(result.skills_granted) > 0
 
-    def test_passive_bonus_skill_increases_stat(self):
-        """Knight +1 PHY at level 2 should raise physique."""
+    def test_passive_bonus_skill_increases_effective_stat(self):
+        """Knight +1 PHY at level 2 should raise effective physique via condition."""
         state = _make_state()
         char = _make_char(state)
         phyBefore = char.ability_scores.physique
         char.experience = XP_THRESHOLDS[1]  # level 2
         from engine import check_level_up
         check_level_up(state, char.character_id)
-        # The primary stat gain is random, but PASSIVE_BONUS skill adds its bonus
-        phyAfter = char.ability_scores.physique
-        assert phyAfter > phyBefore, "Physique should have increased at level-up"
+        # Passive bonus is applied as a condition, not a direct stat mutation
+        assert char.ability_scores.physique == phyBefore
+        assert char.effective_stat("physique") == phyBefore + 1
 
     def test_passive_bonus_stat_changes_reflected_in_result(self):
         """stat_changes in LevelUpResult includes PASSIVE_BONUS contributions."""
@@ -193,8 +193,7 @@ class TestLevelUpSkillEffects:
         results = check_level_up(state, char.character_id)
         result = results[0]
         assert "physique" in result.stat_changes
-        # Knight gets +1 PHY from skill, plus random primary stat roll
-        assert result.stat_changes["physique"] >= 1
+        assert result.stat_changes["physique"] == 1
 
 
 # ---------------------------------------------------------------------------

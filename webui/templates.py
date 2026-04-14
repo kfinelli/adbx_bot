@@ -1475,13 +1475,11 @@ def _sheet_stat_grid(stats: list[tuple[str, str]]) -> str:
 
 
 def character_sheet_panel(character: Character) -> str:
-    a = character.ability_scores
-
     ability_grid = _sheet_stat_grid([
-        ("Physique", f"{a.physique:+d}"),
-        ("Finesse",  f"{a.finesse:+d}"),
-        ("Reason",   f"{a.reason:+d}"),
-        ("Savvy",    f"{a.savvy:+d}"),
+        ("Physique", f"{character.effective_stat('physique'):+d}"),
+        ("Finesse",  f"{character.effective_stat('finesse'):+d}"),
+        ("Reason",   f"{character.effective_stat('reason'):+d}"),
+        ("Savvy",    f"{character.effective_stat('savvy'):+d}"),
     ])
     combat_grid = _sheet_stat_grid([
         ("HP",   f"{character.hp_current}/{character.hp_max}"),

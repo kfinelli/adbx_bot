@@ -221,6 +221,16 @@ class Character:
         )
         return max(0, total)
 
+    def effective_stat(self, stat: str) -> int:
+        """Return ability score for `stat` including any active condition modifiers."""
+        base = getattr(self.ability_scores, stat, 0)
+        bonus = sum(
+            CONDITION_REGISTRY[c.condition_id].stat_modifiers.get(stat, 0) * c.stacks
+            for c in self.active_conditions
+            if c.condition_id in CONDITION_REGISTRY
+        )
+        return base + bonus
+
     @property
     def dodge(self) -> int:
         """Dodge target number (base = finesse). Capped at POWER_LEVEL when any Heavy item is equipped."""

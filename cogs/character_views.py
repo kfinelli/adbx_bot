@@ -97,7 +97,6 @@ async def _submit_gear_combat_action(
 
 def _character_sheet(char, state) -> str:
     """Produce the character sheet code block string."""
-    a = char.ability_scores
     leader_note = " (Party Leader)" if (
         state.party and state.party.leader_id == char.character_id
     ) else ""
@@ -146,18 +145,22 @@ def _character_sheet(char, state) -> str:
         if c.condition_id in CONDITION_REGISTRY
     )
     save_base = char.saving_throws.get("save", 0) + save_cond_bonus
+    phy = char.effective_stat("physique")
+    fns = char.effective_stat("finesse")
+    rsn = char.effective_stat("reason")
+    svy = char.effective_stat("savvy")
     sheet_lines = [
         sep,
         f"{char.name}  \u2014  {char.character_class.value} Level {char.level}{leader_note}",
         f"HP: {char.hp_current}/{char.hp_max}   DEF: {char.defense} RES: {char.resistance}  Move: {char.movement_speed}'",
         f"XP: {char.experience}   Gold: {char.gold} gp",
         sep,
-        f"PHY {a.physique:+d}   FNS {a.finesse:+d}",
-        f"RSN {a.reason:+d}   SVY {a.savvy:+d}",
+        f"PHY {phy:+d}   FNS {fns:+d}",
+        f"RSN {rsn:+d}   SVY {svy:+d}",
         sep,
         "Saves:",
-        f"  PHY: {save_base + a.physique}   FNS: {save_base + a.finesse}",
-        f"  RSN: {save_base + a.reason}   SVY: {save_base + a.savvy}",
+        f"  PHY: {save_base + phy}   FNS: {save_base + fns}",
+        f"  RSN: {save_base + rsn}   SVY: {save_base + svy}",
         sep,
         "Equipped:",
         *slot_lines,

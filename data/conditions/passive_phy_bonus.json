@@ -1,0 +1,8 @@
+{
+  "condition_id": "passive_phy_bonus",
+  "label": "PHY Bonus",
+  "duration_type": "permanent",
+  "stackable": true,
+  "hooks": {},
+  "stat_modifiers": { "physique": 1 }
+}
