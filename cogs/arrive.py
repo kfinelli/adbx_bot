@@ -20,9 +20,9 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from engine import create_character, give_item, roll_stats
+from engine import create_character, equip_item, give_item, roll_stats
 from engine.data_loader import ITEM_REGISTRY
-from engine.item import ChargeWeapon, Gear, Item, Weapon
+from engine.item import ChargeWeapon, EquipItem, Gear, Item, Weapon
 from models import CharacterClass, SessionMode
 from store import get_characters_by_owner, get_session, save_session, update_status
 from validation import validate_character_name
@@ -246,23 +246,81 @@ class ItemSelectView(discord.ui.View):
         # Save the session
         save_session(state)
 
-        # Return to the slot selection view so the player can keep shopping
+        # Return to shop — offer equip prompt for equippable items
         remaining_gold = character.gold
-        shop_view = ShopView(self.channel_id, self.character_id, self.owner_id)
-        await interaction.response.edit_message(
-            content=(
-                f"✓ Purchased **{item.name}** for {price} gp!\n"
-                f"You have {remaining_gold} gp remaining.\n\n"
-                f"**Item Shop** — Select a category to continue shopping:"
-            ),
-            view=shop_view,
-        )
+        if isinstance(item, EquipItem) and getattr(item, 'slot', None):
+            equip_view = EquipNowView(
+                self.channel_id, self.character_id, self.owner_id,
+                self.selected_item_id, item.name, remaining_gold,
+            )
+            await interaction.response.edit_message(
+                content=(
+                    f"✓ Purchased **{item.name}** for {price} gp!\n"
+                    f"You have {remaining_gold} gp remaining.\n\n"
+                    f"Would you like to equip **{item.name}** now?"
+                ),
+                view=equip_view,
+            )
+        else:
+            shop_view = ShopView(self.channel_id, self.character_id, self.owner_id)
+            await interaction.response.edit_message(
+                content=(
+                    f"✓ Purchased **{item.name}** for {price} gp!\n"
+                    f"You have {remaining_gold} gp remaining.\n\n"
+                    f"**Item Shop** — Select a category to continue shopping:"
+                ),
+                view=shop_view,
+            )
 
     async def _back_callback(self, interaction: discord.Interaction):
         # Return to slot selection
         shop_view = ShopView(self.channel_id, self.character_id, self.owner_id)
         await interaction.response.edit_message(
             content="**Item Shop** — Select a category to browse items:",
+            view=shop_view,
+        )
+
+
+class EquipNowView(discord.ui.View):
+    """
+    Shown after a successful purchase of an equippable item.
+    Lets the player equip it immediately or keep it in inventory.
+    """
+
+    def __init__(self, channel_id: str, character_id: str, owner_id: str, item_id: str, item_name: str, remaining_gold: int):
+        super().__init__(timeout=300)
+        self.channel_id = channel_id
+        self.character_id = character_id
+        self.owner_id = owner_id
+        self.item_id = item_id
+        self.item_name = item_name
+        self.remaining_gold = remaining_gold
+
+    @discord.ui.button(label="Equip Now", style=discord.ButtonStyle.success)
+    async def equip_now(self, interaction: discord.Interaction, button: discord.ui.Button):
+        from uuid import UUID
+        state = get_session(self.channel_id)
+        if state is None:
+            await interaction.response.edit_message(content="⚠ Session no longer exists.", view=None)
+            return
+        char_uuid = UUID(self.character_id)
+        result = equip_item(state, char_uuid, self.item_id)
+        if result.ok:
+            save_session(state)
+            prefix = f"✓ {result.message}\n\n"
+        else:
+            prefix = f"⚠ Could not equip: {result.error}\n\n"
+        shop_view = ShopView(self.channel_id, self.character_id, self.owner_id)
+        await interaction.response.edit_message(
+            content=prefix + f"**Item Shop** — {self.remaining_gold} gp remaining. Select a category:",
+            view=shop_view,
+        )
+
+    @discord.ui.button(label="Keep in Inventory", style=discord.ButtonStyle.secondary)
+    async def keep_in_inventory(self, interaction: discord.Interaction, button: discord.ui.Button):
+        shop_view = ShopView(self.channel_id, self.character_id, self.owner_id)
+        await interaction.response.edit_message(
+            content=f"**Item Shop** — {self.remaining_gold} gp remaining. Select a category:",
             view=shop_view,
         )
 
