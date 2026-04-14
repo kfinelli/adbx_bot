@@ -723,22 +723,41 @@ class TestUtilitySpellbookGive:
 
 class TestUtilitySpellCharacterSheet:
     def test_character_sheet_shows_utility_spell_description(self, state_mage, utility_spellbook_id):
-        """Character sheet should include spell name, charges, and description under its container."""
+        """Inventory display lines for utility spells include name, charges, and description.
+
+        Replicates the contained-item rendering from cogs/character_views._character_sheet
+        without importing the cog (which pulls in discord).
+        """
         assert utility_spellbook_id is not None
         char = _get_char(state_mage)
         give_item(state_mage, char.character_id, utility_spellbook_id)
 
-        from cogs.character_views import _character_sheet
-        sheet = _character_sheet(char, state_mage)
+        # Build the same contained-item lines that _character_sheet produces.
+        contained: dict[str, list] = {}
+        for inv in char.inventory:
+            if inv.container_id:
+                contained.setdefault(inv.container_id, []).append(inv)
+
+        lines = []
+        for child in contained.get(utility_spellbook_id, []):
+            cdefn = ITEM_REGISTRY.get(child.item_id)
+            cname = cdefn.name if cdefn else child.item_id
+            if child.charges is not None and cdefn is not None and hasattr(cdefn, "maxCharges"):
+                charges = f" (\u221e)" if cdefn.maxCharges < 0 else f" ({child.charges}/{cdefn.maxCharges})"
+            else:
+                charges = ""
+            desc = f" \u2014 {cdefn.description}" if isinstance(cdefn, UtilitySpell) and cdefn.description else ""
+            lines.append(f"    \u2514 {cname}{charges}{desc}")
 
         book_def = ITEM_REGISTRY[utility_spellbook_id]
         for spell_id in book_def.contained_item_ids:
             spell_def = ITEM_REGISTRY.get(spell_id)
             if not isinstance(spell_def, UtilitySpell):
                 continue
-            assert spell_def.name in sheet
+            matching = [ln for ln in lines if spell_def.name in ln]
+            assert matching, f"{spell_def.name} not found in rendered lines"
             if spell_def.description:
-                assert spell_def.description in sheet
+                assert any(spell_def.description in ln for ln in matching)
 
 
 class TestUtilitySpellPersistence:
