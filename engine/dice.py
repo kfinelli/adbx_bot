@@ -72,13 +72,10 @@ def roll_sum(n: int, sides: int) -> int:
 
 def roll_azure_stat() -> int:
     """
-    Roll one Azure stat using the formula 2d(4×POWER_LEVEL) − 5×POWER_LEVEL.
-    Result is a scaled integer; divide by POWER_LEVEL to get the human value.
+    Roll one Azure stat using the formula 20d40 − 400
     Range: −500 to +300 (i.e. −5.00 to +3.00).
     """
-    die = 4 * POWER_LEVEL
-    penalty = 5 * POWER_LEVEL
-    return d(die) + d(die) - penalty
+    return roll_sum(20,40) - 400
 
 
 def roll_stat_block():
