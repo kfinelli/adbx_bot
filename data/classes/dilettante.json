@@ -4,6 +4,7 @@
   "hit_die": 8,
   "base_save": 3,
   "primary_stat": "SVY",
+  "stat_rolls": { "SVY": "5d4", "PHY": "3d4", "FNS": "4d4", "RSN": "2d4" },
   "max_level": 5,
   "description": "",
   "skills": [

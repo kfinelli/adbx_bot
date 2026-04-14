@@ -212,6 +212,7 @@ class JobDef:
     hit_die:        int             = 6
     base_save:      int             = 0
     primary_stat:   str             = "PHY"
+    stat_rolls:     dict[str, str]  = field(default_factory=dict)
     max_level:      int             = 5
     description:    str             = ""
     skills:         dict[str, SkillDef] = field(default_factory=dict)
@@ -510,12 +511,17 @@ def _load_job(path: Path, skill_defs: dict[str, SkillDef]) -> JobDef:
             )
         skills[skill_id] = dataclasses.replace(base, source=job_key_lower, level=level)
 
+    stat_rolls = data.get("stat_rolls", {})
+    if stat_rolls and not isinstance(stat_rolls, dict):
+        raise ValueError(f"{path}: 'stat_rolls' must be an object mapping stat keys to dice expressions")
+
     return JobDef(
         key=key.upper(),
         display_name=data["display_name"],
         hit_die=int(data["hit_die"]),
         base_save=int(data["base_save"]),
         primary_stat=primary_stat,
+        stat_rolls=stat_rolls,
         max_level=int(data["max_level"]),
         description=data.get("description", ""),
         skills=skills,

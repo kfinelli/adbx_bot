@@ -13,6 +13,7 @@ from engine.azure_constants import (
     getLowerWeaponRanks,
 )
 from engine.data_loader import CLASS_DEFINITIONS, ITEM_REGISTRY, SkillDef
+from engine.dice import roll_dice_expr
 from engine.item import ChargeWeapon, ContainerItem, EquipItem, Weapon
 from models import (
     AzureStats,
@@ -584,6 +585,7 @@ class CharacterManager:
         msg = f"{char.name} gained {amount} XP."
         if level_ups:
             msg += " " + " ".join(f"Level {r.new_level}!" for r in level_ups)
+            state.pending_level_ups.extend(level_ups)
         result = _ok(state, msg)
         result.data = level_ups
         return result
@@ -639,7 +641,7 @@ class CharacterManager:
         """Apply one level-up to char. Mutates char and job_exp in place."""
         import random
 
-        from engine.azure_constants import POWER_LEVEL, StatPriority
+        from engine.azure_constants import POWER_LEVEL
 
         _STAT_MAP = {"PHY": "physique", "FNS": "finesse", "RSN": "reason", "SVY": "savvy"}
         _VALID_STATS = {"PHY", "FNS", "RSN", "SVY"}
@@ -649,12 +651,16 @@ class CharacterManager:
         job_exp.hp_bonus += hp_gain
         char.hp_max += hp_gain
 
-        # Primary stat gain: random roll based on stat priority
-        primary_attr = _STAT_MAP.get(job_def.primary_stat, "physique")
-        stat_gain = random.randint(1, StatPriority.GREATEST)
-        job_exp.stat_bonuses[primary_attr] += stat_gain
-        setattr(char.ability_scores, primary_attr,
-                getattr(char.ability_scores, primary_attr) + stat_gain)
+        # Stat gains: roll every stat's dice expression from stat_rolls
+        stat_gains: dict[str, int] = {}
+        for stat_key, attr in _STAT_MAP.items():
+            dice_expr = job_def.stat_rolls.get(stat_key)
+            if not dice_expr:
+                continue
+            gain = roll_dice_expr(dice_expr)["total"]
+            stat_gains[attr] = gain
+            job_exp.stat_bonuses[attr] += gain
+            setattr(char.ability_scores, attr, getattr(char.ability_scores, attr) + gain)
 
         # Increment level
         job_exp.level += 1
@@ -675,7 +681,6 @@ class CharacterManager:
                 if stat_key in _VALID_STATS:
                     attr = _STAT_MAP[stat_key]
                 elif stat_key == "ANY":
-                    # Randomly pick one of the four stats
                     attr = random.choice(list(_STAT_MAP.values()))
                 else:
                     continue
@@ -685,7 +690,7 @@ class CharacterManager:
                         getattr(char.ability_scores, attr) + bonus)
                 skill_stat_changes[attr] = skill_stat_changes.get(attr, 0) + bonus
 
-        combined_stat_changes = {primary_attr: stat_gain}
+        combined_stat_changes = dict(stat_gains)
         for attr, bonus in skill_stat_changes.items():
             combined_stat_changes[attr] = combined_stat_changes.get(attr, 0) + bonus
 

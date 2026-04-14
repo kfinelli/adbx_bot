@@ -43,6 +43,20 @@ async def dispatch_level_up(bot: discord.Client, character, results: list[LevelU
         pass
 
 
+async def drain_level_ups(bot: discord.Client, state: GameState) -> None:
+    """Dispatch DM notifications for all pending level-ups then clear the queue."""
+    if not state.pending_level_ups:
+        return
+    by_char: dict = {}
+    for r in state.pending_level_ups:
+        by_char.setdefault(r.character_id, []).append(r)
+    state.pending_level_ups.clear()
+    for char_id, results in by_char.items():
+        char = state.characters.get(char_id)
+        if char:
+            await dispatch_level_up(bot, char, results)
+
+
 # ---------------------------------------------------------------------------
 # Oracle
 # ---------------------------------------------------------------------------
@@ -100,11 +114,14 @@ async def dispatch_turn_resolved(
     channel: discord.TextChannel,
     state: GameState,
     narrative: str,
+    *,
+    bot: discord.Client | None = None,
 ) -> None:
     """
     After a turn is resolved:
       1. Post the narrative then a fresh status block.
       2. Ping all active players that the new turn is ready.
+      3. If bot is provided, dispatch any pending level-up DMs.
 
     Importing store here (not at module level) avoids a circular import
     since store.py imports from models.py.
@@ -112,3 +129,5 @@ async def dispatch_turn_resolved(
     from store import notify_players_new_turn, repost_status
     await repost_status(channel, state, narrative=narrative)
     await notify_players_new_turn(channel, state)
+    if bot:
+        await drain_level_ups(bot, state)

@@ -85,7 +85,7 @@ async def _submit_gear_combat_action(
     if channel is not None:
         if result.auto_resolved:
             from discord_tasks import dispatch_turn_resolved
-            await dispatch_turn_resolved(channel, state, result.message)
+            await dispatch_turn_resolved(channel, state, result.message, bot=interaction.client)
         elif result.notify_dm:
             from store import notify_dm_of_turn_close
             await notify_dm_of_turn_close(channel, state, state.turn_number)

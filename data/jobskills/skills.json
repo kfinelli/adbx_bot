@@ -84,39 +84,39 @@
       "desc": "You can equip gear and weapons with Rank: X"
     },
     "passive_phy_bonus": {
-      "name": "+1 PHY",
+      "name": "+100 PHY",
       "type": 5,
       "stat": "PHY",
-      "bonus": 1,
-      "desc": "Increase Physique by 1!"
+      "bonus": 100,
+      "desc": "Increase Physique by 100!"
     },
     "passive_fns_bonus": {
-      "name": "+1 FNS",
+      "name": "+100 FNS",
       "type": 5,
       "stat": "FNS",
-      "bonus": 1,
-      "desc": "Increase Finesse by 1!"
+      "bonus": 100,
+      "desc": "Increase Finesse by 100!"
     },
     "passive_rsn_bonus": {
-      "name": "+1 RSN",
+      "name": "+100 RSN",
       "type": 5,
       "stat": "RSN",
-      "bonus": 1,
-      "desc": "Increase Reason by 1!"
+      "bonus": 100,
+      "desc": "Increase Reason by 100!"
     },
     "passive_svy_bonus": {
-      "name": "+1 SVY",
+      "name": "+100 SVY",
       "type": 5,
       "stat": "SVY",
-      "bonus": 1,
-      "desc": "Increase Savvy by 1!"
+      "bonus": 100,
+      "desc": "Increase Savvy by 100!"
     },
     "passive_any_bonus": {
-      "name": "+1 ANY",
+      "name": "+100 ANY",
       "type": 5,
       "stat": "ANY",
-      "bonus": 1,
-      "desc": "Increase any stat by 1!"
+      "bonus": 100,
+      "desc": "Increase any stat by 100!"
     },
     "knight_protector": {
       "name": "Protector",

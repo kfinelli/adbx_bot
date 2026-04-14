@@ -792,6 +792,9 @@ class GameState:
     platform_channel_id: str | None      = None
     dm_user_id:          str | None      = None
 
+    # Ephemeral notification queue — filled by award_xp, drained by dispatch layer
+    pending_level_ups:   list = field(default_factory=list)  # list[LevelUpResult]
+
 
     # ------------------------------------------------------------------
     # Convenience accessors

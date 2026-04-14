@@ -20,7 +20,7 @@ from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import HTMLResponse, Response
 
 import store
-from discord_tasks import dispatch_level_up, dispatch_oracle_answer, dispatch_turn_resolved
+from discord_tasks import dispatch_oracle_answer, dispatch_turn_resolved, drain_level_ups
 from engine import (
     add_exit,
     answer_oracle,
@@ -185,7 +185,7 @@ async def route_resolve(channel_id: str, narrative: Annotated[str, Form()]):
     if _bot:
         channel = _bot.get_channel(int(channel_id))
         if channel:
-            asyncio.create_task(dispatch_turn_resolved(channel, state, narrative))
+            asyncio.create_task(dispatch_turn_resolved(channel, state, narrative, bot=_bot))
     return _respond(channel_id, flash="Turn resolved.", sync=False)
 
 
@@ -422,6 +422,8 @@ async def route_party_addxp(
     n = len(active)
     distribute_xp(state, amount)
     await save_session_async(state)
+    if _bot:
+        asyncio.create_task(drain_level_ups(_bot, state))
     each = amount // n if n else 0
     return _respond(channel_id, flash=f"Distributed {amount} XP among {n} active characters ({each} each).")
 
@@ -487,6 +489,7 @@ async def route_enterroom(channel_id: str, room_id: str):
         channel = _bot.get_channel(int(channel_id))
         if channel:
             asyncio.create_task(store.update_status(channel, state))
+        asyncio.create_task(drain_level_ups(_bot, state))
     return _respond(channel_id, flash=result.message, view_room_id=room_id)
 
 
@@ -1157,8 +1160,7 @@ async def route_character_addxp(
     result = award_xp(state, char.character_id, amount)
     await store.db.save_character_async(char)
     sync_character_to_sessions(char)
-    level_ups = getattr(result, "data", [])
-    if level_ups and _bot:
-        asyncio.create_task(dispatch_level_up(_bot, char, level_ups))
+    if _bot:
+        asyncio.create_task(drain_level_ups(_bot, state))
     return _char_redirect(char_id, flash=result.message)
 

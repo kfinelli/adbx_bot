@@ -1260,7 +1260,7 @@ class AffectModal(discord.ui.Modal):
 
         if result.auto_resolved:
             from discord_tasks import dispatch_turn_resolved
-            await dispatch_turn_resolved(channel, state, result.message)
+            await dispatch_turn_resolved(channel, state, result.message, bot=interaction.client)
         elif result.notify_dm:
             await notify_dm_of_turn_close(channel, state, turn_number)
         else:
