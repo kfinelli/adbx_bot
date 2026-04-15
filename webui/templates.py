@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import html as _html
 
-from engine.azure_constants import XP_THRESHOLDS
+from engine.azure_constants import XP_THRESHOLDS, RechargePeriod
 from engine.character import CharacterManager
 from engine.data_loader import ITEM_REGISTRY
+from engine.item import ChargeWeapon
 from models import (
     Character,
     CharacterStatus,
@@ -786,6 +787,10 @@ def party_panel(state: GameState) -> str:
       <button type="submit">Distribute XP</button>
     </div>
   </form>
+  <form hx-post="/session/{channel_id}/party/rechargedaily"
+        hx-target="#dashboard" hx-swap="outerHTML" style="margin-bottom:0.5rem">
+    <button type="submit">Recharge All Daily Spells</button>
+  </form>
   <table>
     <tr><th>Character</th><th>HP</th><th>Status</th><th>Controls</th></tr>
     {rows}
@@ -1502,6 +1507,42 @@ def character_sheet_panel(character: Character) -> str:
         if _ci.container_id:
             _contained_map.setdefault(_ci.container_id, []).append(_ci)
 
+    def _recharge_tag(period) -> str:
+        """Return a small [D] or [E] pill for DAY/ENCOUNTER spells; empty string otherwise."""
+        if period == RechargePeriod.DAY:
+            return ' <span class="muted" style="font-size:0.7rem;border:1px solid #555;border-radius:3px;padding:0 3px" title="Daily recharge">D</span>'
+        if period == RechargePeriod.ENCOUNTER:
+            return ' <span class="muted" style="font-size:0.7rem;border:1px solid #555;border-radius:3px;padding:0 3px" title="Encounter recharge">E</span>'
+        return ""
+
+    def _charge_controls(item_id: str, charges: int | None, max_charges: int, recharge_period=None) -> str:
+        """Return inline charge badge + +/- and restore buttons for finite-charge spells."""
+        if charges is None or max_charges < 0:
+            return ""
+        badge = f'<span class="muted" style="font-size:0.8rem">({charges}/{max_charges})</span>'
+        period_tag = _recharge_tag(recharge_period)
+        minus_form = (
+            f'<form method="post" action="/characters/{cid_str}/spellcharge" style="margin:0;display:inline">'
+            f'<input type="hidden" name="item_id" value="{item_id}">'
+            f'<input type="hidden" name="delta" value="-1">'
+            f'<button class="btn-sm" type="submit" style="padding:1px 5px">−</button>'
+            f'</form>'
+        )
+        plus_form = (
+            f'<form method="post" action="/characters/{cid_str}/spellcharge" style="margin:0;display:inline">'
+            f'<input type="hidden" name="item_id" value="{item_id}">'
+            f'<input type="hidden" name="delta" value="1">'
+            f'<button class="btn-sm" type="submit" style="padding:1px 5px">+</button>'
+            f'</form>'
+        )
+        restore_form = (
+            f'<form method="post" action="/characters/{cid_str}/spellrecharge" style="margin:0;display:inline">'
+            f'<input type="hidden" name="item_id" value="{item_id}">'
+            f'<button class="btn-sm" type="submit" style="padding:1px 5px" title="Restore to max">↺</button>'
+            f'</form>'
+        )
+        return f' {badge}{period_tag} {minus_form}{plus_form}{restore_form}'
+
     item_rows = ""
     for inv_item in character.inventory:
         if inv_item.container_id:
@@ -1510,9 +1551,22 @@ def character_sheet_panel(character: Character) -> str:
         item_name = defn.name if defn else inv_item.item_id
         qty_str = f'<span class="muted"> ×{inv_item.quantity}</span>' if inv_item.quantity > 1 else ""
         equip_str = ' <span class="tag tag-open" style="font-size:0.7rem;padding:1px 5px">equip</span>' if inv_item.equipped else ""
+        # Show charge controls for standalone ChargeWeapons with finite charges.
+        standalone_charges = ""
+        if (isinstance(defn, ChargeWeapon)
+                and inv_item.charges is not None
+                and defn.maxCharges >= 0):
+            standalone_charges = _charge_controls(
+                inv_item.item_id, inv_item.charges, defn.maxCharges,
+                recharge_period=defn.rechargePeriod,
+            )
+        elif (isinstance(defn, ChargeWeapon)
+              and inv_item.charges is not None
+              and defn.maxCharges < 0):
+            standalone_charges = ' <span class="muted" style="font-size:0.8rem">(∞)</span>'
         item_rows += (
             f'<tr>'
-            f'<td>{item_name}{qty_str}{equip_str}</td>'
+            f'<td>{item_name}{qty_str}{equip_str}{standalone_charges}</td>'
             f'<td style="width:1%;white-space:nowrap">'
             f'<form method="post" action="/characters/{cid_str}/removeitem" style="margin:0">'
             f'<input type="hidden" name="item_id" value="{inv_item.item_id}">'
@@ -1525,16 +1579,20 @@ def character_sheet_panel(character: Character) -> str:
         for _child in _contained_map.get(inv_item.item_id, []):
             _cdefn = ITEM_REGISTRY.get(_child.item_id)
             _cname = _cdefn.name if _cdefn else _child.item_id
-            _charges_str = ""
             if _child.charges is not None and _cdefn is not None and hasattr(_cdefn, "maxCharges"):
                 if _cdefn.maxCharges < 0:
-                    _charges_str = ' <span class="muted" style="font-size:0.8rem">(∞)</span>'
+                    _charges_display = ' <span class="muted" style="font-size:0.8rem">(∞)</span>'
                 else:
-                    _charges_str = f' <span class="muted" style="font-size:0.8rem">({_child.charges}/{_cdefn.maxCharges})</span>'
+                    _charges_display = _charge_controls(
+                        _child.item_id, _child.charges, _cdefn.maxCharges,
+                        recharge_period=getattr(_cdefn, "rechargePeriod", None),
+                    )
+            else:
+                _charges_display = ""
             item_rows += (
-                f'<tr style="opacity:0.7">'
+                f'<tr style="opacity:0.85">'
                 f'<td style="padding-left:1.5rem;font-size:0.9rem">'
-                f'<span class="muted">└</span> {_cname}{_charges_str}'
+                f'<span class="muted">└</span> {_cname}{_charges_display}'
                 f'</td>'
                 f'<td></td>'
                 f'</tr>'
@@ -1602,6 +1660,11 @@ def character_sheet_panel(character: Character) -> str:
       <button type="submit">Add item</button>
     </div>
   </form>
+  <div style="margin-top:0.5rem">
+    <form method="post" action="/characters/{cid_str}/rechargedaily" style="margin:0;display:inline">
+      <button class="btn-sm" type="submit">Recharge All (Day)</button>
+    </form>
+  </div>
 
   <hr class="divider">
 

@@ -23,6 +23,7 @@ import store
 from discord_tasks import dispatch_oracle_answer, dispatch_turn_resolved, drain_level_ups
 from engine import (
     add_exit,
+    adjust_spell_charges,
     answer_oracle,
     apply_condition,
     award_xp,
@@ -35,6 +36,7 @@ from engine import (
     import_dungeon,
     move_party_to_room,
     open_turn,
+    recharge_day_spells,
     register_room,
     remove_item,
     remove_npc,
@@ -426,6 +428,22 @@ async def route_party_addxp(
         asyncio.create_task(drain_level_ups(_bot, state))
     each = amount // n if n else 0
     return _respond(channel_id, flash=f"Distributed {amount} XP among {n} active characters ({each} each).")
+
+
+@app.post("/session/{channel_id}/party/rechargedaily", response_class=HTMLResponse)
+async def route_party_rechargedaily(channel_id: str):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    if state.party is None:
+        return _respond(channel_id, error="No party.")
+    count = 0
+    for char in state.characters.values():
+        result = recharge_day_spells(state, char.character_id)
+        if result.ok and "no daily" not in result.message:
+            count += 1
+    await save_session_async(state)
+    return _respond(channel_id, flash=f"Recharged daily spells for {count} character(s).")
 
 
 # ---------------------------------------------------------------------------
@@ -1162,5 +1180,50 @@ async def route_character_addxp(
     sync_character_to_sessions(char)
     if _bot:
         asyncio.create_task(drain_level_ups(_bot, state))
+    return _char_redirect(char_id, flash=result.message)
+
+
+@app.post("/characters/{char_id}/spellcharge", response_class=HTMLResponse)
+async def route_character_spellcharge(
+    char_id: str,
+    item_id: Annotated[str, Form()],
+    delta: Annotated[int, Form()],
+):
+    state, char = _load_char_state(char_id)
+    if char is None:
+        return _char_redirect(char_id, error="Character not found.")
+    result = adjust_spell_charges(state, char.character_id, item_id, delta)
+    if not result.ok:
+        return _char_redirect(char_id, error=result.error)
+    await store.db.save_character_async(char)
+    sync_character_to_sessions(char)
+    return _char_redirect(char_id, flash=result.message)
+
+
+@app.post("/characters/{char_id}/spellrecharge", response_class=HTMLResponse)
+async def route_character_spellrecharge(
+    char_id: str,
+    item_id: Annotated[str, Form()],
+):
+    state, char = _load_char_state(char_id)
+    if char is None:
+        return _char_redirect(char_id, error="Character not found.")
+    # Use a large positive delta; adjust_spell_charges clamps to maxCharges.
+    result = adjust_spell_charges(state, char.character_id, item_id, delta=9999)
+    if not result.ok:
+        return _char_redirect(char_id, error=result.error)
+    await store.db.save_character_async(char)
+    sync_character_to_sessions(char)
+    return _char_redirect(char_id, flash=result.message)
+
+
+@app.post("/characters/{char_id}/rechargedaily", response_class=HTMLResponse)
+async def route_character_rechargedaily(char_id: str):
+    state, char = _load_char_state(char_id)
+    if char is None:
+        return _char_redirect(char_id, error="Character not found.")
+    result = recharge_day_spells(state, char.character_id)
+    await store.db.save_character_async(char)
+    sync_character_to_sessions(char)
     return _char_redirect(char_id, flash=result.message)
 

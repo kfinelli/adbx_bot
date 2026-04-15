@@ -173,6 +173,18 @@ def give_item(state: GameState, character_id, item_id: str, quantity: int = 1):
     return cm.give_item(state, character_id, item_id, quantity)
 
 
+def adjust_spell_charges(state: GameState, character_id, item_id: str, delta: int):
+    """Adjust a spell's current charges by delta, clamped to [0, maxCharges]."""
+    cm = CharacterManager()
+    return cm.adjust_spell_charges(state, character_id, item_id, delta)
+
+
+def recharge_day_spells(state: GameState, character_id):
+    """Restore all DAY-period spells to full charges for the given character."""
+    cm = CharacterManager()
+    return cm.recharge_day_spells(state, character_id)
+
+
 def add_npc(state: GameState, npc):
     """Add an NPC."""
     nm = NPCManager()
@@ -777,4 +789,6 @@ __all__ = [
     "check_level_up",
     "distribute_xp",
     "check_random_encounter",
+    "adjust_spell_charges",
+    "recharge_day_spells",
 ]

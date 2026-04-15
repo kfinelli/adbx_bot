@@ -483,6 +483,83 @@ class CharacterManager:
         qty_str = f"{quantity}x " if quantity > 1 else ""
         return _ok(state, f"{char.name} received {qty_str}{defn.name}.")
 
+    def adjust_spell_charges(
+        self,
+        state: GameState,
+        character_id,
+        item_id: str,
+        delta: int,
+    ):
+        """
+        Adjust a spell's current charges by delta (positive or negative).
+
+        Works for ChargeWeapon and UtilitySpell items with finite maxCharges.
+        Result is clamped to [0, maxCharges]. Infinite spells (maxCharges < 0)
+        are rejected.
+        """
+        from engine import _now
+
+        char = state.characters.get(character_id)
+        if char is None:
+            return _err(state, f"Character {character_id} not found.")
+
+        from engine.item import UtilitySpell
+        inv_item = next(
+            (i for i in char.inventory if i.item_id == item_id and i.charges is not None),
+            None,
+        )
+        if inv_item is None:
+            return _err(state, f"No chargeable spell '{item_id}' found on {char.name}.")
+
+        defn = ITEM_REGISTRY.get(item_id)
+        if defn is None or not isinstance(defn, (ChargeWeapon, UtilitySpell)):
+            return _err(state, f"'{item_id}' is not a spell.")
+        if defn.maxCharges < 0:
+            return _err(state, f"'{defn.name}' has infinite charges and cannot be adjusted.")
+
+        inv_item.charges = max(0, min(defn.maxCharges, inv_item.charges + delta))
+        state.updated_at = _now()
+        return _ok(state, f"{defn.name} charges: {inv_item.charges}/{defn.maxCharges}.")
+
+    def recharge_day_spells(
+        self,
+        state: GameState,
+        character_id,
+    ):
+        """
+        Restore all DAY-period spells to full charges for the given character.
+
+        Returns an EngineResult with the count of spells recharged.
+        """
+        from engine import _now
+        from engine.azure_constants import RechargePeriod
+        from engine.item import UtilitySpell
+
+        char = state.characters.get(character_id)
+        if char is None:
+            return _err(state, f"Character {character_id} not found.")
+
+        count = 0
+        for inv_item in char.inventory:
+            if inv_item.charges is None:
+                continue
+            defn = ITEM_REGISTRY.get(inv_item.item_id)
+            if defn is None:
+                continue
+            if not isinstance(defn, (ChargeWeapon, UtilitySpell)):
+                continue
+            if getattr(defn, "rechargePeriod", None) != RechargePeriod.DAY:
+                continue
+            if defn.maxCharges < 0:
+                continue
+            inv_item.charges = defn.maxCharges
+            count += 1
+
+        state.updated_at = _now()
+        if count == 0:
+            return _ok(state, f"{char.name} has no daily spells to recharge.")
+        return _ok(state, f"Recharged {count} daily spell(s) for {char.name}.")
+
     def remove_item(
         self,
         state: GameState,

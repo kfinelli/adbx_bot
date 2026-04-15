@@ -100,6 +100,24 @@ class SessionManager:
         if state.current_turn:
             state.current_turn.mode = SessionMode.EXPLORATION
             state.current_turn.turn_number = resumed_at
+        # Restore encounter-period spell charges for all characters.
+        from engine.azure_constants import RechargePeriod
+        from engine.data_loader import ITEM_REGISTRY
+        from engine.item import ChargeWeapon, UtilitySpell
+        for char in state.characters.values():
+            for inv_item in char.inventory:
+                if inv_item.charges is None:
+                    continue
+                defn = ITEM_REGISTRY.get(inv_item.item_id)
+                if defn is None:
+                    continue
+                if not isinstance(defn, (ChargeWeapon, UtilitySpell)):
+                    continue
+                if getattr(defn, "rechargePeriod", None) != RechargePeriod.ENCOUNTER:
+                    continue
+                if defn.maxCharges < 0:
+                    continue
+                inv_item.charges = defn.maxCharges
         state.updated_at = _now()
         return _ok(state, "Returning to exploration.")
 
