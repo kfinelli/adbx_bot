@@ -11,7 +11,6 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
 import os
 import sys
 import tempfile
@@ -31,8 +30,8 @@ from engine import (
 )
 from engine.azure_constants import RechargePeriod
 from engine.data_loader import ITEM_REGISTRY
-from engine.item import ChargeWeapon, UtilitySpell
-from models import CharacterClass, GameState, InventoryItem, Party, SessionMode
+from engine.item import ChargeWeapon
+from models import CharacterClass, GameState, Party
 from persistence import Database
 
 # ---------------------------------------------------------------------------

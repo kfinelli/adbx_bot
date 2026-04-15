@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import html as _html
 
-from engine.azure_constants import RechargePeriod, XP_THRESHOLDS
+from engine.azure_constants import XP_THRESHOLDS, RechargePeriod
 from engine.character import CharacterManager
 from engine.data_loader import ITEM_REGISTRY
-from engine.item import ChargeWeapon, UtilitySpell
+from engine.item import ChargeWeapon
 from models import (
     Character,
     CharacterStatus,

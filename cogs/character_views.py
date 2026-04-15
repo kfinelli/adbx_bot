@@ -10,7 +10,7 @@ from __future__ import annotations
 import discord
 
 from engine import equip_item, unequip_item
-from engine.azure_constants import RechargePeriod, UI_SLOTS, ItemSlot
+from engine.azure_constants import UI_SLOTS, ItemSlot, RechargePeriod
 from engine.character import CharacterManager
 from engine.data_loader import CONDITION_REGISTRY, ITEM_REGISTRY
 from engine.item import EquipItem, UtilitySpell
