@@ -10,7 +10,7 @@ from __future__ import annotations
 import discord
 
 from engine import equip_item, unequip_item
-from engine.azure_constants import UI_SLOTS, ItemSlot
+from engine.azure_constants import RechargePeriod, UI_SLOTS, ItemSlot
 from engine.character import CharacterManager
 from engine.data_loader import CONDITION_REGISTRY, ITEM_REGISTRY
 from engine.item import EquipItem, UtilitySpell
@@ -117,6 +117,13 @@ def _character_sheet(char, state) -> str:
         for _child in _contained.get(i.item_id, []):
             _cdefn = ITEM_REGISTRY.get(_child.item_id)
             _cname = _cdefn.name if _cdefn else _child.item_id
+            _period = getattr(_cdefn, "rechargePeriod", None)
+            if _period == RechargePeriod.DAY:
+                _period_tag = " [D]"
+            elif _period == RechargePeriod.ENCOUNTER:
+                _period_tag = " [E]"
+            else:
+                _period_tag = ""
             if _child.charges is not None and _cdefn is not None and hasattr(_cdefn, "maxCharges"):
                 if _cdefn.maxCharges < 0:
                     _charges = " (\u221e)"
@@ -125,7 +132,7 @@ def _character_sheet(char, state) -> str:
             else:
                 _charges = ""
             _desc = f" — {_cdefn.description}" if isinstance(_cdefn, UtilitySpell) and _cdefn.description else ""
-            _inv_parts.append(f"    \u2514 {_cname}{_charges}{_desc}")
+            _inv_parts.append(f"    \u2514 {_cname}{_period_tag}{_charges}{_desc}")
     inv_lines = "\n".join(_inv_parts) if _inv_parts else "  (empty)"
 
     # Equipped slots summary
