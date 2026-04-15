@@ -8,7 +8,12 @@
   "requires_destination": true,
   "range_requirement": null,
   "effect_tags": [
-    {"tag": "apply_condition", "condition": "abdication-immunity", "duration": 1, "target": "self"},
+    {
+      "tag": "apply_condition",
+      "condition": "abdication-immunity",
+      "duration": 1,
+      "target": "self"
+    },
     "move_to_band"
   ]
 }

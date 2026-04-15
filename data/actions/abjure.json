@@ -8,6 +8,11 @@
   "requires_destination": false,
   "range_requirement": null,
   "effect_tags": [
-    {"tag": "apply_condition", "condition": "abjuring", "duration": 1, "target": "self"}
+    {
+      "tag": "apply_condition",
+      "condition": "abjuring",
+      "duration": 1,
+      "target": "self"
+    }
   ]
 }

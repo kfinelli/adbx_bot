@@ -6,5 +6,7 @@
   "hooks": {},
   "stat_modifiers": {},
   "grants_actions": [],
-  "tags": ["opportunity-attack-immune"]
+  "tags": [
+    "opportunity-attack-immune"
+  ]
 }

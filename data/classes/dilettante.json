@@ -4,26 +4,82 @@
   "hit_die": 8,
   "base_save": 3,
   "primary_stat": "SVY",
-  "stat_rolls": { "SVY": "5d4", "PHY": "3d4", "FNS": "4d4", "RSN": "2d4" },
   "max_level": 5,
   "description": "",
+  "stat_rolls": {
+    "SVY": "5d4",
+    "PHY": "3d4",
+    "FNS": "4d4",
+    "RSN": "2d4"
+  },
   "skills": [
-    { "id": "advance",               "level": 1 },
-    { "id": "abdicate",              "level": 1 },
-    { "id": "aggrieve",              "level": 1 },
-    { "id": "assail",                "level": 1 },
-    { "id": "abjure",                "level": 1 },
-    { "id": "abscond",               "level": 1 },
-    { "id": "affect",                "level": 1 },
-    { "id": "martial_training_d",    "level": 1 },
-    { "id": "dilettante_knack",      "level": 1 },
-    { "id": "dilettante_weapon_forte","level": 1 },
-    { "id": "passive_svy_bonus",     "level": 2 },
-    { "id": "trapwise",              "level": 2 },
-    { "id": "martial_training_c",    "level": 3 },
-    { "id": "arcane_basics",         "level": 3 },
-    { "id": "passive_any_bonus",     "level": 4 },
-    { "id": "martial_expertise_b",   "level": 5 },
-    { "id": "arcane_knowledge",      "level": 5 }
+    {
+      "id": "advance",
+      "level": 1
+    },
+    {
+      "id": "abdicate",
+      "level": 1
+    },
+    {
+      "id": "aggrieve",
+      "level": 1
+    },
+    {
+      "id": "assail",
+      "level": 1
+    },
+    {
+      "id": "abjure",
+      "level": 1
+    },
+    {
+      "id": "abscond",
+      "level": 1
+    },
+    {
+      "id": "affect",
+      "level": 1
+    },
+    {
+      "id": "martial_training_d",
+      "level": 1
+    },
+    {
+      "id": "dilettante_knack",
+      "level": 1
+    },
+    {
+      "id": "dilettante_weapon_forte",
+      "level": 1
+    },
+    {
+      "id": "passive_svy_bonus",
+      "level": 2
+    },
+    {
+      "id": "trapwise",
+      "level": 2
+    },
+    {
+      "id": "martial_training_c",
+      "level": 3
+    },
+    {
+      "id": "arcane_basics",
+      "level": 3
+    },
+    {
+      "id": "passive_any_bonus",
+      "level": 4
+    },
+    {
+      "id": "martial_expertise_b",
+      "level": 5
+    },
+    {
+      "id": "arcane_knowledge",
+      "level": 5
+    }
   ]
 }
