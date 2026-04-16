@@ -13,7 +13,7 @@ from engine.azure_constants import (
     getLowerWeaponRanks,
 )
 from engine.data_loader import CLASS_DEFINITIONS, ITEM_REGISTRY, SkillDef
-from engine.dice import roll_dice_expr
+from engine.dice import max_dice_expr, roll_dice_expr
 from engine.item import ChargeWeapon, ContainerItem, EquipItem, Weapon
 from models import (
     AzureStats,
@@ -99,7 +99,7 @@ class CharacterManager:
         Azure creation flow:
           1. Roll or accept base stats (four Azure stats, scaled by POWER_LEVEL).
           2. Look up job rules from CREATION_RULES.
-          3. HP = hit_die * POWER_LEVEL (full HP at level 1).
+          3. HP = max_dice_expr(hit_die) (full HP at level 1).
           4. base_save = job.baseSave * POWER_LEVEL.
           5. Empty inventory — items are assigned separately.
           6. No spellbook — spells come from skill progression.
@@ -123,7 +123,7 @@ class CharacterManager:
         scores = ability_scores if ability_scores is not None else roll_stat_block()
         job_def   = CLASS_DEFINITIONS[character_class.name]
 
-        hp_max    = max(job_def.hit_die   * POWER_LEVEL + scores.physique, 100) # Minimum level 1 hit points
+        hp_max    = max(max_dice_expr(job_def.hit_die) + scores.physique, 100) # Minimum level 1 hit points
         base_save = job_def.base_save * POWER_LEVEL
 
         job_key = character_class.name.lower()  # e.g. "knight"
@@ -795,13 +795,11 @@ class CharacterManager:
         """Apply one level-up to char. Mutates char and job_exp in place."""
         import random
 
-        from engine.azure_constants import POWER_LEVEL
-
         _STAT_MAP = {"PHY": "physique", "FNS": "finesse", "RSN": "reason", "SVY": "savvy"}
         _VALID_STATS = {"PHY", "FNS", "RSN", "SVY"}
 
-        # HP gain: roll d(hit_die * POWER_LEVEL), matching hero.py formula
-        hp_gain = random.randint(1, job_def.hit_die * POWER_LEVEL)
+        # HP gain: roll the hit_die dice expression directly
+        hp_gain = roll_dice_expr(job_def.hit_die)["total"]
         job_exp.hp_bonus += hp_gain
         char.hp_max += hp_gain
 

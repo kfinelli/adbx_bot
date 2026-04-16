@@ -1,7 +1,7 @@
 {
   "key": "THIEF",
   "display_name": "Thief",
-  "hit_die": 6,
+  "hit_die": "4d150",
   "base_save": 2,
   "primary_stat": "FNS",
   "max_level": 5,

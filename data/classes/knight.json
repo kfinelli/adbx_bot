@@ -1,7 +1,7 @@
 {
   "key": "KNIGHT",
   "display_name": "Knight",
-  "hit_die": 12,
+  "hit_die": "4d300",
   "base_save": 4,
   "primary_stat": "PHY",
   "max_level": 5,

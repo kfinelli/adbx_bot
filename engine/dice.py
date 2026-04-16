@@ -68,6 +68,19 @@ def roll_sum(n: int, sides: int) -> int:
     return sum(roll(n, sides))
 
 
+def max_dice_expr(expr: str) -> int:
+    """Return the maximum possible roll of an XdY or XdY+Z expression."""
+    xyz = re.split(r'd|\+', expr)
+    x = int(xyz[0])
+    if len(xyz) == 1:
+        return x
+    if "d" not in expr:
+        return x + int(xyz[1])
+    y = int(xyz[1])
+    z = int(xyz[2]) if len(xyz) > 2 else 0
+    return x * y + z
+
+
 def roll_azure_stat() -> int:
     """
     Roll one Azure stat using the formula 20d40 − 400

@@ -327,7 +327,7 @@ def _normalise_job(row: dict) -> dict:
     job: dict = {
         "key":          key,
         "display_name": str(row.get("display_name", "")).strip(),
-        "hit_die":      _int_or_zero(row.get("hit_die", 8)),
+        "hit_die":      str(row.get("hit_die", "1d8")).strip(),
         "base_save":    _int_or_zero(row.get("base_save", 2)),
         "primary_stat": str(row.get("primary_stat", "")).strip(),
         "max_level":    _int_or_zero(row.get("max_level", 5)),

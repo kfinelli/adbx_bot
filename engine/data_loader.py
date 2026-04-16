@@ -196,8 +196,8 @@ class JobDef:
     key          : Uppercase identifier matching the filename stem and
                    the CharacterClass enum member name (e.g. "KNIGHT").
     display_name : Player-facing name (e.g. "Knight").
-    hit_die      : HP die size (e.g. 12 for d12), pre-scaled by POWER_LEVEL
-                   at creation time.
+    hit_die      : Dice expression for HP gain (e.g. "12d100"). Rolled
+                   directly — no engine-side multiplier applied.
     base_save    : Starting save value (raw, scaled by POWER_LEVEL at creation).
     primary_stat : Which of the four stats (PHY/FNS/RSN/SVY) grows on level-up.
     max_level    : Maximum level for this job.
@@ -209,7 +209,7 @@ class JobDef:
     """
     key:            str             = ""
     display_name:   str             = ""
-    hit_die:        int             = 6
+    hit_die:        str             = "1d6"
     base_save:      int             = 0
     primary_stat:   str             = "PHY"
     stat_rolls:     dict[str, str]  = field(default_factory=dict)
@@ -518,7 +518,7 @@ def _load_job(path: Path, skill_defs: dict[str, SkillDef]) -> JobDef:
     return JobDef(
         key=key.upper(),
         display_name=data["display_name"],
-        hit_die=int(data["hit_die"]),
+        hit_die=str(data["hit_die"]),
         base_save=int(data["base_save"]),
         primary_stat=primary_stat,
         stat_rolls=stat_rolls,

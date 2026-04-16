@@ -81,7 +81,7 @@ _VALID_CONDITION = {
 _VALID_JOB = {
     "key":          "KNIGHT",
     "display_name": "Knight",
-    "hit_die":      12,
+    "hit_die":      "12d100",
     "base_save":    4,
     "primary_stat": "PHY",
     "max_level":    5,
@@ -135,7 +135,7 @@ class TestProductionDataFiles:
         j = CLASS_DEFINITIONS["KNIGHT"]
         assert isinstance(j, JobDef)
         assert j.display_name == "Knight"
-        assert j.hit_die == 12
+        assert j.hit_die == "12d100"
         assert j.base_save == 4
         assert j.primary_stat == "PHY"
         assert j.max_level == 5
@@ -151,7 +151,7 @@ class TestProductionDataFiles:
     def test_job_thief_values(self):
         j = CLASS_DEFINITIONS["THIEF"]
         assert j.display_name == "Thief"
-        assert j.hit_die == 6
+        assert j.hit_die == "6d100"
         assert j.base_save == 2
         assert j.primary_stat == "FNS"
         action_ids = {s.action_id for s in j.skills.values() if s.action_id}
@@ -160,7 +160,7 @@ class TestProductionDataFiles:
     def test_job_mage_values(self):
         j = CLASS_DEFINITIONS["MAGE"]
         assert j.display_name == "Mage"
-        assert j.hit_die == 4
+        assert j.hit_die == "4d100"
         assert j.primary_stat == "RSN"
 
     def test_job_dilettante_values(self):
@@ -244,7 +244,7 @@ class TestLoadAllIsolated:
             _write(classes / "knight.json", _VALID_JOB)
             _, _, cd, _, _ = load_all(Path(tmp))
             assert "KNIGHT" in cd
-            assert cd["KNIGHT"].hit_die == 12
+            assert cd["KNIGHT"].hit_die == "12d100"
             assert cd["KNIGHT"].primary_stat == "PHY"
             assert isinstance(cd["KNIGHT"], JobDef)
 
