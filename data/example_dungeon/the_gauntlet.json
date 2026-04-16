@@ -1,0 +1,372 @@
+{
+  "format": "adbx-dungeon",
+  "version": 3,
+  "dungeon": {
+    "dungeon_id": "d0964c9d-a243-40cd-a086-6e1dd06054c8",
+    "name": "The Gauntlet",
+    "description": "",
+    "rooms": {
+      "ba8d77a2-9b69-46cf-992a-5a4cd963e80a": {
+        "room_id": "ba8d77a2-9b69-46cf-992a-5a4cd963e80a",
+        "name": "Lower Gates of the Keep",
+        "description": "On the western side of the fortress, the wall which looms up from the track to the battlemented area has two large, tower-like buttresses.As you round the first of these, you find an impressive gateway occupying most of the width of the wall between them.",
+        "notes": "Adventurers can enter through the lower gates undetected.",
+        "features": [
+          {
+            "feature_id": "f0268c19-a7f0-4439-b451-d23679b2292e",
+            "name": "Coat of Arms",
+            "description": "Above the archway, a smooth, shield-shaped panel of stone bears the faded remains of a coat of arms.",
+            "state": "faded",
+            "notes": ""
+          }
+        ],
+        "exits": [
+          {
+            "exit_id": "d2571e7a-b938-41af-8419-f01f234aeb00",
+            "label": "Southern Gateway",
+            "direction": null,
+            "destination_id": "b20a22a5-7ce4-4a29-8780-581e520036c1",
+            "door_state": "closed",
+            "auto_move": true,
+            "description": "The gateway consists of a round-topped arch and has a pair of stone doors with brass handles.",
+            "notes": ""
+          }
+        ],
+        "visited": false,
+        "authored": true,
+        "exploration_xp": 0,
+        "random_encounter_modifier": 1.0
+      },
+      "b20a22a5-7ce4-4a29-8780-581e520036c1": {
+        "room_id": "b20a22a5-7ce4-4a29-8780-581e520036c1",
+        "name": "The Gateway of Berghof",
+        "description": "This is a large and impressive room. The walls and ceiling are of a deep red, lustrous stone, flecked with glittering white inclusions. The floor is of a smooth, pale grey stone and has a large coat of arms inlaid in its centre.\nIn an alcove in each corner of the room stands a large stone chair. Three of the chairs are occupied by strange, silent, unmoving figures which appear to be no more than suits of human-sized clothing, arranged as if worn by invisible, seated men. The chair in the south-eastern alcove is empty.",
+        "notes": "",
+        "features": [
+          {
+            "feature_id": "e81ecd3b-f023-4ef3-8631-517bb8dec204",
+            "name": "Large stone chairs",
+            "description": "Positioned in each corner of the room",
+            "state": "intact",
+            "notes": ""
+          }
+        ],
+        "exits": [
+          {
+            "exit_id": "20c05dcf-d697-48d1-9d53-4304ac428ca3",
+            "label": "Southern Gateway",
+            "direction": null,
+            "destination_id": "ba8d77a2-9b69-46cf-992a-5a4cd963e80a",
+            "door_state": "open",
+            "auto_move": true,
+            "description": "The gateway leads back to the lower gates of the keep.",
+            "notes": ""
+          },
+          {
+            "exit_id": "0cdb55e3-bc86-4e97-bb49-b977ebbd9f3c",
+            "label": "Northern gateway",
+            "direction": null,
+            "destination_id": "e2e53dbb-80b8-435f-a255-6789265bc059",
+            "door_state": "closed",
+            "auto_move": false,
+            "description": "Identical in appearance to the southern gateway, leads north.",
+            "notes": ""
+          },
+          {
+            "exit_id": "84a883c2-8ffa-4347-b2ec-4b96f8c4df6f",
+            "label": "Eastern gateway",
+            "direction": null,
+            "destination_id": "fc3aa404-6727-48c5-9a2b-8cc4ac44fe45",
+            "door_state": "closed",
+            "auto_move": false,
+            "description": "Identical in appearance to the southern gateway, leads east.",
+            "notes": ""
+          }
+        ],
+        "visited": false,
+        "authored": true,
+        "exploration_xp": 0,
+        "random_encounter_modifier": 1.0
+      },
+      "fc3aa404-6727-48c5-9a2b-8cc4ac44fe45": {
+        "room_id": "fc3aa404-6727-48c5-9a2b-8cc4ac44fe45",
+        "name": "Toll Room",
+        "description": "This is a small, plain room. Projecting from the left-hand wall is a long, stone table with a pan-balance mounted on it near the right-hand end. Behind the table are a pair of chairs and a large iron-bound chest against the far wall.",
+        "notes": "",
+        "features": [
+          {
+            "feature_id": "9530b191-29a0-4824-ad51-2dd12f39c583",
+            "name": "Table with pan-balance",
+            "description": "The pan balance and its weights appears to be brass",
+            "state": "intact",
+            "notes": ""
+          },
+          {
+            "feature_id": "37231e9b-c9d2-44d9-abbd-a5106ac9d82e",
+            "name": "Iron-bound Chest",
+            "description": "Three locks are fastened on the chest",
+            "state": "thrice-locked",
+            "notes": ""
+          }
+        ],
+        "exits": [
+          {
+            "exit_id": "dd11247c-26d1-4255-b217-0305ec1efe80",
+            "label": "Eastern gateway",
+            "direction": null,
+            "destination_id": "b20a22a5-7ce4-4a29-8780-581e520036c1",
+            "door_state": "open",
+            "auto_move": false,
+            "description": "Eastern gateway leading back to The Gateway of Berghof",
+            "notes": ""
+          }
+        ],
+        "visited": false,
+        "authored": true,
+        "exploration_xp": 0,
+        "random_encounter_modifier": 1.0
+      },
+      "e2e53dbb-80b8-435f-a255-6789265bc059": {
+        "room_id": "e2e53dbb-80b8-435f-a255-6789265bc059",
+        "name": "Guardian's Hall",
+        "description": "This long hall appears to beempty but you cannot see the far end since it is obscured by an uneven screen of a paper-like material. The floor consists of green, red\nand white hexagonal tiles, each about 6 inches across, laid out in a regular pattern. The walls are pale grey and plain, as is the ceiling.",
+        "notes": "",
+        "features": [],
+        "exits": [
+          {
+            "exit_id": "369e32cb-2cee-474f-91ae-1956449dcd04",
+            "label": "Northern gateway",
+            "direction": null,
+            "destination_id": "b20a22a5-7ce4-4a29-8780-581e520036c1",
+            "door_state": "open",
+            "auto_move": false,
+            "description": "Back to the Gateway of Berghof",
+            "notes": ""
+          },
+          {
+            "exit_id": "04ed425e-2e42-40f3-962d-695846da870b",
+            "label": "Paper-like screen",
+            "direction": null,
+            "destination_id": null,
+            "door_state": "closed",
+            "auto_move": false,
+            "description": "A partition of unclear substance and origin",
+            "notes": ""
+          }
+        ],
+        "visited": false,
+        "authored": true,
+        "exploration_xp": 0,
+        "random_encounter_modifier": 1.0
+      },
+      "caba1f5f-8876-446c-80c0-cfba1db259a2": {
+        "room_id": "caba1f5f-8876-446c-80c0-cfba1db259a2",
+        "name": "Guardian's Hall (b)",
+        "description": "Beyond the screen you find another section of the room but the far end is still obscured since there is a second screen. This is similar to the first except that\nthere is a small hole in it near the floor.\nThere are five giant ants working here",
+        "notes": "",
+        "features": [
+          {
+            "feature_id": "135e4bb4-7549-44d3-808c-afcf0f485aea",
+            "name": "Pile of rubbish",
+            "description": "The floor everywhere is covered in rubbish except near the centre of the room",
+            "state": "messy",
+            "notes": ""
+          },
+          {
+            "feature_id": "435808ee-7266-4843-8436-dcd13b5cfb76",
+            "name": "Bundles",
+            "description": "Five irregular bundles bound with silk threads suspended from the ceiling: various dead animals",
+            "state": "hanging",
+            "notes": ""
+          },
+          {
+            "feature_id": "528f0980-75e7-4679-8d6f-ecf65bf92abe",
+            "name": "Hole",
+            "description": "About one foot across, surrounded by the pile of rubbish on all sides",
+            "state": "intact",
+            "notes": ""
+          }
+        ],
+        "exits": [
+          {
+            "exit_id": "a5e9a314-7453-42cf-9b60-f04350bb89c4",
+            "label": "Paper-like screen (S)",
+            "direction": null,
+            "destination_id": "e2e53dbb-80b8-435f-a255-6789265bc059",
+            "door_state": "open",
+            "auto_move": false,
+            "description": "Uneven screen of unknown substance and origin",
+            "notes": ""
+          },
+          {
+            "exit_id": "864fd79e-a4de-4a54-ade4-a8255d15c681",
+            "label": "Paper-like screen (n)",
+            "direction": null,
+            "destination_id": "825c1784-525a-4a97-b2b3-df3225357161",
+            "door_state": "closed",
+            "auto_move": false,
+            "description": "Uneven screen of unknown substance and origin",
+            "notes": ""
+          }
+        ],
+        "visited": false,
+        "authored": true,
+        "exploration_xp": 0,
+        "random_encounter_modifier": 1.0
+      },
+      "825c1784-525a-4a97-b2b3-df3225357161": {
+        "room_id": "825c1784-525a-4a97-b2b3-df3225357161",
+        "name": "Guardian's Hall (c)",
+        "description": "This is the final section of the room. The far wall bears a vivid mosaic. Lying on an altar-like table below this is the bloated mass of a queen ant.",
+        "notes": "",
+        "features": [
+          {
+            "feature_id": "b29c25c6-5c53-4428-a6c6-853431a8d807",
+            "name": "Mosaic",
+            "description": "Depicts a large glove of pale leather with a blue stone ring on the index finger.",
+            "state": "intact",
+            "notes": ""
+          },
+          {
+            "feature_id": "8c4f10e6-af4f-4c98-b727-7ae299363f64",
+            "name": "Alter-like table",
+            "description": "Appears to have some sort of buttons or knobs inlaid",
+            "state": "intact",
+            "notes": ""
+          }
+        ],
+        "exits": [
+          {
+            "exit_id": "996a01d8-a75a-47b4-87e9-bea590b296e0",
+            "label": "Paper-like screen (s)",
+            "direction": null,
+            "destination_id": "caba1f5f-8876-446c-80c0-cfba1db259a2",
+            "door_state": "open",
+            "auto_move": false,
+            "description": "Uneven screen of unknown material and origin",
+            "notes": ""
+          },
+          {
+            "exit_id": "efb3643c-76a4-4e4c-9395-15d6c7cc53f9",
+            "label": "Wooden door (e)",
+            "direction": null,
+            "destination_id": null,
+            "door_state": "closed",
+            "auto_move": false,
+            "description": "Standard wooden door with iron handle",
+            "notes": ""
+          }
+        ],
+        "visited": false,
+        "authored": true,
+        "exploration_xp": 0,
+        "random_encounter_modifier": 1.0
+      },
+      "301fe2b0-d37f-4495-8fdf-1242823c9552": {
+        "room_id": "301fe2b0-d37f-4495-8fdf-1242823c9552",
+        "name": "Painted room",
+        "description": "This octagonal room has a slender, stone pillar near the wall at each corner. The ceiling is painted to represent a domed roof, supported by these pillars, and the walls show a country scene which continues all the way around the room. With a little imagination, you could be standing in a summer house, surrounded by pleasant pastures and woodlands, at the top of a grassy slope leading down to a large lake.",
+        "notes": "",
+        "features": [],
+        "exits": [],
+        "visited": false,
+        "authored": true,
+        "exploration_xp": 0,
+        "random_encounter_modifier": 1.0
+      }
+    },
+    "entrance_id": null,
+    "random_encounter_interval": 6,
+    "random_encounter_roll": "1d6",
+    "random_encounter_roster": []
+  },
+  "npc_roster": {
+    "groups": {
+      "ceeb1615-1783-4b67-a6ed-29221ea629aa": {
+        "group_id": "ceeb1615-1783-4b67-a6ed-29221ea629aa",
+        "name": null,
+        "npcs": [
+          {
+            "npc_id": "156adc86-92e0-44ef-9c4d-e330f1b48650",
+            "name": "Automaton",
+            "description": "armored, wielding a mace",
+            "hp_max": 225,
+            "hp_current": 225,
+            "defense": 200,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "2d300",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 6,
+            "weapon_range": 0,
+            "status": "active",
+            "notes": "",
+            "active_conditions": []
+          },
+          {
+            "npc_id": "1860638d-fbf4-4558-8538-0c43c4f8b982",
+            "name": "Automaton",
+            "description": "",
+            "hp_max": 4,
+            "hp_current": 4,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "1d6",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 1,
+            "weapon_range": 0,
+            "status": "active",
+            "notes": "",
+            "active_conditions": []
+          },
+          {
+            "npc_id": "a65ba551-330a-4483-8cce-e3be8bddd846",
+            "name": "Automaton",
+            "description": "armored, wielding a mace",
+            "hp_max": 4,
+            "hp_current": 4,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "1d6",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 1,
+            "weapon_range": 0,
+            "status": "active",
+            "notes": "",
+            "active_conditions": []
+          }
+        ],
+        "possible_rooms": [],
+        "movement_logic": "stationary",
+        "current_room_id": null,
+        "patrol_route": []
+      }
+    }
+  }
+}
