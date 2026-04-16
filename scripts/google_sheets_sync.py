@@ -338,8 +338,18 @@ def _normalise_job(row: dict) -> dict:
     if isinstance(stat_rolls, dict):
         job["stat_rolls"] = stat_rolls
 
-    skills = _parse_json_cell(row.get("skills", ""), "skills", key)
-    job["skills"] = skills if isinstance(skills, list) else []
+    skills_raw = str(row.get("skills", "")).strip()
+    skills = []
+    for line in skills_raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if ":" in line:
+            skill_id, _, level_str = line.partition(":")
+            skills.append({"id": skill_id.strip(), "level": _int_or_zero(level_str.strip())})
+        else:
+            print(f"  WARNING: {key} — unrecognised skill grant line: {line!r}", file=sys.stderr)
+    job["skills"] = skills
 
     return job
 
@@ -606,7 +616,9 @@ def _export_jobs_csv(data_dir: Path, exports_dir: Path) -> None:
             "stat_rolls":   json.dumps(data.get("stat_rolls", {})),
             "max_level":    data.get("max_level", ""),
             "description":  data.get("description", ""),
-            "skills":       json.dumps(data.get("skills", [])),
+            "skills":       "\n".join(
+                f"{s['id']}:{s['level']}" for s in data.get("skills", [])
+            ),
         })
     out = exports_dir / "jobs.csv"
     with out.open("w", newline="") as f:
