@@ -217,8 +217,9 @@ shop:
   purchased_equip_prompt: "\u2713 Purchased **{name}** for {price} gp.\nYou have {remaining_gold} gp remaining.\n\nWould you like to equip **{name}** now?"
   purchased_continue: "\u2713 Purchased **{name}** for {price} gp.\nYou have {remaining_gold} gp remaining.\n\n**Item Shop** \u2014 Select a category to continue shopping:"
   browse_prompt: "**Item Shop** \u2014 {remaining_gold} gp remaining. Select a category:"
-  slot_items_preview: "**{slot} Items**\n\n{items_preview}\n\nSelect an item to purchase:"
+  slot_items_preview: "**{slot} Items**\n\n{char_ranks_line}\n{items_preview}\n\nSelect an item to purchase:"
   welcome: "**Item Shop**\n\nYou can browse and purchase starting equipment for **{name}**.\nSelect a category to see available items:"
+  char_ranks_line: "*Character's equip ranks:  Weapon {ranks_weapon} \u00b7 Armor {ranks_armor} \u00b7 Spell {ranks_spell}*\n"
 
 room:
   added: "Room '{name}' added to dungeon."

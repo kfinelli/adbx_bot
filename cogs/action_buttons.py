@@ -1605,7 +1605,7 @@ class PreStartView(discord.ui.View):
             )
             return
         await interaction.response.defer(ephemeral=True, thinking=True)
-        shop_view = ShopView(self.channel_id, str(char.uuid), str(interaction.user.id))
+        shop_view = ShopView(self.channel_id, str(char.character_id), str(interaction.user.id))
         try:
             dm_channel = await interaction.user.create_dm()
             await dm_channel.send(

@@ -48,25 +48,32 @@ def _fmt_stats(stats: dict) -> str:
 # Shop helpers - list purchasable items by type/slot
 # ---------------------------------------------------------------------------
 
-def get_purchasable_items_by_slot() -> dict[str, list[tuple[str, str, int]]]:
+def get_purchasable_items_by_slot() -> dict[str, list[tuple[str, str, int, str, str]]]:
     """
-    Returns a dict mapping slot/type names to lists of (item_id, name, price) tuples.
+    Returns a dict mapping slot/type names to lists of (item_id, name, price, rank, rank_type) tuples.
     Only includes items marked as purchaseable=True in ITEM_REGISTRY.
+    rank is the item's rank letter (e.g. "C") or "" for non-equip items.
+    rank_type is "weapon", "armor", "spell", or "" — which character rank category applies.
     """
     from collections import defaultdict
-    by_slot: dict[str, list[tuple[str, str, int]]] = defaultdict(list)
+    _ARCANE_SET = {"V", "W", "X", "Y", "Z"}
+    by_slot: dict[str, list[tuple[str, str, int, str, str]]] = defaultdict(list)
 
     for item_id, item in ITEM_REGISTRY.items():
         if not getattr(item, 'purchaseable', False):
             continue
 
-        if isinstance(item, Gear):
+        rank = getattr(item, 'rank', '') or ''
+        if isinstance(item, ChargeWeapon):
+            rank_type = "spell" if rank in _ARCANE_SET else "weapon"
+            by_slot['weapon'].append((item_id, item.name, item.price, rank, rank_type))
+        elif isinstance(item, Weapon):
+            by_slot['weapon'].append((item_id, item.name, item.price, rank, "weapon"))
+        elif isinstance(item, Gear):
             slot = getattr(item, 'slot', 'unknown')
-            by_slot[slot].append((item_id, item.name, item.price))
-        elif isinstance(item, (Weapon, ChargeWeapon)):
-            by_slot['weapon'].append((item_id, item.name, item.price))
+            by_slot[slot].append((item_id, item.name, item.price, rank, "armor"))
         elif isinstance(item, Item):
-            by_slot['other'].append((item_id, item.name, item.price))
+            by_slot['other'].append((item_id, item.name, item.price, '', ''))
 
     # Sort each list by price, then by name
     for slot in by_slot:
@@ -88,8 +95,9 @@ def format_items_list(slot: str) -> str:
     items = items_by_slot[slot]
     lines = [fmt_string("shop.items_header", slot=slot.title())]
 
-    for _item_id, name, price in items:
-        lines.append(fmt_string("shop.item_line", name=name, price=price))
+    for _item_id, name, price, rank, _rank_type in items:
+        rank_label = f" [Rank {rank}]" if rank else ""
+        lines.append(f"\u2022 **{name}**{rank_label} \u2014 {price} gp")
 
     return "\n".join(lines)
 
@@ -98,6 +106,49 @@ def get_available_slots() -> list[str]:
     """Returns a sorted list of available item slots/types with purchasable items."""
     items_by_slot = get_purchasable_items_by_slot()
     return sorted(items_by_slot.keys())
+
+
+def _lookup_char(channel_id: str, character_id: str):
+    """Return the Character for the given IDs, or None if not found."""
+    from uuid import UUID
+    state = get_session(channel_id)
+    if state is None:
+        return None
+    try:
+        char_uuid = UUID(character_id)
+    except (ValueError, AttributeError):
+        return None
+    return state.characters.get(char_uuid)
+
+
+def _get_char_ranks(char) -> dict[str, str]:
+    """
+    Return the highest allowed rank per category for display.
+    e.g. {'weapon': 'C', 'armor': 'C', 'spell': '—'}
+    """
+    from engine.character import CharacterManager
+    _PHYSICAL_ORDERED = ("E", "D", "C", "B", "A")
+    _ARCANE_ORDERED = ("V", "W", "X", "Y", "Z")
+    cm = CharacterManager()
+    result: dict[str, str] = {}
+    for rank_type, ordered in [
+        ("weapon", _PHYSICAL_ORDERED),
+        ("armor", _PHYSICAL_ORDERED),
+        ("spell", _ARCANE_ORDERED),
+    ]:
+        allowed = cm._char_allowed_ranks(char, rank_type)
+        highest = next((r for r in reversed(ordered) if r in allowed), None)
+        result[rank_type] = highest if highest else "\u2014"
+    return result
+
+
+def _item_eligible(char, rank: str, rank_type: str) -> bool:
+    """True if the character can equip an item of this rank/rank_type."""
+    if not rank or not rank_type:
+        return True
+    from engine.character import CharacterManager
+    allowed = CharacterManager()._char_allowed_ranks(char, rank_type)
+    return rank in allowed
 
 
 # ---------------------------------------------------------------------------
@@ -110,19 +161,27 @@ class ItemSelectView(discord.ui.View):
     Allows players to select an item and then click Buy to purchase it.
     """
 
-    def __init__(self, channel_id: str, character_id: str, owner_id: str, slot: str, items: list[tuple[str, str, int]]):
+    def __init__(self, channel_id: str, character_id: str, owner_id: str, slot: str, items: list[tuple[str, str, int, str, str]]):
         super().__init__(timeout=300)
         self.channel_id = channel_id
         self.character_id = character_id
         self.owner_id = owner_id
         self.slot = slot
-        self.items = items  # List of (item_id, name, price)
+        self.items = items  # List of (item_id, name, price, rank, rank_type)
         self.selected_item_id: str | None = None
 
+        char = _lookup_char(channel_id, character_id)
+
         # Add buttons for each item (up to Discord limit)
-        for item_id, name, price in items[:23]:
+        for item_id, name, price, rank, rank_type in items[:23]:
+            rank_label = f" [{rank}]" if rank else ""
+            if char is not None and rank:
+                eligible = _item_eligible(char, rank, rank_type)
+                prefix = "\u2713 " if eligible else "\u2717 "
+            else:
+                prefix = ""
             btn = discord.ui.Button(
-                label=f"{name} ({price} gp)",
+                label=f"{prefix}{name}{rank_label} ({price} gp)",
                 style=discord.ButtonStyle.secondary,
                 custom_id=f"item_{item_id}",
             )
@@ -331,6 +390,9 @@ class ShopView(discord.ui.View):
         self.owner_id = owner_id
         self.selected_slot: str | None = None
 
+        char = _lookup_char(channel_id, character_id)
+        self.char_ranks: dict[str, str] | None = _get_char_ranks(char) if char is not None else None
+
         # Add buttons for each available slot
         slots = get_available_slots()
         for slot in slots[:24]:  # Discord limit of 25 buttons per view
@@ -356,6 +418,7 @@ class ShopView(discord.ui.View):
                 return
 
             # Show item selection view
+            char = _lookup_char(self.channel_id, self.character_id)
             item_view = ItemSelectView(
                 self.channel_id,
                 self.character_id,
@@ -364,14 +427,33 @@ class ShopView(discord.ui.View):
                 items,
             )
 
-            items_preview = "\n".join([fmt_string("shop.item_line", name=name, price=price) for _, name, price in items[:10]])
+            preview_lines = []
+            for _, name, price, rank, rank_type in items[:10]:
+                rank_label = f" [Rank {rank}]" if rank else ""
+                if char is not None and rank:
+                    eligible = _item_eligible(char, rank, rank_type)
+                    marker = "\u2713" if eligible else "\u2717"
+                    preview_lines.append(f"{marker} **{name}**{rank_label} \u2014 {price} gp")
+                else:
+                    preview_lines.append(f"\u2022 **{name}**{rank_label} \u2014 {price} gp")
             if len(items) > 10:
-                items_preview += f"\n... and {len(items) - 10} more"
+                preview_lines.append(f"... and {len(items) - 10} more")
+            items_preview = "\n".join(preview_lines)
 
-            await interaction.response.edit_message(
-                content=fmt_string("shop.slot_items_preview", slot=slot.title(), items_preview=items_preview),
-                view=item_view,
-            )
+            if self.char_ranks is not None:
+                ranks = self.char_ranks
+                char_ranks_line = fmt_string("shop.char_ranks_line",
+                                             ranks_weapon=ranks['weapon'],
+                                             ranks_armor=ranks['armor'],
+                                             ranks_spell=ranks['spell'])
+            else:
+                char_ranks_line = ""
+
+            content = fmt_string("shop.slot_items_preview", slot=slot.title(),
+                                 items_preview=items_preview,
+                                 char_ranks_line=char_ranks_line)
+
+            await interaction.response.edit_message(content=content, view=item_view)
 
         return callback
 
