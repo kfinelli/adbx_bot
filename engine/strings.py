@@ -63,6 +63,7 @@ def _collect_violations(node: dict[str, Any], prefix: str = "") -> list[str]:
                 )
     return violations
 
+
 def _data_dir() -> Path:
     return Path(__file__).parent.parent / "data"
 
