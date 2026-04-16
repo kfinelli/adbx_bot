@@ -63,7 +63,6 @@ def _collect_violations(node: dict[str, Any], prefix: str = "") -> list[str]:
                 )
     return violations
 
-
 def _data_dir() -> Path:
     return Path(__file__).parent.parent / "data"
 
@@ -109,11 +108,13 @@ def fmt_string(key: str, default: str = "", **kwargs: Any) -> str:
     Example: fmt_string("combat.log.attack_miss",
                          actor_name="Alice", target_name="Goblin", roll=12, target_ac=14)
     """
-    import contextlib
     template = get_string(key, default)
     if kwargs:
-        with contextlib.suppress(KeyError):
+        try:
             template = template.format(**kwargs)
+        except KeyError:
+            # Missing placeholder key — leave the template as-is
+            pass
     return template
 
 
