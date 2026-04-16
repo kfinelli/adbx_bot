@@ -65,6 +65,7 @@ from .combat_hooks import (
 )
 from .data_loader import ACTION_REGISTRY, CONDITION_REGISTRY
 from .helpers import _err, _now, _ok
+from .strings import fmt_string, get_string
 
 # ---------------------------------------------------------------------------
 # Range band ordering — used for movement and adjacency checks
@@ -227,7 +228,7 @@ def apply_condition(
         if existing is not None:
             existing.stacks += 1
             state.updated_at = _now()
-            return _ok(state, f"{target_name} is now {cond_def.label} ×{existing.stacks}.")
+            return _ok(state, fmt_string("combat.condition.stacked", target_name=target_name, label=cond_def.label, stacks=existing.stacks))
 
     combatant.active_conditions = [
         c for c in combatant.active_conditions if c.condition_id != condition_id
@@ -238,7 +239,7 @@ def apply_condition(
         source_id=source_id,
     ))
     state.updated_at = _now()
-    return _ok(state, f"{target_name} is now {cond_def.label}.")
+    return _ok(state, fmt_string("combat.condition.applied", target_name=target_name, label=cond_def.label))
 
 
 # ---------------------------------------------------------------------------
@@ -337,7 +338,7 @@ def auto_resolve_round(state: GameState) -> object:  # EngineResult
         action = action_map.get(actor_id)
         if action is not None:
             if cs.skip_action:
-                log.append(f"{_combatant_name(state, actor_id)} is stunned and cannot act this round!")
+                log.append(fmt_string("combat.log.stunned", actor_name=_combatant_name(state, actor_id)))
             else:
                 _execute_action(state, actor_id, action, log)
                 cs.acted_this_round = True
@@ -357,7 +358,7 @@ def auto_resolve_round(state: GameState) -> object:  # EngineResult
         cs.used_oracle      = False
 
     # --- 7. Build narrative
-    narrative   = "\n".join(log) if log else "The round passes without incident."
+    narrative   = "\n".join(log) if log else get_string("combat.log.no_action")
     bf.round_log = log[:]
     state.updated_at = _now()
 
@@ -391,11 +392,14 @@ def _execute_action(
         if actor_cs and target_cs:
             dist = _band_distance(actor_cs.range_band, target_cs.range_band)
             if dist > action_def.range_requirement:
-                log.append(
-                    f"{_combatant_name(state, actor_id)} cannot use {action_def.label} "
-                    f"from {actor_cs.range_band.value} — target is {dist} band(s) away "
-                    f"(max {action_def.range_requirement})."
-                )
+                log.append(fmt_string(
+                    "combat.log.action_out_of_range",
+                    actor_name=_combatant_name(state, actor_id),
+                    label=action_def.label,
+                    band=actor_cs.range_band.value,
+                    dist=dist,
+                    max_range=action_def.range_requirement,
+                ))
                 return
 
     for hook_entry in action_def.effect_tags:

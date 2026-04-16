@@ -17,6 +17,7 @@ from models import GameState
 from .dice import roll_dice_expr
 from .helpers import _ok
 from .npc import NPCManager
+from .strings import fmt_string
 
 
 def check_random_encounter(state: GameState):
@@ -85,8 +86,5 @@ def check_random_encounter(state: GameState):
     NPCManager().add_npc_group(state, group_copy)
 
     group_name = group_copy.name or "A monster group"
-    msg = (
-        f"[Random Encounter] {group_name} appears! "
-        f"(rolled {roll_total} on {dungeon.random_encounter_roll}, threshold \u2264{threshold})"
-    )
+    msg = fmt_string("combat.encounter.appears", group_name=group_name, roll_total=roll_total, encounter_roll=dungeon.random_encounter_roll, threshold=threshold)
     return _ok(state, msg)

@@ -6,6 +6,7 @@ from models import GameState, LightSource
 from validation import validate_non_empty_string
 
 from .helpers import _err, _now, _ok
+from .strings import fmt_string, get_string
 
 
 class LightManager:
@@ -22,7 +23,7 @@ class LightManager:
         Deactivates all previous sources and creates a new active one.
         """
         if state.party is None:
-            return _err(state, "No active party.")
+            return _err(state, get_string("errors.no_party"))
 
         # Validate label
         label_result = validate_non_empty_string(label, "Light source label", max_length=50)
@@ -32,9 +33,9 @@ class LightManager:
         # Validate turns_remaining if provided (allow 0 for exhausted lights)
         if turns_remaining is not None and turns_remaining >= 0:
             if turns_remaining < 0:
-                return _err(state, "Turns remaining cannot be negative.")
+                return _err(state, get_string("light.errors.negative_turns"))
         elif turns_remaining is not None and turns_remaining < 0:
-            return _err(state, "Turns remaining cannot be negative.")
+            return _err(state, get_string("light.errors.negative_turns"))
 
         # Deactivate all existing light sources
         for light in state.party.light_sources:
@@ -50,7 +51,7 @@ class LightManager:
         state.updated_at = _now()
 
         duration = f"{turns_remaining} turns" if turns_remaining is not None else "permanent"
-        return _ok(state, f"Light source set: {label_result.value} ({duration}).")
+        return _ok(state, fmt_string("light.set", label=label_result.value, duration=duration))
 
 
 def _tick_light(state: GameState) -> None:

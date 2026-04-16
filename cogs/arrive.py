@@ -23,6 +23,7 @@ from discord.ext import commands
 from engine import create_character, equip_item, give_item, roll_stats
 from engine.data_loader import ITEM_REGISTRY
 from engine.item import ChargeWeapon, EquipItem, Gear, Item, Weapon
+from engine.strings import fmt_string, get_string
 from models import CharacterClass, SessionMode
 from store import get_characters_by_owner, get_session, save_session, update_status
 from validation import validate_character_name
@@ -82,13 +83,13 @@ def format_items_list(slot: str) -> str:
     items_by_slot = get_purchasable_items_by_slot()
 
     if slot not in items_by_slot:
-        return f"No purchasable items found for **{slot}**."
+        return fmt_string("shop.no_items_for_slot", slot=slot)
 
     items = items_by_slot[slot]
-    lines = [f"**Purchasable {slot.title()} Items:**\n"]
+    lines = [fmt_string("shop.items_header", slot=slot.title())]
 
     for _item_id, name, price in items:
-        lines.append(f"• **{name}** — {price} gp")
+        lines.append(fmt_string("shop.item_line", name=name, price=price))
 
     return "\n".join(lines)
 
@@ -158,7 +159,7 @@ class ItemSelectView(discord.ui.View):
                 self.add_item(buy_btn)
 
             await interaction.response.edit_message(
-                content=f"**Selected:** {name} ({price} gp)\n\nClick 'Buy' to purchase this item.",
+                content=fmt_string("shop.item_selected", name=name, price=price),
                 view=self,
             )
 
@@ -222,7 +223,7 @@ class ItemSelectView(discord.ui.View):
                 "_buy_callback: insufficient gold — have %d, need %d", character.gold, price
             )
             await interaction.response.edit_message(
-                content=f"⚠ Not enough gold! You have {character.gold} gp, but need {price} gp.",
+                content=fmt_string("shop.insufficient_gold", gold=character.gold, price=price),
                 view=self,
             )
             return
@@ -254,21 +255,13 @@ class ItemSelectView(discord.ui.View):
                 self.selected_item_id, item.name, remaining_gold,
             )
             await interaction.response.edit_message(
-                content=(
-                    f"✓ Purchased **{item.name}** for {price} gp!\n"
-                    f"You have {remaining_gold} gp remaining.\n\n"
-                    f"Would you like to equip **{item.name}** now?"
-                ),
+                content=fmt_string("shop.purchased_equip_prompt", name=item.name, price=price, remaining_gold=remaining_gold),
                 view=equip_view,
             )
         else:
             shop_view = ShopView(self.channel_id, self.character_id, self.owner_id)
             await interaction.response.edit_message(
-                content=(
-                    f"✓ Purchased **{item.name}** for {price} gp!\n"
-                    f"You have {remaining_gold} gp remaining.\n\n"
-                    f"**Item Shop** — Select a category to continue shopping:"
-                ),
+                content=fmt_string("shop.purchased_continue", name=item.name, price=price, remaining_gold=remaining_gold),
                 view=shop_view,
             )
 
@@ -312,7 +305,7 @@ class EquipNowView(discord.ui.View):
             prefix = f"⚠ Could not equip: {result.error}\n\n"
         shop_view = ShopView(self.channel_id, self.character_id, self.owner_id)
         await interaction.response.edit_message(
-            content=prefix + f"**Item Shop** — {self.remaining_gold} gp remaining. Select a category:",
+            content=prefix + fmt_string("shop.browse_prompt", remaining_gold=self.remaining_gold),
             view=shop_view,
         )
 
@@ -320,7 +313,7 @@ class EquipNowView(discord.ui.View):
     async def keep_in_inventory(self, interaction: discord.Interaction, button: discord.ui.Button):
         shop_view = ShopView(self.channel_id, self.character_id, self.owner_id)
         await interaction.response.edit_message(
-            content=f"**Item Shop** — {self.remaining_gold} gp remaining. Select a category:",
+            content=fmt_string("shop.browse_prompt", remaining_gold=self.remaining_gold),
             view=shop_view,
         )
 
@@ -357,7 +350,7 @@ class ShopView(discord.ui.View):
 
             if not items:
                 await interaction.response.edit_message(
-                    content=f"No purchasable items found for **{slot}**.",
+                    content=fmt_string("shop.no_items_for_slot", slot=slot),
                     view=self,
                 )
                 return
@@ -371,12 +364,12 @@ class ShopView(discord.ui.View):
                 items,
             )
 
-            items_preview = "\n".join([f"• **{name}** — {price} gp" for _, name, price in items[:10]])
+            items_preview = "\n".join([fmt_string("shop.item_line", name=name, price=price) for _, name, price in items[:10]])
             if len(items) > 10:
                 items_preview += f"\n... and {len(items) - 10} more"
 
             await interaction.response.edit_message(
-                content=f"**{slot.title()} Items**\n\n{items_preview}\n\nSelect an item to purchase:",
+                content=fmt_string("shop.slot_items_preview", slot=slot.title(), items_preview=items_preview),
                 view=item_view,
             )
 
@@ -414,7 +407,7 @@ class JobView(discord.ui.View):
             for item in self.children:
                 item.disabled = True
             await interaction.response.edit_message(
-                content=f"Job chosen: **{character_class.value}**. Creating character…",
+                content=fmt_string("character.create.creating", character_class=character_class.value),
                 view=self,
             )
 
@@ -457,7 +450,7 @@ class JobView(discord.ui.View):
                 save_session(state)
 
                 await interaction.followup.send(
-                    f"✓ **{self.character_name}** the {character_class.value} has arrived!",
+                    fmt_string("character.arrived", name=self.character_name, character_class=character_class.value),
                     ephemeral=False,
                 )
 
@@ -474,9 +467,7 @@ class JobView(discord.ui.View):
                 dm_channel = await interaction.user.create_dm()
                 shop_view = ShopView(self.channel_id, str(new_char_id), self.owner_id)
                 await dm_channel.send(
-                    f"**Welcome to the Item Shop!**\n\n"
-                    f"You can browse and purchase starting equipment for **{self.character_name}**.\n"
-                    f"Select a category to see available items:",
+                    fmt_string("shop.welcome", name=self.character_name),
                     view=shop_view,
                 )
 
@@ -530,14 +521,14 @@ class CharacterSelectionView(discord.ui.View):
             for item in self.children:
                 item.disabled = True
             await interaction.response.edit_message(
-                content=f"Selected character: **{character.name}**. Importing into session...",
+                content=fmt_string("character.import.importing", name=character.name),
                 view=self,
             )
 
             try:
                 state = get_session(self.channel_id)
                 if state is None:
-                    await interaction.followup.send("Session no longer exists.",
+                    await interaction.followup.send(get_string("errors.session_not_found"),
                             ephemeral=True
                             )
                     return
@@ -545,7 +536,7 @@ class CharacterSelectionView(discord.ui.View):
                 # Check if character is already in this session
                 if character.character_id in state.characters:
                     await interaction.followup.send(
-                        f"**{character.name}** is already in this session.", ephemeral=True
+                        fmt_string("character.errors.already_in_session", name=character.name), ephemeral=True
                     )
                     return
 
@@ -557,8 +548,7 @@ class CharacterSelectionView(discord.ui.View):
                 save_session(state)
 
                 await interaction.followup.send(
-                    f"**{character.name}** the {character.character_class.value} has arrived! "
-                    f"Head back to the game channel.",
+                    fmt_string("character.import.arrived", name=character.name, character_class=character.character_class.value),
                     ephemeral=False,
                 )
 
@@ -625,7 +615,7 @@ class CharacterNameModal(discord.ui.Modal, title="Enter Character Name"):
                     )
             await dm_channel.send(stat_view._stats_message(), view=stat_view)
             await interaction.response.send_message(
-                    "Check your DMs to roll stats and choose your class!",
+                    get_string("character.create.check_dms"),
                     ephemeral=True,
                     )
         except discord.Forbidden:
@@ -654,22 +644,14 @@ class StatRollView(discord.ui.View):
         self.stats          = roll_stats()
 
     def _stats_message(self) -> str:
-        return (
-            f"**{self.character_name}** — rolled stats:\n\n"
-            f"{_fmt_stats(self.stats)}\n\n"
-            "Accept these stats or reroll?"
-        )
+        return fmt_string("character.create.stats_rolled", name=self.character_name, stats=_fmt_stats(self.stats))
 
     @discord.ui.button(label="Accept", style=discord.ButtonStyle.success)
     async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
         for item in self.children:
             item.disabled = True
         await interaction.response.edit_message(
-            content=(
-                f"Stats accepted!\n\n"
-                f"{_fmt_stats(self.stats)}\n\n"
-                "Now choose your job:"
-            ),
+            content=fmt_string("character.create.stats_accepted", stats=_fmt_stats(self.stats)),
             view=self,
         )
         job_view = JobView(
@@ -678,7 +660,7 @@ class StatRollView(discord.ui.View):
             stats=self.stats,
             owner_id=self.owner_id,
         )
-        await interaction.followup.send("Choose your job:", view=job_view)
+        await interaction.followup.send(get_string("character.create.choose_job"), view=job_view)
 
     @discord.ui.button(label="Reroll", style=discord.ButtonStyle.danger)
     async def reroll(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -704,14 +686,14 @@ class ArriveCog(commands.Cog):
         state = get_session(channel_id)
         if state is None:
             await interaction.response.send_message(
-                "No session in this channel. Ask the DM to create one.",
+                get_string("errors.no_session_join"),
                 ephemeral=True,
             )
             return
 
         if state.mode != SessionMode.PRE_START:
             await interaction.response.send_message(
-                "The session has already started. New characters cannot join mid-session.",
+                get_string("errors.session_started"),
                 ephemeral=True,
             )
             return
@@ -722,7 +704,7 @@ class ArriveCog(commands.Cog):
         for char in state.characters.values():
             if char.owner_id == owner_id:
                 await interaction.response.send_message(
-                    f"You already have a character (**{char.name}**) in this session.",
+                    fmt_string("character.errors.already_have_character", name=char.name),
                     ephemeral=True,
                 )
                 return
@@ -740,11 +722,11 @@ class ArriveCog(commands.Cog):
                     existing_chars=existing_chars,
                 )
                 await dm_channel.send(
-                    "You have existing characters. Would you like to select one or create a new character?",
+                    get_string("character.create.existing_choice"),
                     view=view,
                 )
                 await interaction.response.send_message(
-                    "Check your DMs to select an existing character or create a new one!",
+                    get_string("character.create.check_dms_existing"),
                     ephemeral=True,
                 )
             except discord.Forbidden:

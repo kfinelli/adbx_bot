@@ -1,0 +1,270 @@
+# data/strings.yaml — Player-facing strings for the Async Dungeon Crawler bot.
+#
+# Access via engine/strings.py:
+#   from engine.strings import get_string, fmt_string
+#   get_string("errors.no_session")
+#   fmt_string("combat.log.attack_hit", actor_name="Alice", target_name="Goblin", ...)
+#
+# Placeholders use Python {key} format syntax.
+#
+# LENGTH VALIDATION (enforced at startup by engine/strings.py):
+#   Key suffix determines the Discord character limit that is checked on load.
+#   You MUST follow these naming conventions or the limit will not be enforced:
+#
+#     *.label        — 80 chars (button label); 45 chars for modal TextInput labels
+#                      (modal TextInput label keys are listed explicitly in _KEY_LIMITS
+#                       in engine/strings.py — add new ones there when needed)
+#     *.placeholder  — 100 chars (TextInput / Select placeholder)
+#     *.description  — 100 chars (also used as TextInput placeholder in modals)
+#
+#   If you add a new string that feeds into a Discord UI element, name its key
+#   with the appropriate suffix above so the limit is caught at startup rather
+#   than as a 400 from the Discord API at runtime.
+
+errors:
+  no_session: "No active session in this channel."
+  no_session_join: "No session in this channel. Ask the DM to create one."
+  session_not_found: "Session not found."
+  session_on_hold: "The session is on hold."
+  session_on_hold_resume: "Session is on hold. Use Resume first."
+  session_not_started: "The session has not started yet."
+  session_started: "The session has already started. New characters cannot join mid-session."
+  session_exists: "A session already exists in this channel."
+  turn_closed: "The turn is closed. Waiting for DM resolution."
+  round_closed: "The round is closed. Waiting for resolution."
+  round_not_open: "The round is no longer open."
+  round_closed_choosing: "The round closed while you were choosing. Please wait for the next round."
+  not_in_combat: "Not in combat. Use the exploration buttons instead."
+  combat_active_use_act: "Combat is active. Use the Act button to submit your action."
+  combat_active_use_round: "Combat is active. Use /round to submit your action."
+  combat_not_active: "No combat active. Use /turn to submit your action."
+  no_open_turn: "No open turn. The DM needs to resolve the previous turn first."
+  already_submitted: "Wait for resolution or ask the DM to un-submit your action."
+  abscond_permission: "Only the party leader may use Abscond."
+  strife_permission: "Only the DM or party leader can toggle combat rounds."
+  dm_only: "Only the DM can use this command."
+  character_not_found: "Character not found."
+  wrong_character_panel: "This panel doesn't belong to your character."
+  no_valid_targets: "No valid targets."
+  unknown_action: "Unknown action '{action_id}'."
+  enter_number: "Please enter a number."
+  no_party: "No active party."
+
+action:
+  submitted: "Action submitted."
+  oracle_submitted: "Oracle submitted."
+
+ui:
+  search:
+    label: "Describe your search"
+    description: "Search a 10×10 area. Specify a room feature for focus. More detail can lead to automatic success."
+  disarm:
+    label: "Describe the trap and your approach"
+    placeholder: "More detail may lead to automatic success."
+  listen:
+    label: "What are you listening for or at?"
+    placeholder: "Typically used to listen at doors"
+  force_door:
+    label: "Which door, and how?"
+    placeholder: "Specify an exit number."
+  pick_lock:
+    label: "Which lock?"
+    placeholder: "Specify an exit number or a room feature (e.g, a locked chest), describe how you pick the lock"
+  craft:
+    label: "What are you making or repairing?"
+    placeholder: "Describe your action"
+  other:
+    label: "Other Turn Action"
+    action_label: "Describe your action"
+    placeholder: "Anything that takes a full 10-minute dungeon turn, such as spellcasting."
+  affect:
+    label: "Describe your action"
+    description: "Describe what your character does. The DM will resolve the round manually."
+  exit:
+    placeholder: "Enter the number of the exit to take (see status block)."
+  emote:
+    label: "Describe the action"
+    description: "Describe what your character does (e.g. 'nods sagely')."
+  say:
+    label: "What do you say?"
+    description: "Speak in character."
+  oracle:
+    label: "Question or brief interaction"
+    placeholder: "Describe a short action that takes less than a full turn, or ask a question"
+  combat:
+    choose_action: "**{name}**, choose your action:"
+    choose_move: "**{name}**, choose where to move:"
+    select_target: "**{name}**, select a target:"
+    select_destination: "**{name}**, select destination:"
+    select_weapon: "**{name}**, select a weapon:"
+    weapon_placeholder: "Choose a weapon:"
+    target_placeholder: "Choose a target:"
+    destination_placeholder: "Choose destination:"
+
+session:
+  combat_ended: "Combat ended. Returning to exploration."
+  started: "The adventure begins."
+  on_hold: "Session is now on hold."
+  resumed: "Session resumed."
+  entering_rounds: "Entering rounds."
+  returning_to_exploration: "Returning to exploration."
+  dungeon_loaded: "Dungeon '{name}' loaded ({room_count} room(s))."
+  errors:
+    already_started: "Session is already started."
+    no_characters: "No characters have arrived yet."
+    already_on_hold: "Session is already on hold."
+    not_on_hold: "Session is not on hold."
+    already_in_rounds: "Already in rounds."
+    already_in_exploration: "Already in exploration mode."
+    dungeon_import_timing: "Dungeons can only be imported before the session starts."
+
+turn:
+  opened: "Turn {turn_number} is now open."
+  closed: "Turn {turn_number} closed. Awaiting DM resolution."
+  submitted_action: "{name}: \"{action_text}\""
+  number_set: "Turn number set to {turn_number}."
+  unsubmitted: "{name}'s turn submission has been sent back for revision."
+  errors:
+    already_open: "A turn is already open. Close or resolve it first."
+    no_open: "No open {mode_str} to submit to. The DM needs to resolve the previous {mode_str} first."
+    character_inactive: "{name} is not active and cannot submit a turn."
+    no_current_turn: "No current turn to close."
+    not_open: "Current turn is not open."
+    no_current_to_resolve: "No current turn to resolve."
+    already_resolved: "Current turn is already resolved."
+    no_current: "No current turn."
+    not_open_unsubmit: "Current turn is not open; cannot un-submit."
+    no_submission: "{name} has not submitted a turn."
+
+status:
+  waiting: "Waiting for players. Session not yet started"
+  turn_open: "Open. Accepting turn submissions"
+  turn_closed: "Closed. Awaiting DM resolution"
+
+explore:
+  xp_note: " Party gained {xp} XP for exploring."
+  auto_travel: "[Auto] {leader_name} {action}. Party arrives at {dest_name}.{xp_note}"
+  travel_submitted: "{leader_name} {action}."
+  errors:
+    no_exits: "No exits in this room."
+    exit_not_found: "Exit {exit_number} does not exist. There are {exit_count} exit(s)."
+    exit_blocked: "The {label} exit is {door_state} and cannot be used."
+
+combat:
+  log:
+    out_of_range: "{actor_name} cannot reach {target_name} - {dist} band(s) away, weapon range is {weapon_range}."
+    no_charges: "{actor_name} tries to use {weapon_name} but it has no charges left!"
+    swings_at_nothing: "{actor_name} swings at nothing."
+    attack_miss: "{actor_name} attacks {target_name} and misses! (rolled {roll} vs AC {target_ac})"
+    attack_hit: "{actor_name} attacks {target_name} and hits!{crit_tag}{magic_tag} (rolled {roll} vs Dodge {target_ac}) Deals {damage} damage. [{target_name}: {hp_str}]"
+    fallen: "{target_name} has fallen!"
+    slain: "{target_name} has been slain!"
+    xp_gained: "The party gains {xp_total} XP ({xp_each} each)."
+    opportunity_attack: "{enemy_name} gets an opportunity attack!"
+    holds_position: "{actor_name} holds position at {band}."
+    moves: "{actor_name} moves from {old_band} to {new_band}."
+    takes_damage_falls: "{actor_name} takes {damage} {damage_type} damage and falls!"
+    takes_damage_slain: "{actor_name} takes {damage} {damage_type} damage and is slain!"
+    takes_damage: "{actor_name} takes {damage} {damage_type} damage. [{actor_name}: {hp_str}]"
+    condition_applied_self: "{actor_name} is now {label}! ({duration} rounds)"
+    condition_applied: "{actor_name} applies {label} to {target_name}! ({duration} rounds)"
+    entangled: "{actor_name} is entangled and cannot move!"
+    flee_blocked: "{actor_name} tries to flee but {blocker} is blocking the way!"
+    flee_success: "{actor_name} rolls {roll} + {finesse} = **{total}** vs {threshold}; the party flees!"
+    flee_failure: "{actor_name} rolls {roll} + {finesse} = {total} vs {threshold}; failed to abscond."
+    condition_expired: "{name}'s {cond_name} condition has expired."
+    no_action: "The round passes without incident."
+    stunned: "{actor_name} is stunned and cannot act this round!"
+    action_out_of_range: "{actor_name} cannot use {label} from {band}, target is {dist} band(s) away (max {max_range})."
+    moved_to: "Moved to **{destination}**."
+  condition:
+    applied: "{target_name} is now {label}."
+    stacked: "{target_name} is now {label} \u00d7{stacks}."
+  encounter:
+    appears: "[Random Encounter] {group_name} appears! (rolled {roll_total} on {encounter_roll}, threshold \u2264{threshold})"
+
+character:
+  arrived: "\u2713 **{name}** the {character_class} has arrived."
+  sheet_sent: "Your character sheet has been sent to your DMs."
+  create:
+    creating: "Job chosen: **{character_class}**. Creating character\u2026"
+    check_dms: "Check your DMs to roll stats and choose your class."
+    stats_rolled: "**{name}** \u2014 rolled stats:\n\n{stats}\n\nAccept these stats or reroll?"
+    stats_accepted: "Stats accepted.\n\n{stats}\n\nNow choose your job:"
+    choose_job: "Choose your job:"
+    existing_choice: "You have existing characters. Would you like to select one or create a new character?"
+    check_dms_existing: "Check your DMs to select an existing character or create a new one."
+  import:
+    importing: "Selected character: **{name}**. Importing into session..."
+    arrived: "**{name}** the {character_class} has arrived. Head back to the game channel."
+  equip:
+    no_items: "You have no equippable items."
+    choose_item: "Choose an item from your inventory to equip:"
+    choose_slot: "Choose a slot to unequip:"
+  errors:
+    already_in_session: "**{name}** is already in this session."
+    already_have_character: "You already have a character (**{name}**) in this session."
+
+shop:
+  no_items_for_slot: "No purchasable items found for **{slot}**."
+  items_header: "**Purchasable {slot} Items:**\n"
+  item_line: "\u2022 **{name}** \u2014 {price} gp"
+  item_selected: "**Selected:** {name} ({price} gp)\n\nClick 'Buy' to purchase this item."
+  insufficient_gold: "\u26a0 Not enough gold. You have {gold} gp, but need {price} gp."
+  purchased_equip_prompt: "\u2713 Purchased **{name}** for {price} gp.\nYou have {remaining_gold} gp remaining.\n\nWould you like to equip **{name}** now?"
+  purchased_continue: "\u2713 Purchased **{name}** for {price} gp.\nYou have {remaining_gold} gp remaining.\n\n**Item Shop** \u2014 Select a category to continue shopping:"
+  browse_prompt: "**Item Shop** \u2014 {remaining_gold} gp remaining. Select a category:"
+  slot_items_preview: "**{slot} Items**\n\n{items_preview}\n\nSelect an item to purchase:"
+  welcome: "**Item Shop**\n\nYou can browse and purchase starting equipment for **{name}**.\nSelect a category to see available items:"
+
+room:
+  added: "Room '{name}' added to dungeon."
+  entered: "Entered: {name}."
+  updated: "Room updated: {name}."
+  errors:
+    name_empty: "Room name cannot be empty."
+    description_too_long: "Room description exceeds maximum length of 1000 characters."
+    notes_too_long: "Room notes exceed maximum length of 2000 characters."
+    no_dungeon: "No dungeon loaded."
+    not_found: "Room {room_id} not found."
+    no_current: "No current room."
+  feature:
+    not_found: "Feature {feature_id} not found."
+    deleted: "Feature deleted."
+    updated: "Feature updated: {name}."
+    state_set: "{name} \u2192 {state}."
+    errors:
+      name_empty: "Feature name cannot be empty."
+  exit:
+    not_found: "Exit {exit_id} not found."
+    updated: "Exit updated: {label}."
+    errors:
+      label_empty: "Exit label cannot be empty."
+
+npc:
+  group_added: "{npc_count} NPC(s) added: {group_name}."
+  appears: "{name} appears."
+  group_moved: "NPC group moved to room {room_id}."
+  group_removed: "NPC group removed."
+  hp_updated: "{name} HP: {old} \u2192 {hp_current}/{hp_max}."
+  status_updated: "{name} status \u2192 {status}."
+  updated: "NPC updated: {name}."
+  errors:
+    not_found: "NPC {npc_id} not found."
+    group_not_found: "NPC group {group_id} not found."
+    move_failed: "Could not move NPC group {group_id} to room {room_id}."
+
+oracle:
+  posted: "Oracle #{number} posted."
+  answered: "Oracle #{number} answered."
+  errors:
+    not_found: "Oracle #{number} not found."
+
+light:
+  set: "Light source set: {label} ({duration})."
+  errors:
+    negative_turns: "Turns remaining cannot be negative."
+
+timer:
+  expired: "Turn {turn_number} timer expired. Awaiting resolution ({dm_mention})."
+  dm_notification: "Turn {turn_number} has expired in <#{channel_id}>. Ready for your resolution."

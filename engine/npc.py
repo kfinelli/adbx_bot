@@ -6,6 +6,7 @@ from models import NPC, GameState, NPCGroup, NPCMovementLogic
 from validation import validate_hp_value, validate_non_empty_string
 
 from .helpers import _err, _find_npc_in_roster, _find_npcgroup_with_npc, _now, _ok
+from .strings import fmt_string, get_string
 
 
 class NPCManager:
@@ -17,7 +18,7 @@ class NPCManager:
         state.updated_at = _now()
         npc_count = len(group.npcs)
         group_name = group.name or f"Group {group.group_id}"
-        return _ok(state, f"{npc_count} NPC(s) added: {group_name}.")
+        return _ok(state, fmt_string("npc.group_added", npc_count=npc_count, group_name=group_name))
 
     def add_npc_to_room(
         self,
@@ -49,7 +50,7 @@ class NPCManager:
             # Add NPC to the existing group
             existing_group.npcs.append(npc)
             state.updated_at = _now()
-            return _ok(state, f"{npc.name} appears.")
+            return _ok(state, fmt_string("npc.appears", name=npc.name))
         else:
             # Create a new group for this NPC
             group = NPCGroup(
@@ -61,15 +62,15 @@ class NPCManager:
             )
             state.npc_roster.add_group(group)
             state.updated_at = _now()
-            return _ok(state, f"{npc.name} appears.")
+            return _ok(state, fmt_string("npc.appears", name=npc.name))
 
     def move_npc_group_to_room(self, state: GameState, group_id, room_id):
         """Move an NPC group to a new room."""
         success = state.npc_roster.move_group_to_room(group_id, room_id)
         if not success:
-            return _err(state, f"Could not move NPC group {group_id} to room {room_id}.")
+            return _err(state, fmt_string("npc.errors.move_failed", group_id=group_id, room_id=room_id))
         state.updated_at = _now()
-        return _ok(state, f"NPC group moved to room {room_id}.")
+        return _ok(state, fmt_string("npc.group_moved", room_id=room_id))
 
     def set_npc_hp(
         self,
@@ -80,7 +81,7 @@ class NPCManager:
         """Set an NPC's current HP. Searches the entire roster."""
         npc = _find_npc_in_roster(state, npc_id)
         if npc is None:
-            return _err(state, f"NPC {npc_id} not found.")
+            return _err(state, fmt_string("npc.errors.not_found", npc_id=npc_id))
 
         # Validate HP value
         hp_result = validate_hp_value(new_hp)
@@ -92,7 +93,7 @@ class NPCManager:
         if npc.hp_current == 0:
             npc.status = "dead"
         state.updated_at = _now()
-        return _ok(state, f"{npc.name} HP: {old} → {npc.hp_current}/{npc.hp_max}.")
+        return _ok(state, fmt_string("npc.hp_updated", name=npc.name, old=old, hp_current=npc.hp_current, hp_max=npc.hp_max))
 
     def set_npc_status(
         self,
@@ -103,7 +104,7 @@ class NPCManager:
         """Set an NPC's status. Searches the entire roster."""
         npc = _find_npc_in_roster(state, npc_id)
         if npc is None:
-            return _err(state, f"NPC {npc_id} not found.")
+            return _err(state, fmt_string("npc.errors.not_found", npc_id=npc_id))
 
         # Validate status string
         status_result = validate_non_empty_string(status, "NPC status", max_length=50)
@@ -112,24 +113,24 @@ class NPCManager:
 
         npc.status = status_result.value
         state.updated_at = _now()
-        return _ok(state, f"{npc.name} status → {status_result.value}.")
+        return _ok(state, fmt_string("npc.status_updated", name=npc.name, status=status_result.value))
 
     def remove_npc_group(self, state: GameState, group_id):
         """Remove an NPC group from the roster."""
         success = state.npc_roster.remove_group(group_id)
         if not success:
-            return _err(state, f"NPC group {group_id} not found.")
+            return _err(state, fmt_string("npc.errors.group_not_found", group_id=group_id))
         state.updated_at = _now()
-        return _ok(state, "NPC group removed.")
+        return _ok(state, get_string("npc.group_removed"))
 
     def remove_npc(self, state: GameState, npc_id):
         """Remove an NPC from its group (and the roster)."""
         group = _find_npcgroup_with_npc(state, npc_id)
         if group is None:
-            return _err(state, f"NPC {npc_id} not found.")
+            return _err(state, fmt_string("npc.errors.not_found", npc_id=npc_id))
         success = group.remove_npc(npc_id)
         if not success:
-            return _err(state, f"NPC {npc_id} not found.")
+            return _err(state, fmt_string("npc.errors.not_found", npc_id=npc_id))
         state.updated_at = _now()
         return _ok(state, "NPC removed.")
 
@@ -148,7 +149,7 @@ class NPCManager:
         """Update an NPC's attributes. Searches the entire roster."""
         npc = _find_npc_in_roster(state, npc_id)
         if npc is None:
-            return _err(state, f"NPC {npc_id} not found.")
+            return _err(state, fmt_string("npc.errors.not_found", npc_id=npc_id))
 
         # Validate name
         name_result = validate_non_empty_string(name, "NPC name", max_length=50)
@@ -188,4 +189,4 @@ class NPCManager:
         npc.notes       = notes_result.value
         npc.hit_dice    = max(1, int(hit_dice))
         state.updated_at = _now()
-        return _ok(state, f"NPC updated: {npc.name}.")
+        return _ok(state, fmt_string("npc.updated", name=npc.name))

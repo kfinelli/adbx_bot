@@ -14,6 +14,7 @@ from engine.azure_constants import UI_SLOTS, ItemSlot, RechargePeriod
 from engine.character import CharacterManager
 from engine.data_loader import CONDITION_REGISTRY, ITEM_REGISTRY
 from engine.item import EquipItem, UtilitySpell
+from engine.strings import get_string
 from store import save_session_async
 
 # Human-readable labels for each slot.
@@ -80,7 +81,7 @@ async def _submit_gear_combat_action(
         )
         return True
 
-    await interaction.response.edit_message(content="Action submitted.", view=None)
+    await interaction.response.edit_message(content=get_string("action.submitted"), view=None)
     channel = interaction.client.get_channel(int(channel_id))
     if channel is not None:
         if result.auto_resolved:
@@ -246,7 +247,7 @@ class EquipSelectView(discord.ui.View):
         item_id = interaction.data["values"][0]
         if item_id == "__none__":
             await interaction.response.edit_message(
-                content="You have no equippable items.", view=self
+                content=get_string("character.equip.no_items"), view=self
             )
             return
 
@@ -416,14 +417,14 @@ class EquipMenuView(discord.ui.View):
     @discord.ui.button(label="Equip Item", style=discord.ButtonStyle.primary)
     async def equip_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(
-            content="Choose an item from your inventory to equip:",
+            content=get_string("character.equip.choose_item"),
             view=EquipSelectView(self.char, self.state, self.channel_id),
         )
 
     @discord.ui.button(label="Unequip Item", style=discord.ButtonStyle.secondary)
     async def unequip_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(
-            content="Choose a slot to unequip:",
+            content=get_string("character.equip.choose_slot"),
             view=UnequipView(self.char, self.state, self.channel_id),
         )
 
