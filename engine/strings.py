@@ -108,13 +108,11 @@ def fmt_string(key: str, default: str = "", **kwargs: Any) -> str:
     Example: fmt_string("combat.log.attack_miss",
                          actor_name="Alice", target_name="Goblin", roll=12, target_ac=14)
     """
+    import contextlib
     template = get_string(key, default)
     if kwargs:
-        try:
+        with contextlib.suppress(KeyError):
             template = template.format(**kwargs)
-        except KeyError:
-            # Missing placeholder key — leave the template as-is
-            pass
     return template
 
 
