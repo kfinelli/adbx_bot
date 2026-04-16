@@ -49,6 +49,8 @@ errors:
   unknown_action: "Unknown action '{action_id}'."
   enter_number: "Please enter a number."
   no_party: "No active party."
+  not_arrived: "You haven't arrived yet. Use the **Arrive** button to join first."
+  dm_failed: "Unable to send a DM. Please allow DMs from server members."
 
 action:
   submitted: "Action submitted."
@@ -186,6 +188,7 @@ combat:
 character:
   arrived: "\u2713 **{name}** the {character_class} has arrived."
   sheet_sent: "Your character sheet has been sent to your DMs."
+  shop_sent: "Item shop sent to your DMs."
   create:
     creating: "Job chosen: **{character_class}**. Creating character\u2026"
     check_dms: "Check your DMs to roll stats and choose your class."

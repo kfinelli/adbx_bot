@@ -3,7 +3,7 @@
   "label": "Affect",
   "button_style": "secondary",
   "action_type": "affect",
-  "description": "Freely describe your action. Always requires DM resolution \u2014 turn will not auto-resolve.",
+  "description": "Freely describe your action. Always requires DM resolution; turn will not auto-resolve.",
   "requires_target": "none",
   "requires_destination": false,
   "range_requirement": null,
