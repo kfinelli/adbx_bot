@@ -1998,7 +1998,7 @@
   "Weapon": [
     {
       "attack_status": "",
-      "damage": "1d8",
+      "damage": "2d400",
       "description": "",
       "held_status": "",
       "is_light": false,
@@ -2018,7 +2018,7 @@
     },
     {
       "attack_status": "",
-      "damage": "1d4",
+      "damage": "2d200",
       "description": "",
       "held_status": "",
       "is_light": false,
@@ -2038,7 +2038,7 @@
     },
     {
       "attack_status": "",
-      "damage": "1d4",
+      "damage": "4d100",
       "description": "",
       "held_status": "",
       "is_light": true,
@@ -2060,7 +2060,7 @@
     },
     {
       "attack_status": "",
-      "damage": "1d12",
+      "damage": "2d600",
       "description": "",
       "held_status": "",
       "is_light": false,
@@ -2083,7 +2083,7 @@
     },
     {
       "attack_status": "",
-      "damage": "3d4",
+      "damage": "6d190",
       "description": "",
       "held_status": "",
       "is_light": false,
@@ -2106,7 +2106,7 @@
     },
     {
       "attack_status": "",
-      "damage": "2d6",
+      "damage": "4d290",
       "description": "",
       "held_status": "",
       "is_light": false,
@@ -2129,7 +2129,7 @@
     },
     {
       "attack_status": "",
-      "damage": "1d6",
+      "damage": "2d300",
       "description": "",
       "held_status": "",
       "is_light": false,
@@ -2152,7 +2152,7 @@
     },
     {
       "attack_status": "",
-      "damage": "1d6",
+      "damage": "6d100",
       "description": "",
       "held_status": "",
       "is_light": false,
@@ -2174,7 +2174,7 @@
     },
     {
       "attack_status": "",
-      "damage": "1d10",
+      "damage": "6d160",
       "description": "",
       "held_status": "",
       "is_light": false,
@@ -2197,7 +2197,7 @@
     },
     {
       "attack_status": "",
-      "damage": "1d8",
+      "damage": "6d130",
       "description": "",
       "held_status": "",
       "is_light": false,
@@ -2217,7 +2217,7 @@
     },
     {
       "attack_status": "",
-      "damage": "1d10",
+      "damage": "6d160",
       "description": "",
       "held_status": "",
       "is_light": false,
@@ -2239,7 +2239,7 @@
     },
     {
       "attack_status": "",
-      "damage": "1d8",
+      "damage": "4d200",
       "description": "",
       "held_status": "",
       "is_light": false,
@@ -2259,7 +2259,7 @@
     },
     {
       "attack_status": "",
-      "damage": "1d6",
+      "damage": "2d300",
       "description": "",
       "held_status": "",
       "is_light": false,
@@ -2279,7 +2279,7 @@
     },
     {
       "attack_status": "",
-      "damage": "1d4+1d6",
+      "damage": "2d200+3d200",
       "description": "",
       "held_status": "",
       "is_light": false,
@@ -2301,7 +2301,7 @@
     },
     {
       "attack_status": "",
-      "damage": "1d6",
+      "damage": "2d300",
       "description": "",
       "held_status": "",
       "is_light": false,
@@ -2321,7 +2321,7 @@
     },
     {
       "attack_status": "",
-      "damage": "1d6",
+      "damage": "4d150",
       "description": "",
       "held_status": "",
       "is_light": false,
@@ -2343,7 +2343,7 @@
     },
     {
       "attack_status": "",
-      "damage": "1d4",
+      "damage": "2d200",
       "description": "",
       "held_status": "",
       "is_light": false,
@@ -2365,7 +2365,7 @@
     },
     {
       "attack_status": "",
-      "damage": "1d8",
+      "damage": "6d130",
       "description": "",
       "held_status": "",
       "is_light": false,
@@ -2387,7 +2387,7 @@
     },
     {
       "attack_status": "",
-      "damage": "1d6",
+      "damage": "2d300",
       "description": "",
       "held_status": "",
       "is_light": false,
@@ -2409,7 +2409,7 @@
     },
     {
       "attack_status": "",
-      "damage": "1d4",
+      "damage": "2d200",
       "description": "A torch burns for 1 hour (6 turns), clearly illuminating a 30' radius. Torches may also be used in combat.",
       "held_status": "",
       "is_light": true,
@@ -2429,7 +2429,7 @@
     },
     {
       "attack_status": "",
-      "damage": "1d8",
+      "damage": "2d400",
       "description": "",
       "held_status": "",
       "is_light": false,
@@ -2449,7 +2449,7 @@
     },
     {
       "attack_status": "",
-      "damage": "1d4",
+      "damage": "2d200",
       "description": "",
       "held_status": "",
       "is_light": false,
@@ -2469,7 +2469,7 @@
     },
     {
       "attack_status": "",
-      "damage": "1d4",
+      "damage": "2d200",
       "description": "A fan made of rare feathers with magical properties",
       "held_status": "",
       "is_light": true,
@@ -2491,7 +2491,7 @@
     },
     {
       "attack_status": "",
-      "damage": "2d8",
+      "damage": "2d800",
       "description": "For testing the [unwieldy] tag",
       "held_status": "",
       "is_light": false,
@@ -2512,6 +2512,29 @@
       ],
       "targets_stat": "defense",
       "type": "Blunt"
+    },
+    {
+      "attack_status": "",
+      "damage": "6d290",
+      "description": "For testint A rank weapon",
+      "held_status": "",
+      "is_light": false,
+      "item_id": "apocalypse_blade",
+      "item_type": "weapon",
+      "name": "Apocalypse Blade",
+      "other_abilities": "",
+      "price": 0,
+      "purchaseable": false,
+      "range": 0,
+      "rank": "A",
+      "slot": "main_hand",
+      "stat": "physique",
+      "tags": [
+        "Heavy",
+        "Two-Handed"
+      ],
+      "targets_stat": "defense",
+      "type": "Sword"
     }
   ]
 }

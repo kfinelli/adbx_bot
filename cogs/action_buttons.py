@@ -1477,6 +1477,7 @@ class PreStartView(discord.ui.View):
         label="Arrive",
         style=discord.ButtonStyle.primary,
         custom_id="pre_start:arrive",
+        row=0,
     )
     async def arrive_button(
         self,
@@ -1538,6 +1539,86 @@ class PreStartView(discord.ui.View):
                 owner_id=owner_id,
             )
             await interaction.response.send_modal(modal)
+
+    @discord.ui.button(
+        label="View Character",
+        style=discord.ButtonStyle.secondary,
+        custom_id="pre_start:character",
+        row=1,
+    )
+    async def view_character_btn(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        from cogs.character_views import EquipMenuView, _character_sheet
+
+        state = get_session(self.channel_id)
+        if state is None:
+            await interaction.response.send_message(
+                get_string("errors.no_session"), ephemeral=True
+            )
+            return
+        char = _find_character(state, str(interaction.user.id))
+        if char is None:
+            await interaction.response.send_message(
+                get_string("errors.not_arrived"), ephemeral=True
+            )
+            return
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        sheet = _character_sheet(char, state)
+        try:
+            dm_channel = await interaction.user.create_dm()
+            await dm_channel.send(
+                content=sheet,
+                view=EquipMenuView(char, state, self.channel_id),
+            )
+            await interaction.edit_original_response(
+                content=get_string("character.sheet_sent")
+            )
+        except discord.Forbidden:
+            await interaction.edit_original_response(content=sheet)
+
+    @discord.ui.button(
+        label="Item Shop",
+        style=discord.ButtonStyle.secondary,
+        custom_id="pre_start:shop",
+        row=1,
+    )
+    async def item_shop_btn(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        from cogs.arrive import ShopView
+
+        state = get_session(self.channel_id)
+        if state is None:
+            await interaction.response.send_message(
+                get_string("errors.no_session"), ephemeral=True
+            )
+            return
+        char = _find_character(state, str(interaction.user.id))
+        if char is None:
+            await interaction.response.send_message(
+                get_string("errors.not_arrived"), ephemeral=True
+            )
+            return
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        shop_view = ShopView(self.channel_id, str(char.uuid), str(interaction.user.id))
+        try:
+            dm_channel = await interaction.user.create_dm()
+            await dm_channel.send(
+                content=fmt_string("shop.welcome", name=char.name),
+                view=shop_view,
+            )
+            await interaction.edit_original_response(
+                content=get_string("character.shop_sent")
+            )
+        except discord.Forbidden:
+            await interaction.edit_original_response(
+                content=get_string("errors.dm_failed")
+            )
 
 
 # ---------------------------------------------------------------------------
