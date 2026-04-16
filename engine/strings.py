@@ -22,6 +22,47 @@ import yaml
 
 _strings_cache: dict[str, Any] = {}
 
+# Discord character limits by key suffix.
+# Applied to every leaf string whose dotted key ends with the given suffix.
+_SUFFIX_LIMITS: dict[str, int] = {
+    "placeholder": 100,   # TextInput / Select placeholder
+    "description": 100,   # Used as TextInput placeholder in modals
+    "label":        80,   # Button label (TextInput labels are stricter — see _KEY_LIMITS)
+}
+
+# Per-key overrides: modal TextInput labels are capped at 45 chars, stricter than buttons.
+_KEY_LIMITS: dict[str, int] = {
+    "ui.search.label":       45,
+    "ui.disarm.label":       45,
+    "ui.listen.label":       45,
+    "ui.force_door.label":   45,
+    "ui.pick_lock.label":    45,
+    "ui.craft.label":        45,
+    "ui.other.action_label": 45,
+    "ui.affect.label":       45,
+    "ui.oracle.label":       45,
+    "ui.emote.label":        45,
+    "ui.say.label":          45,
+}
+
+
+def _collect_violations(node: dict[str, Any], prefix: str = "") -> list[str]:
+    """Walk all leaf strings and return a list of limit-violation messages."""
+    violations: list[str] = []
+    for key, value in node.items():
+        full_key = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            violations.extend(_collect_violations(value, full_key))
+        elif isinstance(value, str):
+            suffix = full_key.rsplit(".", 1)[-1]
+            limit = _KEY_LIMITS.get(full_key) or _SUFFIX_LIMITS.get(suffix)
+            if limit and len(value) > limit:
+                violations.append(
+                    f"  {full_key}: {len(value)} chars (max {limit})\n"
+                    f"    {value!r}"
+                )
+    return violations
+
 
 def _data_dir() -> Path:
     return Path(__file__).parent.parent / "data"
@@ -33,7 +74,14 @@ def _load_strings() -> dict[str, Any]:
         if not filepath.exists():
             raise FileNotFoundError(f"Strings file not found: {filepath}")
         with open(filepath, encoding="utf-8") as f:
-            _strings_cache.update(yaml.safe_load(f) or {})
+            data = yaml.safe_load(f) or {}
+        violations = _collect_violations(data)
+        if violations:
+            raise ValueError(
+                "data/strings.yaml contains strings that exceed Discord limits:\n"
+                + "\n".join(violations)
+            )
+        _strings_cache.update(data)
     return _strings_cache
 
 

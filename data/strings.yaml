@@ -6,6 +6,20 @@
 #   fmt_string("combat.log.attack_hit", actor_name="Alice", target_name="Goblin", ...)
 #
 # Placeholders use Python {key} format syntax.
+#
+# LENGTH VALIDATION (enforced at startup by engine/strings.py):
+#   Key suffix determines the Discord character limit that is checked on load.
+#   You MUST follow these naming conventions or the limit will not be enforced:
+#
+#     *.label        — 80 chars (button label); 45 chars for modal TextInput labels
+#                      (modal TextInput label keys are listed explicitly in _KEY_LIMITS
+#                       in engine/strings.py — add new ones there when needed)
+#     *.placeholder  — 100 chars (TextInput / Select placeholder)
+#     *.description  — 100 chars (also used as TextInput placeholder in modals)
+#
+#   If you add a new string that feeds into a Discord UI element, name its key
+#   with the appropriate suffix above so the limit is caught at startup rather
+#   than as a 400 from the Discord API at runtime.
 
 errors:
   no_session: "No active session in this channel."
@@ -26,7 +40,7 @@ errors:
   combat_not_active: "No combat active. Use /turn to submit your action."
   no_open_turn: "No open turn. The DM needs to resolve the previous turn first."
   already_submitted: "Wait for resolution or ask the DM to un-submit your action."
-  abscond_permission: "Only the party leader can use Abscond."
+  abscond_permission: "Only the party leader may use Abscond."
   strife_permission: "Only the DM or party leader can toggle combat rounds."
   dm_only: "Only the DM can use this command."
   character_not_found: "Character not found."
@@ -43,7 +57,7 @@ action:
 ui:
   search:
     label: "Describe your search"
-    description: "A 10×10 area. You can specify a feature from the list. More detail can lead to automatic success."
+    description: "Search a 10×10 area. Specify a room feature for focus. More detail can lead to automatic success."
   disarm:
     label: "Describe the trap and your approach"
     placeholder: "More detail may lead to automatic success."
@@ -62,7 +76,7 @@ ui:
   other:
     label: "Other Turn Action"
     action_label: "Describe your action"
-    placeholder: "Anything that takes a full 10-minute dungeon turn."
+    placeholder: "Anything that takes a full 10-minute dungeon turn, such as spellcasting."
   affect:
     label: "Describe your action"
     description: "Describe what your character does. The DM will resolve the round manually."
@@ -89,10 +103,10 @@ ui:
 
 session:
   combat_ended: "Combat ended. Returning to exploration."
-  started: "Session started. The adventure begins!"
+  started: "The adventure begins."
   on_hold: "Session is now on hold."
   resumed: "Session resumed."
-  entering_rounds: "Entering rounds!"
+  entering_rounds: "Entering rounds."
   returning_to_exploration: "Returning to exploration."
   dungeon_loaded: "Dungeon '{name}' loaded ({room_count} room(s))."
   errors:
@@ -170,19 +184,19 @@ combat:
     appears: "[Random Encounter] {group_name} appears! (rolled {roll_total} on {encounter_roll}, threshold \u2264{threshold})"
 
 character:
-  arrived: "\u2713 **{name}** the {character_class} has arrived!"
+  arrived: "\u2713 **{name}** the {character_class} has arrived."
   sheet_sent: "Your character sheet has been sent to your DMs."
   create:
     creating: "Job chosen: **{character_class}**. Creating character\u2026"
-    check_dms: "Check your DMs to roll stats and choose your class!"
+    check_dms: "Check your DMs to roll stats and choose your class."
     stats_rolled: "**{name}** \u2014 rolled stats:\n\n{stats}\n\nAccept these stats or reroll?"
-    stats_accepted: "Stats accepted!\n\n{stats}\n\nNow choose your job:"
+    stats_accepted: "Stats accepted.\n\n{stats}\n\nNow choose your job:"
     choose_job: "Choose your job:"
     existing_choice: "You have existing characters. Would you like to select one or create a new character?"
-    check_dms_existing: "Check your DMs to select an existing character or create a new one!"
+    check_dms_existing: "Check your DMs to select an existing character or create a new one."
   import:
     importing: "Selected character: **{name}**. Importing into session..."
-    arrived: "**{name}** the {character_class} has arrived! Head back to the game channel."
+    arrived: "**{name}** the {character_class} has arrived. Head back to the game channel."
   equip:
     no_items: "You have no equippable items."
     choose_item: "Choose an item from your inventory to equip:"
@@ -196,12 +210,12 @@ shop:
   items_header: "**Purchasable {slot} Items:**\n"
   item_line: "\u2022 **{name}** \u2014 {price} gp"
   item_selected: "**Selected:** {name} ({price} gp)\n\nClick 'Buy' to purchase this item."
-  insufficient_gold: "\u26a0 Not enough gold! You have {gold} gp, but need {price} gp."
-  purchased_equip_prompt: "\u2713 Purchased **{name}** for {price} gp!\nYou have {remaining_gold} gp remaining.\n\nWould you like to equip **{name}** now?"
-  purchased_continue: "\u2713 Purchased **{name}** for {price} gp!\nYou have {remaining_gold} gp remaining.\n\n**Item Shop** \u2014 Select a category to continue shopping:"
+  insufficient_gold: "\u26a0 Not enough gold. You have {gold} gp, but need {price} gp."
+  purchased_equip_prompt: "\u2713 Purchased **{name}** for {price} gp.\nYou have {remaining_gold} gp remaining.\n\nWould you like to equip **{name}** now?"
+  purchased_continue: "\u2713 Purchased **{name}** for {price} gp.\nYou have {remaining_gold} gp remaining.\n\n**Item Shop** \u2014 Select a category to continue shopping:"
   browse_prompt: "**Item Shop** \u2014 {remaining_gold} gp remaining. Select a category:"
   slot_items_preview: "**{slot} Items**\n\n{items_preview}\n\nSelect an item to purchase:"
-  welcome: "**Welcome to the Item Shop!**\n\nYou can browse and purchase starting equipment for **{name}**.\nSelect a category to see available items:"
+  welcome: "**Item Shop**\n\nYou can browse and purchase starting equipment for **{name}**.\nSelect a category to see available items:"
 
 room:
   added: "Room '{name}' added to dungeon."
