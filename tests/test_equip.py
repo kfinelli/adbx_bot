@@ -515,6 +515,160 @@ class TestEquipErrors:
         result = equip_item(state_char, uuid4(), weapon_id)
         assert not result.ok
 
+    def test_equip_displacement_blocked_when_inventory_full(self, state_char):
+        """Equipping a new item must not push inventory over the limit by displacing the old one.
+
+        The overflow can only occur when the displaced item costs more inventory slots than
+        the new item. We patch one weapon's slot_cost to 2 to manufacture that condition.
+        """
+        from engine.item import ChargeWeapon
+        _ARCANE = {"V", "W", "X", "Y", "Z"}
+        # Find two different physical weapons the Knight can equip
+        weapons = [
+            item_id for item_id, defn in ITEM_REGISTRY.items()
+            if isinstance(defn, Weapon) and not isinstance(defn, ChargeWeapon)
+            and defn.rank not in _ARCANE
+        ]
+        if len(weapons) < 2:
+            pytest.skip("Need at least 2 physical weapons to test displacement")
+        w1, w2 = weapons[0], weapons[1]
+
+        char = _get_char(state_char)
+        # Temporarily give w1 a slot_cost of 2 so displacing it would overflow inventory
+        w1_defn = ITEM_REGISTRY[w1]
+        original_cost = w1_defn.slot_cost
+        w1_defn.slot_cost = 2
+        try:
+            # Equip w1 (cost=2, equipped so doesn't count toward slots_used)
+            _add_item(char, w1)
+            equip_item(state_char, char.character_id, w1)
+
+            # Fill inventory to inventory_size - 1 slots with filler
+            filler_id = next(
+                item_id for item_id, defn in ITEM_REGISTRY.items()
+                if isinstance(defn, Weapon) and not isinstance(defn, ChargeWeapon)
+                and defn.rank not in _ARCANE and item_id not in (w1, w2)
+            )
+            while char.slots_used < char.inventory_size - 1:
+                _add_item(char, filler_id)
+
+            # Add w2 (cost=1) — this succeeds because one slot is free
+            give_result = give_item(state_char, char.character_id, w2)
+            assert give_result.ok, "Setup failed: could not add w2 to inventory"
+            assert char.slots_used == char.inventory_size, "Expected inventory to be full after giving w2"
+
+            # Equip w2 — would displace w1 (cost=2) back to a full inventory: +2-1 = overflow
+            result = equip_item(state_char, char.character_id, w2)
+
+            assert not result.ok
+            assert char.slots_used == char.inventory_size, "Inventory limit must not be exceeded"
+        finally:
+            w1_defn.slot_cost = original_cost
+
+    def test_equip_displacement_blocked_when_light_stack_crosses_bundle_boundary(self, state_char):
+        """Equipping a weapon must be blocked when the displaced light-item stack would push
+        the light pool across a BUNDLE_SIZE boundary, costing an extra inventory slot.
+
+        Scenario: a torch stack (qty = BUNDLE_SIZE + 1) is equipped. Inventory is full of
+        non-light items. Equipping a new weapon would displace the stack back to inventory,
+        which now requires 2 light slots instead of 0 (net +1 after the new item frees one
+        non-light slot) — overflow by 1.
+        """
+        from engine.azure_constants import BUNDLE_SIZE
+        from engine.item import ChargeWeapon
+
+        _ARCANE = {"V", "W", "X", "Y", "Z"}
+        torch_id = "torch"
+        weapon_id = next(
+            item_id for item_id, defn in ITEM_REGISTRY.items()
+            if isinstance(defn, Weapon) and not isinstance(defn, ChargeWeapon)
+            and defn.rank not in _ARCANE and item_id != torch_id
+        )
+
+        char = _get_char(state_char)
+
+        # Build a torch stack of BUNDLE_SIZE + 1 (e.g. 11) directly in inventory
+        stack_qty = BUNDLE_SIZE + 1
+        char.inventory.append(InventoryItem(item_id=torch_id, quantity=stack_qty))
+        # Equip the whole stack — frees stack_qty // BUNDLE_SIZE + 1 light slots
+        equip_item(state_char, char.character_id, torch_id)
+        assert char.inventory[0].equipped, "torch stack should be equipped"
+
+        # Fill every remaining inventory slot with non-light weapons
+        while char.slots_used < char.inventory_size:
+            char.inventory.append(InventoryItem(item_id=weapon_id, quantity=1))
+        assert char.slots_used == char.inventory_size
+
+        # Add the new weapon (one free slot needed — make room by temporarily
+        # adjusting expected size, or just bypass give_item for setup)
+        # Actually: with slots_used == inventory_size, give_item would fail.
+        # Directly append to simulate a DM-granted item (the check being tested
+        # is equip_item, not give_item).
+        char.inventory.append(InventoryItem(item_id=weapon_id, quantity=1))
+        # slots_used is now inventory_size + 1 from the raw append, but that's
+        # intentional setup — we're testing that equip_item blocks the swap.
+        # Reset: remove the last non-light filler so slots_used == inventory_size,
+        # then add the new weapon properly.
+        char.inventory.clear()
+        char.inventory.append(InventoryItem(item_id=torch_id, quantity=stack_qty, equipped=True))
+        # Fill non-light slots to inventory_size - 1 (leave one slot for the new weapon)
+        while char.slots_used < char.inventory_size - 1:
+            char.inventory.append(InventoryItem(item_id=weapon_id, quantity=1))
+        # Give the weapon to buy (occupies the last slot)
+        give_result = give_item(state_char, char.character_id, weapon_id)
+        assert give_result.ok, f"Setup failed: {give_result.error}"
+        assert char.slots_used == char.inventory_size
+        char.equipped_slots["main_hand"] = torch_id  # restore equipped state
+
+        # Equip the new weapon — displacing the torch stack (qty=BUNDLE_SIZE+1)
+        # would require ceil((BUNDLE_SIZE+1)/BUNDLE_SIZE) = 2 light slots, but
+        # only one non-light slot is freed: net overflow by 1.
+        result = equip_item(state_char, char.character_id, weapon_id)
+
+        assert not result.ok, f"Expected equip to be blocked but got: {result.message}"
+        assert char.slots_used == char.inventory_size, "Inventory limit must not be exceeded"
+
+    def test_unequip_light_item_blocked_when_bundle_boundary_crossed(self, state_char):
+        """Unequipping a light item must be blocked when the light pool is at a BUNDLE_SIZE
+        multiple and returning the item would cross to the next bundle slot.
+
+        Scenario: inventory is full, unequipped light pool is exactly BUNDLE_SIZE (1 slot).
+        Unequipping a dagger (light) would push pool to BUNDLE_SIZE+1 (2 slots) — overflow.
+        """
+        from engine.azure_constants import BUNDLE_SIZE
+        from engine.item import ChargeWeapon
+
+        _ARCANE = {"V", "W", "X", "Y", "Z"}
+        dagger_id = "dagger"
+        filler_id = next(
+            item_id for item_id, defn in ITEM_REGISTRY.items()
+            if isinstance(defn, Weapon) and not isinstance(defn, ChargeWeapon)
+            and defn.rank not in _ARCANE and item_id != dagger_id
+        )
+        torch_id = "torch"
+
+        char = _get_char(state_char)
+
+        # Equip a dagger in MAIN_HAND (doesn't count toward slots_used)
+        char.inventory.append(InventoryItem(item_id=dagger_id, quantity=1, equipped=True))
+        char.equipped_slots["main_hand"] = dagger_id
+
+        # Fill the light pool to exactly BUNDLE_SIZE (1 light slot used)
+        char.inventory.append(InventoryItem(item_id=torch_id, quantity=BUNDLE_SIZE))
+
+        # Fill the rest with non-light items until inventory is full
+        while char.slots_used < char.inventory_size:
+            char.inventory.append(InventoryItem(item_id=filler_id, quantity=1))
+
+        assert char.slots_used == char.inventory_size, "Inventory must be full for this test"
+
+        # Unequipping the dagger adds 1 to the light pool (BUNDLE_SIZE → BUNDLE_SIZE+1),
+        # crossing the bundle boundary and requiring an extra slot — must be blocked.
+        result = unequip_item(state_char, char.character_id, ItemSlot.MAIN_HAND)
+
+        assert not result.ok, f"Expected unequip to be blocked but got: {result.message}"
+        assert char.slots_used == char.inventory_size, "Inventory limit must not be exceeded"
+
 
 # ---------------------------------------------------------------------------
 # Serialization round-trip

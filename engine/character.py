@@ -31,6 +31,55 @@ from .dice import roll_stat_block
 from .helpers import _err, _ok
 
 
+def _projected_slots_used_after_equip(
+    char,
+    equip_item_id: str,
+    displace_item_ids: list,
+) -> int:
+    """
+    Return the hypothetical ``slots_used`` after ``equip_item_id`` moves from
+    unequipped→equipped and every ID in ``displace_item_ids`` moves from
+    equipped→unequipped.
+
+    Uses bundle-aware math so light-item stacks are accounted for correctly.
+    """
+    from math import ceil
+
+    from engine.azure_constants import BUNDLE_SIZE
+
+    # Current unequipped light total and derived non-light slots
+    L = sum(
+        i.quantity
+        for i in char.inventory
+        if not i.equipped
+        and i.container_id is None
+        and (d := ITEM_REGISTRY.get(i.item_id)) is not None
+        and d.isLight
+    )
+    non_light = char.slots_used - (ceil(L / BUNDLE_SIZE) if L > 0 else 0)
+
+    # Remove the newly-equipped item from the unequipped pool
+    equip_defn = ITEM_REGISTRY.get(equip_item_id)
+    equip_inv = next(
+        (i for i in char.inventory if i.item_id == equip_item_id and not i.equipped), None
+    )
+    if equip_defn is not None and equip_defn.isLight:
+        L -= equip_inv.quantity if equip_inv else 1
+    else:
+        non_light -= equip_defn.slot_cost if equip_defn else 1
+
+    # Add each displaced item back to the unequipped pool
+    for did in displace_item_ids:
+        displace_defn = ITEM_REGISTRY.get(did)
+        displace_inv = next((i for i in char.inventory if i.item_id == did), None)
+        if displace_defn is not None and displace_defn.isLight:
+            L += displace_inv.quantity if displace_inv else 1
+        else:
+            non_light += displace_defn.slot_cost if displace_defn else 1
+
+    return non_light + (ceil(L / BUNDLE_SIZE) if L > 0 else 0)
+
+
 class CharacterManager:
     """Manages character creation and mutations."""
 
@@ -303,28 +352,32 @@ class CharacterManager:
         item_name = definition.name if definition else item_id
         new_tags = definition.getTags() if isinstance(definition, EquipItem) else []
 
-        # --- Two-Handed: inventory pre-flight check ---
-        # Auto-unequipping the off-hand frees no slot (it was equipped), but the
-        # displaced main-hand item and the off-hand item both land in inventory.
-        # Net delta = +slot_cost(mh) + slot_cost(oh) - slot_cost(new weapon).
-        # Fail before mutating anything if that would exceed inventory_size.
+        # --- Unified inventory pre-flight: all displaced items at once ---
+        # Collects every item that will land back in inventory (the current occupant of
+        # the target slot, plus the off-hand if a Two-Handed weapon auto-unequips it),
+        # then uses bundle-aware math to verify there is room for all of them.
+        displace_ids: list[str] = []
+        existing_id_pre = char.equipped_slots.get(target_slot.value)
+        if existing_id_pre and existing_id_pre != item_id:
+            displace_ids.append(existing_id_pre)
         if "Two-Handed" in new_tags and target_slot == ItemSlot.MAIN_HAND:
             oh_id_pre = char.equipped_slots.get(ItemSlot.OFF_HAND.value)
-            if oh_id_pre:
-                mh_existing_id = char.equipped_slots.get(ItemSlot.MAIN_HAND.value)
-                mh_def_pre = ITEM_REGISTRY.get(mh_existing_id) if mh_existing_id else None
-                mh_cost = mh_def_pre.slot_cost if mh_def_pre else (1 if mh_existing_id else 0)
-                oh_def_pre = ITEM_REGISTRY.get(oh_id_pre)
-                oh_cost = oh_def_pre.slot_cost if oh_def_pre else 1
-                new_cost = definition.slot_cost if definition else 1
-                if char.slots_used + mh_cost + oh_cost - new_cost > char.inventory_size:
-                    oh_name_pre = oh_def_pre.name if oh_def_pre else oh_id_pre
-                    return _err(
-                        state,
-                        f"Not enough inventory space to equip {item_name}: unequipping "
-                        f"{oh_name_pre} from the off-hand would exceed your inventory limit "
-                        f"({char.slots_used}/{char.inventory_size} slots used). Free a slot first.",
-                    )
+            if oh_id_pre and oh_id_pre not in displace_ids:
+                displace_ids.append(oh_id_pre)
+
+        if displace_ids:
+            projected = _projected_slots_used_after_equip(char, item_id, displace_ids)
+            if projected > char.inventory_size:
+                names = " and ".join(
+                    (ITEM_REGISTRY.get(did).name if ITEM_REGISTRY.get(did) else did)
+                    for did in displace_ids
+                )
+                return _err(
+                    state,
+                    f"Not enough inventory space to equip {item_name}: unequipping "
+                    f"{names} would exceed your inventory limit "
+                    f"({char.slots_used}/{char.inventory_size} slots used). Free a slot first.",
+                )
 
         # --- Two-Handed: block off-hand equip if main_hand holds a two-handed weapon ---
         if target_slot == ItemSlot.OFF_HAND:
@@ -630,13 +683,37 @@ class CharacterManager:
             return _err(state, f"{char.name} has nothing equipped in the {slot.value} slot.")
 
         inv_item = next((i for i in char.inventory if i.item_id == item_id), None)
+        definition = ITEM_REGISTRY.get(item_id)
+        item_name = definition.name if definition else item_id
+
+        # Bundle-aware pre-flight: unequipping a light item may push the light pool
+        # across a BUNDLE_SIZE boundary, costing an extra inventory slot.
+        if inv_item and definition is not None and definition.isLight:
+            from math import ceil
+
+            from engine.azure_constants import BUNDLE_SIZE
+            L_current = sum(
+                i.quantity for i in char.inventory
+                if not i.equipped
+                and i.container_id is None
+                and (d := ITEM_REGISTRY.get(i.item_id)) is not None
+                and d.isLight
+            )
+            L_after = L_current + inv_item.quantity
+            extra_slots = ceil(L_after / BUNDLE_SIZE) - (ceil(L_current / BUNDLE_SIZE) if L_current > 0 else 0)
+            if char.slots_used + extra_slots > char.inventory_size:
+                return _err(
+                    state,
+                    f"Not enough inventory space to unequip {item_name}: returning it to "
+                    f"inventory would exceed your inventory limit "
+                    f"({char.slots_used}/{char.inventory_size} slots used). Free a slot first.",
+                )
+
         if inv_item:
             inv_item.equipped = False
 
         char.equipped_slots[slot.value] = None
 
-        definition = ITEM_REGISTRY.get(item_id)
-        item_name = definition.name if definition else item_id
         state.updated_at = _now()
         return _ok(state, f"{char.name} unequipped {item_name} from the {slot.value} slot.")
 
