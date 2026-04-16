@@ -7,5 +7,7 @@
   "requires_target": "none",
   "requires_destination": true,
   "range_requirement": null,
-  "effect_tags": ["move_to_band"]
+  "effect_tags": [
+    "move_to_band"
+  ]
 }

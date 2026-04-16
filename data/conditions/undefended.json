@@ -4,6 +4,8 @@
   "duration_type": "rounds",
   "stackable": false,
   "hooks": {},
-  "stat_modifiers": {"defense": -9999},
+  "stat_modifiers": {
+    "defense": -9999
+  },
   "grants_actions": []
 }

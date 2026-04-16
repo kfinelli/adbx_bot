@@ -2,6 +2,7 @@
   "condition_id": "strengthened",
   "label": "Strengthened",
   "duration_type": "rounds",
+  "stackable": false,
   "hooks": {},
   "stat_modifiers": {
     "physique": 2

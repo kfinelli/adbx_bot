@@ -3,44 +3,44 @@
     "advance": {
       "name": "Advance",
       "type": 2,
-      "action_id": "advance",
-      "desc": "Move to an adjacent zone."
+      "desc": "Move to an adjacent zone.",
+      "action_id": "advance"
     },
     "abdicate": {
       "name": "Abdicate",
       "type": 2,
-      "action_id": "abdicate",
-      "desc": "Forfeit your combat action."
+      "desc": "Forfeit your combat action.",
+      "action_id": "abdicate"
     },
     "aggrieve": {
       "name": "Aggrieve",
       "type": 2,
-      "action_id": "aggrieve",
-      "desc": "Charge into melee range and attack."
+      "desc": "Charge into melee range and attack.",
+      "action_id": "aggrieve"
     },
     "assail": {
       "name": "Assail",
       "type": 2,
-      "action_id": "assail",
-      "desc": "Attack an enemy in range."
+      "desc": "Attack an enemy in range.",
+      "action_id": "assail"
     },
     "abjure": {
       "name": "Abjure",
       "type": 2,
-      "action_id": "abjure",
-      "desc": "Attempt to repel an enemy."
+      "desc": "Attempt to repel an enemy.",
+      "action_id": "abjure"
     },
     "abscond": {
       "name": "Abscond",
       "type": 2,
-      "action_id": "abscond",
-      "desc": "Attempt to flee from combat."
+      "desc": "Attempt to flee from combat.",
+      "action_id": "abscond"
     },
     "affect": {
       "name": "Affect",
       "type": 2,
-      "action_id": "affect",
-      "desc": "Declare a freeform action requiring DM input."
+      "desc": "Declare a freeform action requiring DM input.",
+      "action_id": "affect"
     },
     "trapwise": {
       "name": "Trapwise",
@@ -50,73 +50,73 @@
     "martial_training_c": {
       "name": "Martial Training",
       "type": 6,
-      "rank": "C",
-      "desc": "You can equip gear and weapons with Rank: C"
+      "desc": "You can equip gear and weapons with Rank: C",
+      "rank": "C"
     },
     "martial_training_d": {
       "name": "Light Weapons",
       "type": 6,
-      "rank": "D",
-      "desc": "You can equip gear and weapons with Rank: D"
+      "desc": "You can equip gear and weapons with Rank: D",
+      "rank": "D"
     },
     "martial_expertise_b": {
       "name": "Martial Expertise",
       "type": 6,
-      "rank": "B",
-      "desc": "You can equip gear and weapons with Rank: B"
+      "desc": "You can equip gear and weapons with Rank: B",
+      "rank": "B"
     },
     "arcane_basics": {
       "name": "Arcane Basics",
       "type": 6,
-      "rank": "V",
-      "desc": "You can equip gear and weapons with Rank: V"
+      "desc": "You can equip gear and weapons with Rank: V",
+      "rank": "V"
     },
     "arcane_knowledge": {
       "name": "Arcane Knowledge",
       "type": 6,
-      "rank": "W",
-      "desc": "You can equip gear and weapons with Rank: W"
+      "desc": "You can equip gear and weapons with Rank: W",
+      "rank": "W"
     },
     "arcane_secrets": {
       "name": "Arcane Secrets",
       "type": 6,
-      "rank": "X",
-      "desc": "You can equip gear and weapons with Rank: X"
+      "desc": "You can equip gear and weapons with Rank: X",
+      "rank": "X"
     },
     "passive_phy_bonus": {
       "name": "+100 PHY",
       "type": 5,
+      "desc": "Increase Physique by 100!",
       "stat": "PHY",
-      "bonus": 100,
-      "desc": "Increase Physique by 100!"
+      "bonus": 100
     },
     "passive_fns_bonus": {
       "name": "+100 FNS",
       "type": 5,
+      "desc": "Increase Finesse by 100!",
       "stat": "FNS",
-      "bonus": 100,
-      "desc": "Increase Finesse by 100!"
+      "bonus": 100
     },
     "passive_rsn_bonus": {
       "name": "+100 RSN",
       "type": 5,
+      "desc": "Increase Reason by 100!",
       "stat": "RSN",
-      "bonus": 100,
-      "desc": "Increase Reason by 100!"
+      "bonus": 100
     },
     "passive_svy_bonus": {
       "name": "+100 SVY",
       "type": 5,
+      "desc": "Increase Savvy by 100!",
       "stat": "SVY",
-      "bonus": 100,
-      "desc": "Increase Savvy by 100!"
+      "bonus": 100
     },
     "passive_any_bonus": {
       "name": "+100 ANY",
       "type": 5,
+      "desc": "Increase any stat by 100!",
       "stat": "ANY",
-      "bonus": 100,
-      "desc": "Increase any stat by 100!"
+      "bonus": 100
     },
     "knight_protector": {
       "name": "Protector",
@@ -141,9 +141,9 @@
     "thief_acquire": {
       "name": "Acquire",
       "type": 2,
-      "action_id": "affect",
       "desc": "DC: ? + [target FNS].\nMake a finesse check to steal an unequipped item from an enemy.",
-      "dm_notes": "Base DCs are usually:\n5 - unequipped items\n7 - held items (level 3 or higher)\n9 - equipped items (level 5)\nSome items may be easier or harder to steal at your discretion"
+      "dm_notes": "Base DCs are usually:\n500 - unequipped items\n700 - held items (level 3 or higher)\n900 - equipped items (level 5)\nSome items may be easier or harder to steal at your discretion",
+      "action_id": "affect"
     },
     "thief_hide": {
       "name": "Hide",
@@ -158,8 +158,11 @@
     "thief_slip": {
       "name": "Slip",
       "type": 4,
-      "check": { "DC": 9, "Stat": "FNS" },
-      "desc": "On a successful FNS check, enemies cannot attack you for leaving the current zone until next turn."
+      "desc": "On a successful FNS check, enemies cannot attack you for leaving the current zone until next turn.",
+      "check": {
+        "DC": 900,
+        "Stat": "FNS"
+      }
     },
     "thief_disarmor": {
       "name": "Disarmor",
@@ -170,7 +173,7 @@
       "name": "Spellcraft",
       "type": 3,
       "desc": "You can analyze the properties of a spell or ritual with a RSN check.",
-      "dm_notes": "Base DCs are usually:\n Rank - DC\nV - 5\nW - 7\nX - 9\nY - 11\nZ - 13\nSome spells may be easier or harder to analyze at your discretion.\n\nDecrease DC by 2 for each of the following:\n - Player witnessed spell being cast\n - Player has access to written record of the spell (tome, scroll, runes, magic circle, etc)\n - Player is directly affected by the spell"
+      "dm_notes": "Base DCs are usually:\n Rank - DC\nV - 500\nW - 700\nX - 900\nY - 1100\nZ - 1300\nSome spells may be easier or harder to analyze at your discretion.\n\nDecrease DC by 200 for each of the following:\n - Player witnessed spell being cast\n - Player has access to written record of the spell (tome, scroll, runes, magic circle, etc)\n - Player is directly affected by the spell"
     },
     "mage_rep": {
       "name": "Distinguished",
@@ -180,8 +183,8 @@
     "dilettante_knack": {
       "name": "Knack",
       "type": 9,
-      "uses": 1,
-      "desc": "You may either:\n - Make a SVY check in place of another check.\n - Use your SVY save in place of another save.\nGain an additional use at level 3, and again at level 5. Regain all uses at the start of a combat encounter."
+      "desc": "You may either:\n - Make a SVY check in place of another check.\n - Use your SVY save in place of another save.\nGain an additional use at level 3, and again at level 5. Regain all uses at the start of a combat encounter.",
+      "uses": 1
     },
     "dilettante_weapon_forte": {
       "name": "Weapon Forte",
