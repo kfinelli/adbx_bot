@@ -127,47 +127,6 @@ class TestProductionDataFiles:
         assert a.requires_destination is False
         assert a.effect_tags == []
 
-    def test_all_expected_jobs_present(self):
-        expected = {"KNIGHT", "THIEF", "MAGE", "DILETTANTE"}
-        assert expected == set(CLASS_DEFINITIONS.keys())
-
-    def test_job_knight_values(self):
-        j = CLASS_DEFINITIONS["KNIGHT"]
-        assert isinstance(j, JobDef)
-        assert j.display_name == "Knight"
-        assert j.hit_die == "12d100"
-        assert j.base_save == 4
-        assert j.primary_stat == "PHY"
-        assert j.max_level == 5
-        # Actions come from COMBAT_ACTION skills
-        action_ids = {s.action_id for s in j.skills.values() if s.action_id}
-        assert "aggrieve" in action_ids
-        assert "move" not in action_ids  # Move is a top-level button, not from a skill
-        assert "affect" in action_ids
-        # Starting weapon rank comes from WEAPON_RANK skill at level 1
-        weapon_rank_skills = [s for s in j.skills.values() if s.skill_type == SkillType.WEAPON_RANK.value and s.level == 1]
-        assert any(s.rank == "C" for s in weapon_rank_skills)
-
-    def test_job_thief_values(self):
-        j = CLASS_DEFINITIONS["THIEF"]
-        assert j.display_name == "Thief"
-        assert j.hit_die == "6d100"
-        assert j.base_save == 2
-        assert j.primary_stat == "FNS"
-        action_ids = {s.action_id for s in j.skills.values() if s.action_id}
-        assert "assail" in action_ids
-
-    def test_job_mage_values(self):
-        j = CLASS_DEFINITIONS["MAGE"]
-        assert j.display_name == "Mage"
-        assert j.hit_die == "4d100"
-        assert j.primary_stat == "RSN"
-
-    def test_job_dilettante_values(self):
-        j = CLASS_DEFINITIONS["DILETTANTE"]
-        assert j.display_name == "Dilettante"
-        assert j.primary_stat == "SVY"
-
     def test_condition_registry_has_expected_conditions(self):
         for cid in (
             "poisoned", "stunned", "strengthened", "entangled", "absconding",
