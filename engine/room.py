@@ -16,6 +16,7 @@ from validation import (
 )
 
 from .helpers import _err, _now, _ok, _resolve_room
+from .strings import fmt_string, get_string
 
 
 class RoomManager:
@@ -32,19 +33,19 @@ class RoomManager:
 
         # Validate room name
         if not room.name or not room.name.strip():
-            return _err(state, "Room name cannot be empty.")
+            return _err(state, get_string("room.errors.name_empty"))
 
         # Validate room description length
         if room.description and len(room.description) > 1000:
-            return _err(state, "Room description exceeds maximum length of 1000 characters.")
+            return _err(state, get_string("room.errors.description_too_long"))
 
         # Validate room notes length
         if room.notes and len(room.notes) > 2000:
-            return _err(state, "Room notes exceed maximum length of 2000 characters.")
+            return _err(state, get_string("room.errors.notes_too_long"))
 
         state.dungeon.rooms[room.room_id] = room
         state.updated_at = _now()
-        return _ok(state, f"Room '{room.name}' added to dungeon.")
+        return _ok(state, fmt_string("room.added", name=room.name))
 
     def set_room(self, state: GameState, room: Room):
         """
@@ -60,7 +61,7 @@ class RoomManager:
         state.current_room_id = room.room_id
         room.visited = True
         state.updated_at = _now()
-        return _ok(state, f"Entered: {room.name}.")
+        return _ok(state, fmt_string("room.entered", name=room.name))
 
     def move_party_to_room(self, state: GameState, room_id):
         """
@@ -72,14 +73,14 @@ class RoomManager:
         - NPCs in the roster remain in their rooms; use npc_roster for persistent NPCs.
         """
         if state.dungeon is None:
-            return _err(state, "No dungeon loaded.")
+            return _err(state, get_string("room.errors.no_dungeon"))
         room = state.dungeon.rooms.get(room_id)
         if room is None:
-            return _err(state, f"Room {room_id} not found in dungeon.")
+            return _err(state, fmt_string("room.errors.not_found", room_id=room_id))
         state.current_room_id = room_id
         room.visited = True
         state.updated_at = _now()
-        return _ok(state, f"Entered: {room.name}.")
+        return _ok(state, fmt_string("room.entered", name=room.name))
 
     def update_room(
         self,
@@ -91,15 +92,15 @@ class RoomManager:
     ):
         """Edit the name, description, and DM notes of an existing room."""
         if not name.strip():
-            return _err(state, "Room name cannot be empty.")
+            return _err(state, get_string("room.errors.name_empty"))
         room = _resolve_room(state, room_id)
         if room is None:
-            return _err(state, f"Room {room_id} not found.")
+            return _err(state, fmt_string("room.errors.not_found", room_id=room_id))
         room.name        = name.strip()
         room.description = description
         room.notes       = notes
         state.updated_at = _now()
-        return _ok(state, f"Room updated: {room.name}.")
+        return _ok(state, fmt_string("room.updated", name=room.name))
 
     def delete_feature(
         self,
@@ -110,13 +111,13 @@ class RoomManager:
         """Delete a feature from a room."""
         room = _resolve_room(state, room_id)
         if room is None:
-            return _err(state, "No current room.")
+            return _err(state, get_string("room.errors.no_current"))
         before = len(room.features)
         room.features = [f for f in room.features if f.feature_id != feature_id]
         if len(room.features) == before:
-            return _err(state, f"Feature {feature_id} not found.")
+            return _err(state, fmt_string("room.feature.not_found", feature_id=feature_id))
         state.updated_at = _now()
-        return _ok(state, "Feature deleted.")
+        return _ok(state, get_string("room.feature.deleted"))
 
     def update_feature(
         self,
@@ -131,18 +132,18 @@ class RoomManager:
         """Update a feature in a room."""
         room = _resolve_room(state, room_id)
         if room is None:
-            return _err(state, "No current room.")
+            return _err(state, get_string("room.errors.no_current"))
         feat = next((f for f in room.features if f.feature_id == feature_id), None)
         if feat is None:
-            return _err(state, f"Feature {feature_id} not found.")
+            return _err(state, fmt_string("room.feature.not_found", feature_id=feature_id))
         if not name.strip():
-            return _err(state, "Feature name cannot be empty.")
+            return _err(state, get_string("room.feature.errors.name_empty"))
         feat.name        = name.strip()
         feat.description = description
         feat.state       = state_str
         feat.notes       = notes
         state.updated_at = _now()
-        return _ok(state, f"Feature updated: {feat.name}.")
+        return _ok(state, fmt_string("room.feature.updated", name=feat.name))
 
     def delete_exit(
         self,
@@ -153,11 +154,11 @@ class RoomManager:
         """Delete an exit from a room."""
         room = _resolve_room(state, room_id)
         if room is None:
-            return _err(state, "No current room.")
+            return _err(state, get_string("room.errors.no_current"))
         before = len(room.exits)
         room.exits = [e for e in room.exits if e.exit_id != exit_id]
         if len(room.exits) == before:
-            return _err(state, f"Exit {exit_id} not found.")
+            return _err(state, fmt_string("room.exit.not_found", exit_id=exit_id))
         state.updated_at = _now()
         return _ok(state, "Exit deleted.")
 
@@ -176,12 +177,12 @@ class RoomManager:
         """Update an exit in a room."""
         room = _resolve_room(state, room_id)
         if room is None:
-            return _err(state, "No current room.")
+            return _err(state, get_string("room.errors.no_current"))
         ex = next((e for e in room.exits if e.exit_id == exit_id), None)
         if ex is None:
-            return _err(state, f"Exit {exit_id} not found.")
+            return _err(state, fmt_string("room.exit.not_found", exit_id=exit_id))
         if not label.strip():
-            return _err(state, "Exit label cannot be empty.")
+            return _err(state, get_string("room.exit.errors.label_empty"))
         ex.label          = label.strip()
         ex.description    = description
         ex.door_state     = door_state
@@ -189,7 +190,7 @@ class RoomManager:
         ex.notes          = notes
         ex.auto_move      = auto_move
         state.updated_at  = _now()
-        return _ok(state, f"Exit updated: {ex.label}.")
+        return _ok(state, fmt_string("room.exit.updated", label=ex.label))
 
     def set_feature_state(
         self,
@@ -201,7 +202,7 @@ class RoomManager:
         """Update the state string of a room feature."""
         room = _resolve_room(state, room_id)
         if room is None:
-            return _err(state, "No current room.")
+            return _err(state, get_string("room.errors.no_current"))
 
         # Validate new state
         state_result = validate_non_empty_string(new_state, "Feature state", max_length=100)
@@ -212,8 +213,8 @@ class RoomManager:
             if feat.feature_id == feature_id:
                 feat.state = state_result.value
                 state.updated_at = _now()
-                return _ok(state, f"{feat.name} → {state_result.value}.")
-        return _err(state, f"Feature {feature_id} not found.")
+                return _ok(state, fmt_string("room.feature.state_set", name=feat.name, state=state_result.value))
+        return _err(state, fmt_string("room.feature.not_found", feature_id=feature_id))
 
     def set_exit_state(
         self,
@@ -225,7 +226,7 @@ class RoomManager:
         """Set the door state of an exit."""
         room = _resolve_room(state, room_id)
         if room is None:
-            return _err(state, "No current room.")
+            return _err(state, get_string("room.errors.no_current"))
 
         # Validate door state
         state_result = validate_door_state(new_state)
@@ -251,7 +252,7 @@ class RoomManager:
         """DM adds a new exit."""
         room = _resolve_room(state, room_id)
         if room is None:
-            return _err(state, "No current room.")
+            return _err(state, get_string("room.errors.no_current"))
 
         # Validate label
         label_result = validate_non_empty_string(label, "Exit label", max_length=50)

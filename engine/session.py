@@ -5,6 +5,7 @@ Session management for the dungeon crawler engine.
 from models import GameState, SessionMode
 
 from .helpers import _err, _now, _ok
+from .strings import fmt_string, get_string
 
 
 class SessionManager:
@@ -16,9 +17,9 @@ class SessionManager:
         Opens the first dungeon turn.
         """
         if state.mode != SessionMode.PRE_START:
-            return _err(state, "Session is already started.")
+            return _err(state, get_string("session.errors.already_started"))
         if not state.characters:
-            return _err(state, "No characters have arrived yet.")
+            return _err(state, get_string("session.errors.no_characters"))
         state.mode = SessionMode.EXPLORATION
         state.session_active = True
         if state.current_room_id and state.dungeon and state.current_room_id in state.dungeon.rooms:
@@ -30,23 +31,23 @@ class SessionManager:
         tm = TurnManager()
         tm.open_turn(state)
 
-        return _ok(state, "Session started. The adventure begins!")
+        return _ok(state, get_string("session.started"))
 
     def hold_session(self, state: GameState):
         """Put the session on hold. No player turns or DM commands accepted until resumed."""
         if not state.session_active:
-            return _err(state, "Session is already on hold.")
+            return _err(state, get_string("session.errors.already_on_hold"))
         state.session_active = False
         state.updated_at = _now()
-        return _ok(state, "Session is now on hold.")
+        return _ok(state, get_string("session.on_hold"))
 
     def resume_session(self, state: GameState):
         """Resume a session that was put on hold."""
         if state.session_active:
-            return _err(state, "Session is not on hold.")
+            return _err(state, get_string("session.errors.not_on_hold"))
         state.session_active = True
         state.updated_at = _now()
-        return _ok(state, "Session resumed.")
+        return _ok(state, get_string("session.resumed"))
 
     def enter_rounds(self, state: GameState):
         """
@@ -56,7 +57,7 @@ class SessionManager:
         room NPCs.
         """
         if state.mode == SessionMode.ROUNDS:
-            return _err(state, "Already in rounds.")
+            return _err(state, get_string("session.errors.already_in_rounds"))
         state.rounds_started_at_turn = state.turn_number
         state.mode = SessionMode.ROUNDS
         state.turn_number = 1
@@ -70,7 +71,7 @@ class SessionManager:
         state.battlefield = initialize_battlefield(state)
 
         state.updated_at = _now()
-        return _ok(state, "Entering rounds!")
+        return _ok(state, get_string("session.entering_rounds"))
 
     def exit_rounds(self, state: GameState):
         """
@@ -80,7 +81,7 @@ class SessionManager:
         Clears the battlefield.
         """
         if state.mode == SessionMode.EXPLORATION:
-            return _err(state, "Already in exploration mode.")
+            return _err(state, get_string("session.errors.already_in_exploration"))
         state.mode = SessionMode.EXPLORATION
         resumed_at = (state.rounds_started_at_turn or state.turn_number) + 1
         state.turn_number = resumed_at
@@ -119,7 +120,7 @@ class SessionManager:
                     continue
                 inv_item.charges = defn.maxCharges
         state.updated_at = _now()
-        return _ok(state, "Returning to exploration.")
+        return _ok(state, get_string("session.returning_to_exploration"))
 
     def import_dungeon(self, state: GameState, dungeon, npc_roster=None):
         """
@@ -140,7 +141,7 @@ class SessionManager:
             npc_roster: Optional NPCRoster to load (replaces existing roster if provided)
         """
         if state.mode != SessionMode.PRE_START:
-            return _err(state, "Dungeons can only be imported before the session starts.")
+            return _err(state, get_string("session.errors.dungeon_import_timing"))
         state.dungeon = dungeon
         # Replace the NPC roster if provided
         if npc_roster is not None:
@@ -151,4 +152,4 @@ class SessionManager:
             state.current_room_id = dungeon.entrance_id
         state.updated_at = _now()
         room_count = len(dungeon.rooms)
-        return _ok(state, f"Dungeon '{dungeon.name}' loaded ({room_count} room(s)).")
+        return _ok(state, fmt_string("session.dungeon_loaded", name=dungeon.name, room_count=room_count))

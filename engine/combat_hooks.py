@@ -70,6 +70,7 @@ from models import (
 
 from .data_loader import CONDITION_REGISTRY
 from .dice import roll_dice_expr
+from .strings import fmt_string
 
 # ---------------------------------------------------------------------------
 # State lookup utilities
@@ -283,10 +284,7 @@ def _hook_weapon_attack(
         from engine.combat import _band_distance
         dist = _band_distance(actor_cs.range_band, target_cs.range_band)
         if dist > weapon_range:
-            log.append(
-                f"{actor_name} cannot reach {target_name} "
-                f"— {dist} band(s) away, weapon range is {weapon_range}."
-            )
+            log.append(fmt_string("combat.log.out_of_range", actor_name=actor_name, target_name=target_name, dist=dist, weapon_range=weapon_range))
             return
 
     actor_char = state.characters.get(actor_id)
@@ -316,10 +314,7 @@ def _hook_weapon_attack(
             if isinstance(weapon_def, ChargeWeapon):
                 current = weapon_inv.charges if weapon_inv.charges is not None else -1
                 if current == 0:
-                    log.append(
-                        f"{actor_name} tries to use {weapon_def.name} "
-                        f"but it has no charges left!"
-                    )
+                    log.append(fmt_string("combat.log.no_charges", actor_name=actor_name, weapon_name=weapon_def.name))
                     return
                 if current > 0:
                     weapon_inv.charges = current - 1
@@ -340,14 +335,14 @@ def _hook_weapon_attack(
     target_char = state.characters.get(target_id)
     target_npc  = _find_npc(state, target_id)
     if target_char is None and target_npc is None:
-        log.append(f"{actor_name} swings at nothing.")
+        log.append(fmt_string("combat.log.swings_at_nothing", actor_name=actor_name))
         return
 
     target_ac = _effective_finesse(state, target_id)
 
     roll = random.randint(1, 10*POWER_LEVEL) + attack_bonus
     if roll < target_ac:
-        log.append(f"{actor_name} attacks {target_name} — misses! (rolled {roll} vs AC {target_ac})")
+        log.append(fmt_string("combat.log.attack_miss", actor_name=actor_name, target_name=target_name, roll=roll, target_ac=target_ac))
         return
 
     base_roll = roll_dice_expr(dice)["total"]
@@ -371,10 +366,7 @@ def _hook_weapon_attack(
 
     crit_tag = " [CRIT!]" if is_crit else ""
     magic_tag = " [magical]" if targets_stat == "resistance" else ""
-    log.append(
-        f"{actor_name} attacks {target_name} — hits!{crit_tag}{magic_tag} (rolled {roll} vs Dodge {target_ac}) "
-        f"Deals {damage} damage. [{target_name}: {hp_str}]"
-    )
+    log.append(fmt_string("combat.log.attack_hit", actor_name=actor_name, target_name=target_name, crit_tag=crit_tag, magic_tag=magic_tag, roll=roll, target_ac=target_ac, damage=damage, hp_str=hp_str))
 
 
 def _hook_check_death(
@@ -400,14 +392,14 @@ def _hook_check_death(
     if target_char and target_char.hp_current <= 0:
         from models import CharacterStatus
         target_char.status = CharacterStatus.DEAD
-        log.append(f"{target_name} has fallen!")
+        log.append(fmt_string("combat.log.fallen", target_name=target_name))
         state.battlefield.combatants.pop(target_id, None)
         return
 
     target_npc = _find_npc(state, target_id)
     if target_npc and target_npc.hp_current <= 0:
         target_npc.status = "dead"
-        log.append(f"{target_name} has been slain!")
+        log.append(fmt_string("combat.log.slain", target_name=target_name))
         state.battlefield.combatants.pop(target_id, None)
         xp_total = target_npc.hit_dice * 100
         if xp_total > 0:
@@ -418,10 +410,8 @@ def _hook_check_death(
             if active:
                 cm = CharacterManager()
                 cm.distribute_xp(state, xp_total)
-                log.append(
-                    f"The party gains {xp_total} XP "
-                    f"({xp_total // len(active)} each)."
-                )
+                xp_each = xp_total // len(active)
+                log.append(fmt_string("combat.log.xp_gained", xp_total=xp_total, xp_each=xp_each))
 
 
 def _opportunity_attacks(
@@ -465,7 +455,7 @@ def _opportunity_attacks(
             continue
 
         enemy_name = _combatant_name(state, enemy_id)
-        log.append(f"{enemy_name} gets an opportunity attack!")
+        log.append(fmt_string("combat.log.opportunity_attack", enemy_name=enemy_name))
         from engine.combat import CombatAction
         free_action = CombatAction(action_id="attack", target_id=actor_id)
         _hook_weapon_attack(state, enemy_id, free_action, log, {})
@@ -513,7 +503,7 @@ def _hook_move_to_band(
     adjacent   = _adjacent_bands(old_band)
 
     if action.destination == old_band:
-        log.append(f"{actor_name} holds position at {old_band.value}.")
+        log.append(fmt_string("combat.log.holds_position", actor_name=actor_name, band=old_band.value))
         return
 
     if action.destination in adjacent:
@@ -524,7 +514,7 @@ def _hook_move_to_band(
     _opportunity_attacks(state, actor_id, old_band, log)
 
     cs.range_band = new_band
-    log.append(f"{actor_name} moves from {old_band.value} to {new_band.value}.")
+    log.append(fmt_string("combat.log.moves", actor_name=actor_name, old_band=old_band.value, new_band=new_band.value))
 
 
 def _hook_deal_damage(
@@ -563,7 +553,7 @@ def _hook_deal_damage(
             from models import CharacterStatus
             actor_char.status = CharacterStatus.DEAD
             state.battlefield.combatants.pop(actor_id, None)
-            log.append(f"{actor_name} takes {damage} {damage_type} damage and falls!")
+            log.append(fmt_string("combat.log.takes_damage_falls", actor_name=actor_name, damage=damage, damage_type=damage_type))
             return
     elif actor_npc:
         mitigation = (
@@ -577,7 +567,7 @@ def _hook_deal_damage(
         if actor_npc.hp_current <= 0:
             actor_npc.status = "dead"
             state.battlefield.combatants.pop(actor_id, None)
-            log.append(f"{actor_name} takes {damage} {damage_type} damage and is slain!")
+            log.append(fmt_string("combat.log.takes_damage_slain", actor_name=actor_name, damage=damage, damage_type=damage_type))
             xp_total = actor_npc.hit_dice * 100
             if xp_total > 0:
                 from engine.character import CharacterManager
@@ -587,15 +577,13 @@ def _hook_deal_damage(
                 if active:
                     cm = CharacterManager()
                     cm.distribute_xp(state, xp_total)
-                    log.append(
-                        f"The party gains {xp_total} XP "
-                        f"({xp_total // len(active)} each)."
-                    )
+                    xp_each = xp_total // len(active)
+                    log.append(fmt_string("combat.log.xp_gained", xp_total=xp_total, xp_each=xp_each))
             return
     else:
         return
 
-    log.append(f"{actor_name} takes {damage} {damage_type} damage. [{actor_name}: {hp_str}]")
+    log.append(fmt_string("combat.log.takes_damage", actor_name=actor_name, damage=damage, damage_type=damage_type, hp_str=hp_str))
 
 
 def _hook_apply_condition(
@@ -641,9 +629,9 @@ def _hook_apply_condition(
     cond_def = CONDITION_REGISTRY.get(condition_id)
     label    = cond_def.label if cond_def else condition_id
     if target_id == actor_id:
-        log.append(f"{actor_name} is now {label}! ({duration} rounds)")
+        log.append(fmt_string("combat.log.condition_applied_self", actor_name=actor_name, label=label, duration=duration))
     else:
-        log.append(f"{actor_name} applies {label} to {target_name}! ({duration} rounds)")
+        log.append(fmt_string("combat.log.condition_applied", actor_name=actor_name, label=label, target_name=target_name, duration=duration))
 
 
 def _hook_skip_action(
@@ -679,7 +667,7 @@ def _hook_block_movement(
     cs = state.battlefield.combatants.get(actor_id)
     if cs is not None:
         cs.movement_blocked = True
-        log.append(f"{_combatant_name(state, actor_id)} is entangled and cannot move!")
+        log.append(fmt_string("combat.log.entangled", actor_name=_combatant_name(state, actor_id)))
 
 
 def _hook_abscond_roll(
@@ -717,7 +705,7 @@ def _hook_abscond_roll(
         if actor_cs and _BAND_INDEX[cs.range_band] <= _BAND_INDEX[actor_cs.range_band]:
             npc = _find_npc(state, cid)
             blocker = npc.name if npc else "An enemy"
-            log.append(f"{actor_name} tries to flee but {blocker} is blocking the way!")
+            log.append(fmt_string("combat.log.flee_blocked", actor_name=actor_name, blocker=blocker))
             return
 
     # Roll
@@ -752,16 +740,10 @@ def _hook_abscond_roll(
 
     # Outcome
     if total >= threshold:
-        log.append(
-            f"{actor_name} rolls {roll} + {finesse} = **{total}** vs {threshold} — "
-            f"the party flees!"
-        )
+        log.append(fmt_string("combat.log.flee_success", actor_name=actor_name, roll=roll, finesse=finesse, total=total, threshold=threshold))
         bf.abscond_succeeded = True
     else:
-        log.append(
-            f"{actor_name} rolls {roll} + {finesse} = {total} vs {threshold} — "
-            f"failed to abscond."
-        )
+        log.append(fmt_string("combat.log.flee_failure", actor_name=actor_name, roll=roll, finesse=finesse, total=total, threshold=threshold))
 
 
 def _hook_resolve_equip(
@@ -902,7 +884,7 @@ def _tick_actor_conditions(state: GameState, actor_id: UUID, log: list[str]) -> 
         else:
             cond_name = cond_def.label if cond_def else cond.condition_id
             name = _combatant_name(state, actor_id)
-            log.append(f"{name}'s {cond_name} condition has expired.")
+            log.append(fmt_string("combat.log.condition_expired", name=name, cond_name=cond_name))
 
     combatant.active_conditions = still_active
 

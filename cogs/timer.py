@@ -18,6 +18,7 @@ import discord
 from discord.ext import commands, tasks
 
 from engine import close_turn
+from engine.strings import fmt_string
 from models import TurnStatus
 from store import db, get_session, save_session_async, update_status
 
@@ -68,10 +69,7 @@ class TimerCog(commands.Cog):
 
             # Build notification text with DM ping
             dm_mention = f"<@{state.dm_user_id}>" if state.dm_user_id else "DM"
-            notification = (
-                f"Turn {turn.turn_number} timer expired — "
-                f"awaiting resolution ({dm_mention})."
-            )
+            notification = fmt_string("timer.expired", turn_number=turn.turn_number, dm_mention=dm_mention)
 
             await channel.send(notification)
             await update_status(channel, state)
@@ -81,8 +79,7 @@ class TimerCog(commands.Cog):
                 try:
                     dm_user = await self.bot.fetch_user(int(state.dm_user_id))
                     await dm_user.send(
-                        f"Turn {turn.turn_number} has expired in "
-                        f"<#{channel_id}>. Ready for your resolution."
+                        fmt_string("timer.dm_notification", turn_number=turn.turn_number, channel_id=channel_id)
                     )
                 except (discord.Forbidden, discord.HTTPException):
                     pass  # DMs disabled or user not found — channel ping is enough

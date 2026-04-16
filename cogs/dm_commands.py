@@ -26,6 +26,7 @@ from engine import (
     open_turn,
     say,
 )
+from engine.strings import get_string
 from models import (
     SessionMode,
     TurnStatus,
@@ -72,10 +73,10 @@ class DMCog(commands.Cog):
         if state is None:
             return None
         if state.dm_user_id != str(interaction.user.id):
-            await ack_err(interaction, "Only the DM can use this command.")
+            await ack_err(interaction, get_string("errors.dm_only"))
             return None
         if not state.session_active and not allow_on_hold:
-            await ack_err(interaction, "Session is on hold. Use Resume first.")
+            await ack_err(interaction, get_string("errors.session_on_hold_resume"))
             return None
         return state
 
@@ -95,7 +96,7 @@ class DMCog(commands.Cog):
         channel_id = str(interaction.channel_id)
         from store import create_session, has_session
         if has_session(channel_id):
-            await ack_err(interaction, "A session already exists in this channel.")
+            await ack_err(interaction, get_string("errors.session_exists"))
             return
         state = create_session(channel_id, dm_user_id=str(interaction.user.id))
         if header:
@@ -121,7 +122,7 @@ class DMCog(commands.Cog):
 
             if state.mode == SessionMode.ROUNDS:
                 result = exit_rounds(state)
-                label = "Combat ended — returning to exploration."
+                label = get_string("session.combat_ended")
             else:
                 result = enter_rounds(state)
                 label = "Combat begins!"

@@ -57,6 +57,7 @@ from .npc import NPCManager
 from .oracle import OracleManager
 from .room import RoomManager
 from .session import SessionManager
+from .strings import fmt_string, get_string
 
 
 @dataclass
@@ -293,7 +294,7 @@ def set_room(state: GameState, room):
         xp = getattr(room, "exploration_xp", 0) or DEFAULT_ROOM_XP
         cm = CharacterManager()
         cm.distribute_xp(state, xp)
-        result.message += f" (Party gained {xp} XP for exploring.)"
+        result.message += fmt_string("explore.xp_note", xp=xp)
     return result
 
 
@@ -308,7 +309,7 @@ def move_party_to_room(state: GameState, room_id):
         xp = room.exploration_xp or DEFAULT_ROOM_XP
         cm = CharacterManager()
         cm.distribute_xp(state, xp)
-        result.message += f" (Party gained {xp} XP for exploring.)"
+        result.message += fmt_string("explore.xp_note", xp=xp)
     return result
 
 
@@ -474,23 +475,24 @@ def abscond(
     if state.party is None:
         return _err(state, "No active party.")
     if state.mode == SessionMode.PRE_START:
-        return _err(state, "The session has not started yet.")
+        return _err(state, get_string("errors.session_not_started"))
     if state.party.leader_id != character_id:
-        return _err(state, "Only the party leader can use /abscond.")
+        return _err(state, get_string("errors.abscond_permission"))
 
     room = state.current_room
     if room is None:
-        return _err(state, "No current room.")
+        return _err(state, get_string("room.errors.no_current"))
     if not room.exits:
-        return _err(state, "No exits in this room.")
+        return _err(state, get_string("explore.errors.no_exits"))
 
     idx = exit_number - 1
     if idx < 0 or idx >= len(room.exits):
-        return _err(state, f"Exit {exit_number} does not exist. There are {len(room.exits)} exit(s).")
+        exit_count = len(room.exits)
+        return _err(state, fmt_string("explore.errors.exit_not_found", exit_number=exit_number, exit_count=exit_count))
 
     exit_ = room.exits[idx]
     if exit_.door_state in (DoorState.LOCKED, DoorState.STUCK):
-        return _err(state, f"The {exit_.label} exit is {exit_.door_state.value} and cannot be used.")
+        return _err(state, fmt_string("explore.errors.exit_blocked", label=exit_.label, door_state=exit_.door_state.value))
 
     # Determine auto-move and free-move conditions.
     # free_move: destination already explored → no turn cost.
@@ -529,12 +531,12 @@ def abscond(
         xp_note = ""
         if dest_room and not dest_room.visited:
             xp = dest_room.exploration_xp or DEFAULT_ROOM_XP
-            xp_note = f" Party gained {xp} XP for exploring."
+            xp_note = fmt_string("explore.xp_note", xp=xp)
         # Move the party first so the room is marked visited before the snapshot.
         if exit_.destination_id:
             move_party_to_room(state, exit_.destination_id)
         dest_name = dest_room.name if dest_room else exit_.label
-        resolution = f"[Auto] {leader_name} {action}. Party arrives at {dest_name}.{xp_note}"
+        resolution = fmt_string("explore.auto_travel", leader_name=leader_name, action=action, dest_name=dest_name, xp_note=xp_note)
         result = resolve_turn(state, resolution, free_move=is_free_move)
         if result.ok:
             open_turn(state)
@@ -546,7 +548,7 @@ def abscond(
     state.current_turn.closed_at = _now()
     state.updated_at = _now()
 
-    return _ok(state, f"{leader_name} {action}.", notify_dm=True)
+    return _ok(state, fmt_string("explore.travel_submitted", leader_name=leader_name, action=action), notify_dm=True)
 
 
 def render_status_header(state: GameState) -> str:
@@ -582,7 +584,7 @@ def render_status(state: GameState) -> str:
 
     # Mode and session/turn state
     if state.mode == SessionMode.PRE_START:
-        lines.append("Waiting for players — session not yet started")
+        lines.append(get_string("status.waiting"))
     else:
         mode_str = "Rounds" if state.mode == SessionMode.ROUNDS else "Exploration"
         if not state.session_active:
@@ -590,9 +592,9 @@ def render_status(state: GameState) -> str:
         elif state.current_turn is None:
             state_str = "No active turn"
         elif state.current_turn.status == TurnStatus.OPEN:
-            state_str = "Open — accepting turn submissions"
+            state_str = get_string("status.turn_open")
         elif state.current_turn.status == TurnStatus.CLOSED:
-            state_str = "Closed — awaiting DM resolution"
+            state_str = get_string("status.turn_closed")
         else:
             state_str = state.current_turn.status.value
         lines.append(f"{mode_str} | {state_str}")

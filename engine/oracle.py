@@ -5,6 +5,7 @@ Oracle and say/emote functions for the dungeon crawler engine.
 from models import GameState, Oracle
 
 from .helpers import _err, _now, _ok
+from .strings import fmt_string
 
 
 class OracleManager:
@@ -44,7 +45,7 @@ class OracleManager:
         )
         state.oracles.append(oracle)
         state.updated_at = _now()
-        result = _ok(state, f"Oracle #{oracle.number} posted.")
+        result = _ok(state, fmt_string("oracle.posted", number=oracle.number))
         result.data = oracle
         return result
 
@@ -63,11 +64,11 @@ class OracleManager:
         matches = [o for o in state.oracles if o.number == number]
         oracle = matches[-1] if matches else None
         if oracle is None:
-            result = _err(state, f"Oracle #{number} not found.")
+            result = _err(state, fmt_string("oracle.errors.not_found", number=number))
             result.data = None
             return result
         oracle.answer = answer
         state.updated_at = _now()
-        result = _ok(state, f"Oracle #{number} answered.")
+        result = _ok(state, fmt_string("oracle.answered", number=number))
         result.data = oracle
         return result

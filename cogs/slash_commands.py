@@ -19,6 +19,7 @@ from engine import (
     say,
     submit_turn,
 )
+from engine.strings import get_string
 from models import SessionMode, TurnStatus
 from store import (
     ack,
@@ -68,14 +69,14 @@ class SessionCog(commands.Cog):
         await ack(interaction)
         state = get_session(str(interaction.channel_id))
         if state is None:
-            await ack_err(interaction, "No active session in this channel.")
+            await ack_err(interaction, get_string("errors.no_session"))
             return
         char = _find_character(state, str(interaction.user.id))
         if char is None:
             await ack_err(interaction, "You don't have a character in this session. Use /arrive first.")
             return
         if state.mode == SessionMode.ROUNDS:
-            await ack_err(interaction, "Combat is active \u2014 use /round to submit your action.")
+            await ack_err(interaction, get_string("errors.combat_active_use_round"))
             return
         turn_number = state.turn_number
         result = submit_turn(state, char.character_id, action)
@@ -97,10 +98,10 @@ class SessionCog(commands.Cog):
         await ack(interaction)
         state = get_session(str(interaction.channel_id))
         if state is None:
-            await ack_err(interaction, "No active session in this channel.")
+            await ack_err(interaction, get_string("errors.no_session"))
             return
         if state.mode != SessionMode.ROUNDS:
-            await ack_err(interaction, "No combat active \u2014 use /turn to submit your action.")
+            await ack_err(interaction, get_string("errors.combat_not_active"))
             return
         char = _find_character(state, str(interaction.user.id))
         if char is None:
@@ -126,7 +127,7 @@ class SessionCog(commands.Cog):
         await ack(interaction)
         state = get_session(str(interaction.channel_id))
         if state is None:
-            await ack_err(interaction, "No active session in this channel.")
+            await ack_err(interaction, get_string("errors.no_session"))
             return
         char = _find_character(state, str(interaction.user.id))
         if char is None:
@@ -156,7 +157,7 @@ class SessionCog(commands.Cog):
         await ack(interaction)
         state = get_session(str(interaction.channel_id))
         if state is None:
-            await ack_err(interaction, "No active session.")
+            await ack_err(interaction, get_string("errors.no_session"))
             return
         char = _find_character(state, str(interaction.user.id))
         if char is None:
@@ -176,7 +177,7 @@ class SessionCog(commands.Cog):
         await ack(interaction)
         state = get_session(str(interaction.channel_id))
         if state is None:
-            await ack_err(interaction, "No active session.")
+            await ack_err(interaction, get_string("errors.no_session"))
             return
         char = _find_character(state, str(interaction.user.id))
         if char is None:
@@ -196,7 +197,7 @@ class SessionCog(commands.Cog):
         await ack(interaction)
         state = get_session(str(interaction.channel_id))
         if state is None:
-            await ack_err(interaction, "No active session.")
+            await ack_err(interaction, get_string("errors.no_session"))
             return
         char = _find_character(state, str(interaction.user.id))
         asker = char.name if char else interaction.user.display_name
@@ -221,7 +222,7 @@ class SessionCog(commands.Cog):
         await ack(interaction)
         state = get_session(str(interaction.channel_id))
         if state is None:
-            await ack_err(interaction, "No active session in this channel.")
+            await ack_err(interaction, get_string("errors.no_session"))
             return
         user_id = str(interaction.user.id)
         is_dm = state.dm_user_id == user_id
@@ -232,11 +233,11 @@ class SessionCog(commands.Cog):
             state.party.leader_id == char.character_id
         )
         if not (is_dm or is_leader):
-            await ack_err(interaction, "Only the DM or party leader can toggle combat rounds.")
+            await ack_err(interaction, get_string("errors.strife_permission"))
             return
         if state.mode == SessionMode.ROUNDS:
             result = exit_rounds(state)
-            label = "Combat ended \u2014 returning to exploration."
+            label = get_string("session.combat_ended")
         else:
             result = enter_rounds(state)
             label = "Combat begins!"
@@ -257,7 +258,7 @@ class SessionCog(commands.Cog):
         await ack(interaction)
         state = get_session(str(interaction.channel_id))
         if state is None:
-            await ack_err(interaction, "No active session in this channel.")
+            await ack_err(interaction, get_string("errors.no_session"))
             return
         await ack_done(interaction)
         await repost_status(interaction.channel, state)

@@ -14,6 +14,7 @@ from models import (
 
 from .helpers import _err, _now, _ok, _snapshot
 from .light import _tick_light
+from .strings import fmt_string, get_string
 
 
 class TurnManager:
@@ -30,7 +31,7 @@ class TurnManager:
         Fails if a turn is already open.
         """
         if state.current_turn is not None and state.current_turn.status == TurnStatus.OPEN:
-            return _err(state, "A turn is already open. Close or resolve it first.")
+            return _err(state, get_string("turn.errors.already_open"))
 
         if due_at is None:
             due_at = _now() + timedelta(hours=state.default_turn_hours)
@@ -46,7 +47,7 @@ class TurnManager:
         if state.battlefield is not None:
             state.battlefield.round_log = []
         state.updated_at = _now()
-        return _ok(state, f"Turn {state.turn_number} is now open.")
+        return _ok(state, fmt_string("turn.opened", turn_number=state.turn_number))
 
     def submit_turn(
         self,
@@ -65,18 +66,18 @@ class TurnManager:
             the round is auto-resolved immediately without DM intervention.
         """
         if not state.session_active:
-            return _err(state, "The session is on hold.")
+            return _err(state, get_string("errors.session_on_hold"))
         if state.mode == SessionMode.PRE_START:
-            return _err(state, "The session has not started yet.")
+            return _err(state, get_string("errors.session_not_started"))
         if state.current_turn is None or state.current_turn.status != TurnStatus.OPEN:
             mode_str = "round" if state.mode == SessionMode.ROUNDS else "turn"
-            return _err(state, f"No open {mode_str} to submit to. The DM needs to resolve the previous {mode_str} first.")
+            return _err(state, fmt_string("turn.errors.no_open", mode_str=mode_str))
 
         char = state.characters.get(character_id)
         if char is None:
             return _err(state, f"Character {character_id} not found.")
         if char.status.value != "active":
-            return _err(state, f"{char.name} is not active and cannot submit a turn.")
+            return _err(state, fmt_string("turn.errors.character_inactive", name=char.name))
 
         # Supersede any prior submissions from this character
         for sub in state.current_turn.submissions:
@@ -94,7 +95,7 @@ class TurnManager:
 
         # --- Check whether all active members have now submitted ------------
         if state.party is None:
-            return _ok(state, f"{char.name}: \"{action_text}\"")
+            return _ok(state, fmt_string("turn.submitted_action", name=char.name, action_text=action_text))
 
         submitted_ids = {
             s.character_id for s in state.current_turn.submissions if s.is_latest
@@ -107,7 +108,7 @@ class TurnManager:
 
         if not (active_ids and active_ids.issubset(submitted_ids)):
             # Still waiting on other players
-            return _ok(state, f"{char.name}: \"{action_text}\"")
+            return _ok(state, fmt_string("turn.submitted_action", name=char.name, action_text=action_text))
 
         # All submitted — check whether we can auto-resolve (ROUNDS mode only)
         if state.mode == SessionMode.ROUNDS:
@@ -125,7 +126,7 @@ class TurnManager:
         # Exploration mode, or ROUNDS with at least one Affect — close for DM
         state.current_turn.status = TurnStatus.CLOSED
         state.current_turn.closed_at = _now()
-        return _ok(state, f"{char.name}: \"{action_text}\"", notify_dm=True)
+        return _ok(state, fmt_string("turn.submitted_action", name=char.name, action_text=action_text), notify_dm=True)
 
     def _auto_resolve(
         self,
@@ -147,7 +148,7 @@ class TurnManager:
             # Fallback: hand to DM if auto-resolve errors
             state.current_turn.status = TurnStatus.CLOSED
             state.current_turn.closed_at = _now()
-            return _ok(state, f"{last_name}: \"{action_text}\"", notify_dm=True)
+            return _ok(state, fmt_string("turn.submitted_action", name=last_name, action_text=action_text), notify_dm=True)
 
         narrative = result.message
 
@@ -180,14 +181,14 @@ class TurnManager:
         Does not yet resolve or advance the turn counter.
         """
         if state.current_turn is None:
-            return _err(state, "No current turn to close.")
+            return _err(state, get_string("turn.errors.no_current_turn"))
         if state.current_turn.status != TurnStatus.OPEN:
-            return _err(state, "Current turn is not open.")
+            return _err(state, get_string("turn.errors.not_open"))
 
         state.current_turn.status = TurnStatus.CLOSED
         state.current_turn.closed_at = _now()
         state.updated_at = _now()
-        return _ok(state, f"Turn {state.turn_number} closed. Awaiting DM resolution.")
+        return _ok(state, fmt_string("turn.closed", turn_number=state.turn_number))
 
     def resolve_turn(
         self,
@@ -205,9 +206,9 @@ class TurnManager:
         The TurnRecord is still appended to history.
         """
         if state.current_turn is None:
-            return _err(state, "No current turn to resolve.")
+            return _err(state, get_string("turn.errors.no_current_to_resolve"))
         if state.current_turn.status not in (TurnStatus.OPEN, TurnStatus.CLOSED):
-            return _err(state, "Current turn is already resolved.")
+            return _err(state, get_string("turn.errors.already_resolved"))
 
         turn = state.current_turn
 
@@ -252,7 +253,7 @@ class TurnManager:
             enc = check_random_encounter(state)
             if enc is not None:
                 return _ok(state, f"Turn number set to {turn_number}. {enc.message}")
-        return _ok(state, f"Turn number set to {turn_number}.")
+        return _ok(state, fmt_string("turn.number_set", turn_number=turn_number))
 
     def unsubmit_turn(
         self,
@@ -265,9 +266,9 @@ class TurnManager:
         Returns the character name for notification purposes.
         """
         if state.current_turn is None:
-            return _err(state, "No current turn.")
+            return _err(state, get_string("turn.errors.no_current"))
         if state.current_turn.status != TurnStatus.OPEN:
-            return _err(state, "Current turn is not open; cannot un-submit.")
+            return _err(state, get_string("turn.errors.not_open_unsubmit"))
 
         char = state.characters.get(character_id)
         if char is None:
@@ -282,10 +283,10 @@ class TurnManager:
                 break
 
         if not found:
-            return _err(state, f"{char.name} has not submitted a turn.")
+            return _err(state, fmt_string("turn.errors.no_submission", name=char.name))
 
         state.updated_at = _now()
-        return _ok(state, f"{char.name}'s turn submission has been sent back for revision.")
+        return _ok(state, fmt_string("turn.unsubmitted", name=char.name))
 
 
 # Module-level convenience functions
