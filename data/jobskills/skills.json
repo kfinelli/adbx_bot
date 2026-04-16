@@ -65,6 +65,12 @@
       "desc": "You can equip gear and weapons with Rank: B",
       "rank": "B"
     },
+    "martial_training_e": {
+      "name": "Martial Basics",
+      "type": 6,
+      "desc": "You can equip gear and weapons with Rank: E",
+      "rank": "E"
+    },
     "arcane_basics": {
       "name": "Arcane Basics",
       "type": 6,
