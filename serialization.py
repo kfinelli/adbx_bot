@@ -72,6 +72,7 @@ def serialize_inventory_item(item: InventoryItem) -> dict:
         "charges":      item.charges,
         "notes":        item.notes,
         "container_id": item.container_id,
+        "instance_id":  item.instance_id,
     }
 
 
@@ -365,6 +366,7 @@ def _load_dt(v) -> datetime | None:
 
 
 def deserialize_inventory_item(d: dict) -> InventoryItem:
+    import uuid as _uuid
     return InventoryItem(
         item_id=d["item_id"],
         quantity=d.get("quantity", 1),
@@ -373,6 +375,7 @@ def deserialize_inventory_item(d: dict) -> InventoryItem:
         charges=d.get("charges"),
         notes=d.get("notes", ""),
         container_id=d.get("container_id"),
+        instance_id=d.get("instance_id") or _uuid.uuid4().hex,
     )
 
 

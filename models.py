@@ -135,7 +135,8 @@ class InventoryItem:
     broken:       bool   = False
     charges:      int | None = None
     notes:        str    = ""
-    container_id: str | None = None   # item_id of owning ContainerItem, if any
+    container_id: str | None = None   # instance_id of owning ContainerItem, if any
+    instance_id:  str    = field(default_factory=lambda: __import__("uuid").uuid4().hex)
 
     @property
     def definition(self):

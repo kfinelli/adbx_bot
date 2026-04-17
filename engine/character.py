@@ -538,7 +538,8 @@ class CharacterManager:
                     f"({char.slots_used}/{char.inventory_size} slots used).",
                 )
             for _ in range(quantity):
-                char.inventory.append(InventoryItem(item_id=item_id, quantity=1))
+                container_inv = InventoryItem(item_id=item_id, quantity=1)
+                char.inventory.append(container_inv)
                 # Add each contained spell as its own InventoryItem with per-character charges.
                 for spell_id in defn.contained_item_ids:
                     spell_def = ITEM_REGISTRY.get(spell_id)
@@ -546,7 +547,7 @@ class CharacterManager:
                     char.inventory.append(InventoryItem(
                         item_id=spell_id,
                         quantity=1,
-                        container_id=item_id,
+                        container_id=container_inv.instance_id,
                         charges=spell_charges,
                     ))
 
@@ -731,7 +732,7 @@ class CharacterManager:
             char.inventory.remove(inv_item)
             # Purge any items that were contained inside this container.
             if isinstance(defn, ContainerItem):
-                char.inventory = [i for i in char.inventory if i.container_id != item_id]
+                char.inventory = [i for i in char.inventory if i.container_id != inv_item.instance_id]
 
         state.updated_at = _now()
         qty_str = f"{quantity}x " if quantity > 1 else ""

@@ -1592,7 +1592,7 @@ def character_sheet_panel(character: Character) -> str:
             f'</td>'
             f'</tr>'
         )
-        for _child in _contained_map.get(inv_item.item_id, []):
+        for _child in _contained_map.get(inv_item.instance_id, []):
             _cdefn = ITEM_REGISTRY.get(_child.item_id)
             _cname = _cdefn.name if _cdefn else _child.item_id
             if _child.charges is not None and _cdefn is not None and hasattr(_cdefn, "maxCharges"):

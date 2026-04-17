@@ -794,11 +794,12 @@ class TestSpellbookChargeTracking:
         char = _get_char(state_mage)
         give_item(state_mage, char.character_id, spellbook_id)
 
+        book_inv = next(i for i in char.inventory if i.item_id == spellbook_id)
         book_def = ITEM_REGISTRY[spellbook_id]
         for spell_id in book_def.contained_item_ids:
             spell_inv = next(
                 (i for i in char.inventory
-                 if i.item_id == spell_id and i.container_id == spellbook_id),
+                 if i.item_id == spell_id and i.container_id == book_inv.instance_id),
                 None,
             )
             assert spell_inv is not None, f"Spell {spell_id} not added to inventory"
@@ -811,11 +812,13 @@ class TestSpellbookChargeTracking:
         char = _get_char(state_mage)
         give_item(state_mage, char.character_id, spellbook_id)
 
+        book_inv = next(i for i in char.inventory if i.item_id == spellbook_id)
+        book_instance_id = book_inv.instance_id
         book_def = ITEM_REGISTRY[spellbook_id]
         # Verify spells are present before removal
         for spell_id in book_def.contained_item_ids:
             assert any(
-                i.item_id == spell_id and i.container_id == spellbook_id
+                i.item_id == spell_id and i.container_id == book_instance_id
                 for i in char.inventory
             )
 
@@ -825,9 +828,49 @@ class TestSpellbookChargeTracking:
         assert not any(i.item_id == spellbook_id for i in char.inventory)
         for spell_id in book_def.contained_item_ids:
             assert not any(
-                i.item_id == spell_id and i.container_id == spellbook_id
+                i.item_id == spell_id and i.container_id == book_instance_id
                 for i in char.inventory
             )
+
+    def test_give_two_spellbooks_no_duplicate_spells(self, state_mage, spellbook_id):
+        assert spellbook_id is not None, "No ContainerItem found in ITEM_REGISTRY"
+        char = _get_char(state_mage)
+        give_item(state_mage, char.character_id, spellbook_id)
+        give_item(state_mage, char.character_id, spellbook_id)
+
+        book_def = ITEM_REGISTRY[spellbook_id]
+        expected_spell_count = len(book_def.contained_item_ids) * 2
+        actual_spell_count = sum(1 for i in char.inventory if i.container_id is not None)
+        assert actual_spell_count == expected_spell_count, (
+            f"Expected {expected_spell_count} contained spells, got {actual_spell_count}"
+        )
+
+        # Each book instance must have its own independent set of contained spells.
+        books = [i for i in char.inventory if i.item_id == spellbook_id]
+        assert len(books) == 2
+        for book in books:
+            children = [i for i in char.inventory if i.container_id == book.instance_id]
+            assert len(children) == len(book_def.contained_item_ids), (
+                f"Book {book.instance_id} has {len(children)} spells, "
+                f"expected {len(book_def.contained_item_ids)}"
+            )
+
+    def test_remove_one_spellbook_leaves_other_intact(self, state_mage, spellbook_id):
+        assert spellbook_id is not None, "No ContainerItem found in ITEM_REGISTRY"
+        char = _get_char(state_mage)
+        give_item(state_mage, char.character_id, spellbook_id)
+        give_item(state_mage, char.character_id, spellbook_id)
+
+        books = [i for i in char.inventory if i.item_id == spellbook_id]
+        kept_instance_id = books[1].instance_id
+        book_def = ITEM_REGISTRY[spellbook_id]
+
+        remove_item(state_mage, char.character_id, spellbook_id)
+
+        # One book and its spells remain
+        assert sum(1 for i in char.inventory if i.item_id == spellbook_id) == 1
+        remaining_spells = [i for i in char.inventory if i.container_id == kept_instance_id]
+        assert len(remaining_spells) == len(book_def.contained_item_ids)
 
 
 # ---------------------------------------------------------------------------
@@ -889,11 +932,12 @@ class TestUtilitySpellbookGive:
         char = _get_char(state_mage)
         give_item(state_mage, char.character_id, utility_spellbook_id)
 
+        book_inv = next(i for i in char.inventory if i.item_id == utility_spellbook_id)
         book_def = ITEM_REGISTRY[utility_spellbook_id]
         for spell_id in book_def.contained_item_ids:
             spell_inv = next(
                 (i for i in char.inventory
-                 if i.item_id == spell_id and i.container_id == utility_spellbook_id),
+                 if i.item_id == spell_id and i.container_id == book_inv.instance_id),
                 None,
             )
             assert spell_inv is not None, f"Spell {spell_id} not added to inventory"
@@ -907,15 +951,16 @@ class TestUtilitySpellbookGive:
         char = _get_char(state_mage)
         give_item(state_mage, char.character_id, utility_spellbook_id)
 
+        book_inv = next(i for i in char.inventory if i.item_id == utility_spellbook_id)
         book_def = ITEM_REGISTRY[utility_spellbook_id]
         for spell_id in book_def.contained_item_ids:
             spell_inv = next(
                 (i for i in char.inventory
-                 if i.item_id == spell_id and i.container_id == utility_spellbook_id),
+                 if i.item_id == spell_id and i.container_id == book_inv.instance_id),
                 None,
             )
             assert spell_inv is not None
-            assert spell_inv.container_id == utility_spellbook_id
+            assert spell_inv.container_id == book_inv.instance_id
             assert not spell_inv.equipped
 
 
@@ -930,6 +975,8 @@ class TestUtilitySpellCharacterSheet:
         char = _get_char(state_mage)
         give_item(state_mage, char.character_id, utility_spellbook_id)
 
+        book_inv = next(i for i in char.inventory if i.item_id == utility_spellbook_id)
+
         # Build the same contained-item lines that _character_sheet produces.
         contained: dict[str, list] = {}
         for inv in char.inventory:
@@ -937,7 +984,7 @@ class TestUtilitySpellCharacterSheet:
                 contained.setdefault(inv.container_id, []).append(inv)
 
         lines = []
-        for child in contained.get(utility_spellbook_id, []):
+        for child in contained.get(book_inv.instance_id, []):
             cdefn = ITEM_REGISTRY.get(child.item_id)
             cname = cdefn.name if cdefn else child.item_id
             if child.charges is not None and cdefn is not None and hasattr(cdefn, "maxCharges"):
@@ -968,18 +1015,20 @@ class TestUtilitySpellPersistence:
         restored = deserialize_state(serialize_state(state_mage))
         rest_char = next(iter(restored.characters.values()))
 
+        book_inv = next(i for i in char.inventory if i.item_id == utility_spellbook_id)
+        book_instance_id = book_inv.instance_id
         book_def = ITEM_REGISTRY[utility_spellbook_id]
         for spell_id in book_def.contained_item_ids:
             orig = next(
                 (i for i in char.inventory
-                 if i.item_id == spell_id and i.container_id == utility_spellbook_id),
+                 if i.item_id == spell_id and i.container_id == book_instance_id),
                 None,
             )
             restored_inv = next(
                 (i for i in rest_char.inventory
-                 if i.item_id == spell_id and i.container_id == utility_spellbook_id),
+                 if i.item_id == spell_id and i.container_id == book_instance_id),
                 None,
             )
             assert restored_inv is not None, f"Spell {spell_id} lost after round-trip"
             assert restored_inv.charges == orig.charges
-            assert restored_inv.container_id == utility_spellbook_id
+            assert restored_inv.container_id == book_instance_id
