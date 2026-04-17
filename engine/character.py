@@ -41,13 +41,13 @@ def _projected_slots_used_after_equip(
     unequipped→equipped and every ID in ``displace_item_ids`` moves from
     equipped→unequipped.
 
-    Uses bundle-aware math so light-item stacks are accounted for correctly.
+    Uses bundle-aware math so light-weight-item stacks are accounted for correctly.
     """
     from math import ceil
 
     from engine.azure_constants import BUNDLE_SIZE
 
-    # Current unequipped light total and derived non-light slots
+    # Current unequipped light-weight total and derived non-light-weight slots
     L = sum(
         i.quantity
         for i in char.inventory
@@ -414,7 +414,7 @@ class CharacterManager:
                 char.equipped_slots[ItemSlot.OFF_HAND.value] = None
                 extra_msg = f" (Two-Handed: {oh_name} unequipped from off-hand.)"
 
-        # Initialise light charges at equip time
+        # Initialise light-emitting charges at equip time
         if getattr(definition, "max_light_turns", None) is not None:
             if definition.isLight and inv_item.quantity > 1:
                 # Split one torch out of the bundle
@@ -440,6 +440,13 @@ class CharacterManager:
                 else:
                     inv_item.charges = definition.max_light_turns  # torch: set full charges
             # else charges > 0: mid-burn item re-equipped → keep existing charges
+        elif inv_item.quantity > 1:
+            # Non-light-emitting stackable item: split one unit off before equipping
+            inv_item.quantity -= 1
+            from models import InventoryItem as _InvItem
+            split = _InvItem(item_id=item_id, quantity=1)
+            char.inventory.append(split)
+            inv_item = split
 
         # Equip the new item
         inv_item.equipped = True
@@ -460,8 +467,8 @@ class CharacterManager:
         enforcing the inventory slot limit.
 
         Stacking rules:
-        - Light items (is_light=True) are bundled BUNDLE_SIZE-per-slot across
-          all light item types; the capacity check uses bundle math.
+        - Light-weight items (is_light=True) are bundled BUNDLE_SIZE-per-slot across
+          all light-weight item types; the capacity check uses bundle math.
         - ChargeWeapons are never stacked (each has independent charge state);
           a new InventoryItem entry is always created.
         - All other items stack onto an existing unequipped entry if one
@@ -483,7 +490,7 @@ class CharacterManager:
         slot_cost = defn.slot_cost
 
         if defn.isLight:
-            # Bundle-aware capacity check: all light items share bundle slots.
+            # Bundle-aware capacity check: all light-weight items share bundle slots.
             current_light = sum(
                 i.quantity for i in char.inventory
                 if not i.equipped
@@ -632,7 +639,7 @@ class CharacterManager:
             None,
         )
         if inv_item is None:
-            return _err(state, f"No light item '{item_id}' with charges found on {char.name}.")
+            return _err(state, f"No light-emitting item '{item_id}' with charges found on {char.name}.")
 
         defn = ITEM_REGISTRY.get(item_id)
         if defn is None or getattr(defn, "max_light_turns", None) is None:
@@ -754,8 +761,9 @@ class CharacterManager:
         definition = ITEM_REGISTRY.get(item_id)
         item_name = definition.name if definition else item_id
 
-        # Bundle-aware pre-flight: unequipping a light item may push the light pool
-        # across a BUNDLE_SIZE boundary, costing an extra inventory slot.
+        # Bundle-aware pre-flight: unequipping a light-weight item may push the
+        # light pool across a BUNDLE_SIZE boundary, costing an extra inventory
+        # slot.
         if inv_item and definition is not None and definition.isLight:
             from math import ceil
 

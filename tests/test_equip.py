@@ -671,6 +671,50 @@ class TestEquipErrors:
 
 
 # ---------------------------------------------------------------------------
+# Stack-splitting on equip
+# ---------------------------------------------------------------------------
+
+class TestEquipStackSplit:
+    def test_equip_splits_stack_of_non_light_items(self, state_char):
+        """Equipping one item from a stack of N should leave N-1 unequipped and 1 equipped."""
+        _ARCANE = {"V", "W", "X", "Y", "Z"}
+        weapon_id = next(
+            item_id for item_id, defn in ITEM_REGISTRY.items()
+            if isinstance(defn, Weapon) and not isinstance(defn, ChargeWeapon)
+            and defn.rank not in _ARCANE
+        )
+        char = _get_char(state_char)
+        char.inventory.append(InventoryItem(item_id=weapon_id, quantity=3))
+
+        equip_item(state_char, char.character_id, weapon_id)
+
+        weapon_entries = [i for i in char.inventory if i.item_id == weapon_id]
+        assert len(weapon_entries) == 2, "Stack should split into two entries"
+        equipped = [i for i in weapon_entries if i.equipped]
+        unequipped = [i for i in weapon_entries if not i.equipped]
+        assert len(equipped) == 1 and equipped[0].quantity == 1
+        assert len(unequipped) == 1 and unequipped[0].quantity == 2
+
+    def test_equip_single_item_no_split(self, state_char):
+        """Equipping a stack of 1 should not create a spurious empty entry."""
+        _ARCANE = {"V", "W", "X", "Y", "Z"}
+        weapon_id = next(
+            item_id for item_id, defn in ITEM_REGISTRY.items()
+            if isinstance(defn, Weapon) and not isinstance(defn, ChargeWeapon)
+            and defn.rank not in _ARCANE
+        )
+        char = _get_char(state_char)
+        char.inventory.append(InventoryItem(item_id=weapon_id, quantity=1))
+
+        equip_item(state_char, char.character_id, weapon_id)
+
+        weapon_entries = [i for i in char.inventory if i.item_id == weapon_id]
+        assert len(weapon_entries) == 1, "No split should occur for a single-item stack"
+        assert weapon_entries[0].equipped is True
+        assert weapon_entries[0].quantity == 1
+
+
+# ---------------------------------------------------------------------------
 # Serialization round-trip
 # ---------------------------------------------------------------------------
 
