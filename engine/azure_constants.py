@@ -63,6 +63,8 @@ class ItemData(StrEnum):
     RECHARGE_PERIOD = "recharge_period"
     DESTROY_ON_EMPTY = "destroy_on_empty"
     SLOT = "slot"
+    MAX_LIGHT_TURNS = "max_light_turns"
+    FUEL_ITEM_ID = "fuel_item_id"
     HEALTH = "health"
     DEFENSE = "defense"
     RESISTANCE = "resistance"

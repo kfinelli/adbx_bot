@@ -211,18 +211,24 @@ class EquipSelectView(discord.ui.View):
         self.state = state
         self.channel_id = channel_id
 
-        # Build options: only items that are EquipItem definitions and not
-        # already flagged as equipped.
+        # Build options: only items that are EquipItem definitions.
+        # Deduplicate by item_id (e.g. torch bundle + split single share the same id).
+        # Show ✓ if any inventory copy of the item is equipped.
         options = []
+        seen_ids: set[str] = set()
         for inv in char.inventory:
             if inv.container_id:
                 continue  # contained spells are not directly equippable
             defn = ITEM_REGISTRY.get(inv.item_id)
             if defn is None or not isinstance(defn, EquipItem):
                 continue
-            label = defn.name
-            if inv.equipped:
-                label += " ✓"
+            if inv.item_id in seen_ids:
+                continue
+            seen_ids.add(inv.item_id)
+            any_equipped = any(
+                i.item_id == inv.item_id and i.equipped for i in char.inventory
+            )
+            label = defn.name + (" ✓" if any_equipped else "")
             options.append(discord.SelectOption(
                 label=label[:100],
                 value=inv.item_id,

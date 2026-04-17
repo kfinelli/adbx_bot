@@ -682,11 +682,23 @@ def party_panel(state: GameState) -> str:
     if not state.party:
         return '<div class="card"><h3>Party</h3><p class="muted">No party.</p></div>'
 
-    light = state.party.active_light
-    light_str = (
-        f"{light.label}: {light.turns_remaining if light.turns_remaining is not None else '&infin;'} turns"
-        if light else "No light source"
-    )
+    light_parts = []
+    for char_id in state.party.member_ids:
+        char = state.characters.get(char_id)
+        if char is None:
+            continue
+        for item_id in char.equipped_slots.values():
+            if not item_id:
+                continue
+            defn = ITEM_REGISTRY.get(item_id)
+            if defn is None or getattr(defn, "max_light_turns", None) is None:
+                continue
+            inv = next(
+                (i for i in char.inventory if i.item_id == item_id and i.equipped), None
+            )
+            if inv and inv.charges is not None:
+                light_parts.append(f"{defn.name} ({char.name}): {inv.charges} turns")
+    light_str = ", ".join(light_parts) if light_parts else "No light source"
 
     rows = ""
     for cid in state.party.member_ids:
@@ -753,17 +765,7 @@ def party_panel(state: GameState) -> str:
     light_html = f"""
 <hr class="divider">
 <div class="section-header"><h3>Light Source</h3></div>
-<p class="muted">{light_str}</p>
-<form hx-post="/session/{channel_id}/setlight"
-      hx-target="#dashboard" hx-swap="outerHTML">
-  <div class="row">
-    <div><label>Label</label>
-    <input type="text" name="label" placeholder="Torch"></div>
-    <div><label>Turns (-1 = permanent)</label>
-    <input type="number" name="turns" value="6"></div>
-    <button type="submit">Set Light</button>
-  </div>
-</form>"""
+<p class="muted">{light_str}</p>"""
 
     return f"""
 <div class="card">

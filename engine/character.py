@@ -414,6 +414,33 @@ class CharacterManager:
                 char.equipped_slots[ItemSlot.OFF_HAND.value] = None
                 extra_msg = f" (Two-Handed: {oh_name} unequipped from off-hand.)"
 
+        # Initialise light charges at equip time
+        if getattr(definition, "max_light_turns", None) is not None:
+            if definition.isLight and inv_item.quantity > 1:
+                # Split one torch out of the bundle
+                inv_item.quantity -= 1
+                from models import InventoryItem as _InvItem
+                split = _InvItem(item_id=item_id, quantity=1, charges=definition.max_light_turns)
+                char.inventory.append(split)
+                inv_item = split
+            elif inv_item.charges is None or inv_item.charges == 0:
+                fuel_id = getattr(definition, "fuel_item_id", None)
+                if fuel_id:
+                    fuel = next(
+                        (i for i in char.inventory if i.item_id == fuel_id and not i.equipped),
+                        None,
+                    )
+                    if fuel:
+                        fuel.quantity -= 1
+                        if fuel.quantity <= 0:
+                            char.inventory.remove(fuel)
+                        inv_item.charges = definition.max_light_turns
+                    else:
+                        inv_item.charges = 0  # equip dark lantern (no oil available)
+                else:
+                    inv_item.charges = definition.max_light_turns  # torch: set full charges
+            # else charges > 0: mid-burn item re-equipped → keep existing charges
+
         # Equip the new item
         inv_item.equipped = True
         char.equipped_slots[target_slot.value] = item_id

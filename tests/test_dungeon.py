@@ -16,7 +16,6 @@ from engine import (
     remove_npc,
     set_exit_state,
     set_feature_state,
-    set_light_source,
     set_npc_hp,
     set_npc_status,
     set_room,
@@ -413,46 +412,104 @@ class TestNPCs:
 # ---------------------------------------------------------------------------
 
 class TestLightSources:
-    def test_set_light_source(self, bare_state):
-        result = set_light_source(bare_state, "Torch", 6)
-        assert result.ok
-        assert bare_state.party.active_light.label == "Torch"
-        assert bare_state.party.active_light.turns_remaining == 6
+    def test_torch_equip_initializes_charges(self, active_state):
+        char = next(iter(active_state.characters.values()))
+        from engine import equip_item, give_item
+        from engine.azure_constants import ItemSlot
+        give_item(active_state, char.character_id, "torch", 1)
+        equip_item(active_state, char.character_id, "torch", ItemSlot.OFF_HAND)
+        inv = next(i for i in char.inventory if i.item_id == "torch" and i.equipped)
+        assert inv.charges == 6
 
-    def test_permanent_light_source(self, bare_state):
-        result = set_light_source(bare_state, "Continual Light", None)
-        assert result.ok
-        assert bare_state.party.active_light.turns_remaining is None
-
-    def test_new_light_deactivates_old(self, bare_state):
-        set_light_source(bare_state, "Torch", 6)
-        set_light_source(bare_state, "Lantern", 24)
-        active = bare_state.party.active_light
-        assert active.label == "Lantern"
-        # Torch should be inactive
-        for ls in bare_state.party.light_sources:
-            if ls.label == "Torch":
-                assert ls.is_active is False
+    def test_torch_burnout_removes_item(self, active_state):
+        char = next(iter(active_state.characters.values()))
+        from engine import close_turn, equip_item, give_item, resolve_turn
+        from engine.azure_constants import ItemSlot
+        give_item(active_state, char.character_id, "torch", 1)
+        equip_item(active_state, char.character_id, "torch", ItemSlot.OFF_HAND)
+        inv = next(i for i in char.inventory if i.item_id == "torch" and i.equipped)
+        inv.charges = 1
+        close_turn(active_state)
+        resolve_turn(active_state, "Narrative.")
+        assert all(i.item_id != "torch" for i in char.inventory)
+        assert char.equipped_slots.get("off_hand") is None
 
     def test_light_ticks_on_resolve(self, active_state):
-        set_light_source(active_state, "Torch", 6)
-        from engine import close_turn, resolve_turn
+        char = next(iter(active_state.characters.values()))
+        from engine import close_turn, equip_item, give_item, resolve_turn
+        from engine.azure_constants import ItemSlot
+        give_item(active_state, char.character_id, "torch", 1)
+        equip_item(active_state, char.character_id, "torch", ItemSlot.OFF_HAND)
         close_turn(active_state)
         resolve_turn(active_state, "Narrative.")
-        assert active_state.party.active_light.turns_remaining == 5
+        inv = next((i for i in char.inventory if i.item_id == "torch" and i.equipped), None)
+        assert inv is not None and inv.charges == 5
 
-    def test_light_does_not_go_below_zero(self, active_state):
-        set_light_source(active_state, "Torch", 0)
-        from engine import close_turn, resolve_turn
+    def test_lantern_burnout_consumes_oil_flask(self, active_state):
+        char = next(iter(active_state.characters.values()))
+        from engine import close_turn, equip_item, give_item, resolve_turn
+        from engine.azure_constants import ItemSlot
+        give_item(active_state, char.character_id, "lantern", 1)
+        # Give 2 oil flasks: equip consumes one to ignite, burnout consumes the second
+        give_item(active_state, char.character_id, "oil_flask", 2)
+        equip_item(active_state, char.character_id, "lantern", ItemSlot.OFF_HAND)
+        inv = next(i for i in char.inventory if i.item_id == "lantern" and i.equipped)
+        inv.charges = 1
         close_turn(active_state)
         resolve_turn(active_state, "Narrative.")
-        assert active_state.party.active_light.turns_remaining == 0
+        assert inv.charges == 24
+        assert all(i.item_id != "oil_flask" for i in char.inventory)
 
-    def test_set_light_no_party_fails(self):
-        from models import GameState
-        state = GameState(platform_channel_id="ch", dm_user_id="dm")
-        result = set_light_source(state, "Torch", 6)
-        assert not result.ok
+    def test_lantern_equip_no_oil_is_dark(self, active_state):
+        """Equipping a lantern without oil flasks results in charges=0 (no exploit)."""
+        char = next(iter(active_state.characters.values()))
+        from engine import equip_item, give_item
+        from engine.azure_constants import ItemSlot
+        give_item(active_state, char.character_id, "lantern", 1)
+        equip_item(active_state, char.character_id, "lantern", ItemSlot.OFF_HAND)
+        inv = next(i for i in char.inventory if i.item_id == "lantern" and i.equipped)
+        assert inv.charges == 0
+
+    def test_lantern_burnout_no_fuel_stays_dark(self, active_state):
+        """Lantern burning out with no oil stays equipped at 0 charges."""
+        char = next(iter(active_state.characters.values()))
+        from engine import close_turn, equip_item, give_item, resolve_turn
+        from engine.azure_constants import ItemSlot
+        give_item(active_state, char.character_id, "lantern", 1)
+        give_item(active_state, char.character_id, "oil_flask", 1)
+        equip_item(active_state, char.character_id, "lantern", ItemSlot.OFF_HAND)
+        inv = next(i for i in char.inventory if i.item_id == "lantern" and i.equipped)
+        # oil flask was consumed at equip; now no fuel left
+        assert all(i.item_id != "oil_flask" for i in char.inventory)
+        inv.charges = 1
+        close_turn(active_state)
+        resolve_turn(active_state, "Narrative.")
+        assert inv.charges == 0
+        assert char.equipped_slots.get("off_hand") == "lantern"
+
+    def test_lantern_reequip_exploit_blocked(self, active_state):
+        """Re-equipping an exhausted lantern without oil cannot reset charges."""
+        char = next(iter(active_state.characters.values()))
+        from engine import equip_item, give_item, unequip_item
+        from engine.azure_constants import ItemSlot
+        give_item(active_state, char.character_id, "lantern", 1)
+        give_item(active_state, char.character_id, "oil_flask", 1)
+        equip_item(active_state, char.character_id, "lantern", ItemSlot.OFF_HAND)
+        inv = next(i for i in char.inventory if i.item_id == "lantern" and i.equipped)
+        inv.charges = 0  # simulate exhausted
+        unequip_item(active_state, char.character_id, ItemSlot.OFF_HAND)
+        equip_item(active_state, char.character_id, "lantern", ItemSlot.OFF_HAND)
+        inv2 = next(i for i in char.inventory if i.item_id == "lantern" and i.equipped)
+        assert inv2.charges == 0  # no oil → still dark
+
+    def test_light_does_not_tick_in_combat(self, active_state):
+        char = next(iter(active_state.characters.values()))
+        from engine import equip_item, give_item
+        from engine.azure_constants import ItemSlot
+        give_item(active_state, char.character_id, "torch", 1)
+        equip_item(active_state, char.character_id, "torch", ItemSlot.OFF_HAND)
+        inv = next(i for i in char.inventory if i.item_id == "torch" and i.equipped)
+        assert inv.charges == 6
 
 
 # ---------------------------------------------------------------------------

@@ -621,22 +621,6 @@ class TurnRecord:
 # ---------------------------------------------------------------------------
 
 @dataclass
-class LightSource:
-    """
-    Tracks a single active light source.
-    The DM sets the label and duration; the engine just counts down.
-
-    Examples:
-        LightSource(label="Torch", turns_remaining=6)
-        LightSource(label="Lantern (oil flask 1)", turns_remaining=24)
-        LightSource(label="Continual Light (Celes's shield)", turns_remaining=None)
-    """
-    label:           str           = ""
-    turns_remaining: int | None = None   # None = permanent/magical, no countdown
-    is_active:       bool          = True
-
-
-@dataclass
 class Oracle:
     """A player question to the DM, posted as a persistent Discord message."""
     oracle_id:       UUID           = field(default_factory=uuid4)
@@ -734,15 +718,6 @@ class Party:
     leader_id:      UUID | None     = None   # character_id of party leader
     member_ids:     list[UUID]         = field(default_factory=list)
     gold:           int                = 0
-    light_sources:  list[LightSource]  = field(default_factory=list)
-
-    @property
-    def active_light(self) -> LightSource | None:
-        """Return the current active light source, if any."""
-        for ls in self.light_sources:
-            if ls.is_active:
-                return ls
-        return None
 
 
 @dataclass

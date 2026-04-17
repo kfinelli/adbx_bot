@@ -592,7 +592,7 @@ class TestEquipErrors:
         char.inventory.append(InventoryItem(item_id=torch_id, quantity=stack_qty))
         # Equip the whole stack — frees stack_qty // BUNDLE_SIZE + 1 light slots
         equip_item(state_char, char.character_id, torch_id)
-        assert char.inventory[0].equipped, "torch stack should be equipped"
+        assert any(i.item_id == torch_id and i.equipped for i in char.inventory), "torch should be equipped"
 
         # Fill every remaining inventory slot with non-light weapons
         while char.slots_used < char.inventory_size:

@@ -2,63 +2,53 @@
 Light source management for the dungeon crawler engine.
 """
 
-from models import GameState, LightSource
-from validation import validate_non_empty_string
-
-from .helpers import _err, _now, _ok
-from .strings import fmt_string, get_string
-
-
-class LightManager:
-    """Manages light sources."""
-
-    def set_light_source(
-        self,
-        state:           GameState,
-        label:           str,
-        turns_remaining: int | None,
-    ):
-        """
-        DM command: set the active light source.
-        Deactivates all previous sources and creates a new active one.
-        """
-        if state.party is None:
-            return _err(state, get_string("errors.no_party"))
-
-        # Validate label
-        label_result = validate_non_empty_string(label, "Light source label", max_length=50)
-        if not label_result:
-            return _err(state, label_result.error)
-
-        # Validate turns_remaining if provided (allow 0 for exhausted lights)
-        if turns_remaining is not None and turns_remaining >= 0:
-            if turns_remaining < 0:
-                return _err(state, get_string("light.errors.negative_turns"))
-        elif turns_remaining is not None and turns_remaining < 0:
-            return _err(state, get_string("light.errors.negative_turns"))
-
-        # Deactivate all existing light sources
-        for light in state.party.light_sources:
-            light.is_active = False
-
-        # Create and activate the new light source
-        new_light = LightSource(
-            label=label_result.value,
-            turns_remaining=turns_remaining,
-            is_active=True,
-        )
-        state.party.light_sources.append(new_light)
-        state.updated_at = _now()
-
-        duration = f"{turns_remaining} turns" if turns_remaining is not None else "permanent"
-        return _ok(state, fmt_string("light.set", label=label_result.value, duration=duration))
+from engine.data_loader import ITEM_REGISTRY
+from models import GameState
 
 
 def _tick_light(state: GameState) -> None:
-    """Decrement the active light source by one turn. Called by resolve_turn."""
+    """Decrement equipped light items by one turn. Called by resolve_turn (exploration only)."""
     if state.party is None:
         return
-    light = state.party.active_light
-    if light is None or light.turns_remaining is None:
-        return  # no light, or permanent/magical source
-    light.turns_remaining = max(0, light.turns_remaining - 1)
+    for char_id in state.party.member_ids:
+        char = state.characters.get(char_id)
+        if char is None:
+            continue
+        for item_id in list(char.equipped_slots.values()):
+            if item_id is None:
+                continue
+            defn = ITEM_REGISTRY.get(item_id)
+            if defn is None or getattr(defn, "max_light_turns", None) is None:
+                continue
+            inv_item = next(
+                (i for i in char.inventory if i.item_id == item_id and i.equipped),
+                None,
+            )
+            if inv_item is None or inv_item.charges is None or inv_item.charges <= 0:
+                continue
+            inv_item.charges -= 1
+            if inv_item.charges <= 0:
+                _handle_light_burnout(state, char, inv_item, defn)
+
+
+def _handle_light_burnout(state, char, inv_item, defn) -> None:
+    fuel_id = getattr(defn, "fuel_item_id", None)
+    if fuel_id:
+        fuel = next(
+            (i for i in char.inventory if i.item_id == fuel_id and not i.equipped),
+            None,
+        )
+        if fuel:
+            fuel.quantity -= 1
+            if fuel.quantity <= 0:
+                char.inventory.remove(fuel)
+            inv_item.charges = defn.max_light_turns
+        # else: no fuel → lantern stays at 0 charges (dark, still equipped)
+    else:
+        # Torch: remove from inventory and clear the slot
+        if inv_item in char.inventory:
+            char.inventory.remove(inv_item)
+        for slot_name, sid in list(char.equipped_slots.items()):
+            if sid == inv_item.item_id:
+                char.equipped_slots[slot_name] = None
+                break

@@ -13,7 +13,6 @@ from engine import (
     close_turn,
     register_room,
     resolve_turn,
-    set_light_source,
 )
 from models import (
     NPC,
@@ -115,17 +114,18 @@ class TestStateRoundTrip:
         assert r.hp_current == 2
         assert r.defense == 1
 
-    def test_light_source_roundtrips(self, bare_state):
-        set_light_source(bare_state, "Torch", 6)
-        restored = _roundtrip(bare_state)
-        assert restored.party.active_light is not None
-        assert restored.party.active_light.label == "Torch"
-        assert restored.party.active_light.turns_remaining == 6
-
-    def test_permanent_light_roundtrips(self, bare_state):
-        set_light_source(bare_state, "Continual Light", None)
-        restored = _roundtrip(bare_state)
-        assert restored.party.active_light.turns_remaining is None
+    def test_light_item_charges_roundtrip(self, active_state):
+        char = next(iter(active_state.characters.values()))
+        from engine import equip_item, give_item
+        from engine.azure_constants import ItemSlot
+        give_item(active_state, char.character_id, "torch", 1)
+        equip_item(active_state, char.character_id, "torch", ItemSlot.OFF_HAND)
+        inv = next(i for i in char.inventory if i.item_id == "torch" and i.equipped)
+        inv.charges = 4  # simulate mid-burn
+        restored = _roundtrip(active_state)
+        r_char = next(iter(restored.characters.values()))
+        r_inv = next(i for i in r_char.inventory if i.item_id == "torch" and i.equipped)
+        assert r_inv.charges == 4
 
     def test_dungeon_roundtrips(self, bare_state):
         room = Room(name="Vault", description="Dark.")

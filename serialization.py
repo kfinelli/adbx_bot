@@ -36,7 +36,6 @@ from models import (
     GameState,
     InventoryItem,
     JobExperience,
-    LightSource,
     NPCGroup,
     NPCMovementLogic,
     NPCRoster,
@@ -249,14 +248,6 @@ def serialize_npc_roster(roster: NPCRoster) -> dict:
     }
 
 
-def serialize_light_source(ls: LightSource) -> dict:
-    return {
-        "label":           ls.label,
-        "turns_remaining": ls.turns_remaining,
-        "is_active":       ls.is_active,
-    }
-
-
 def serialize_party(p: Party) -> dict:
     return {
         "party_id":      _uuid(p.party_id),
@@ -264,7 +255,6 @@ def serialize_party(p: Party) -> dict:
         "leader_id":     _uuid(p.leader_id),
         "member_ids":    [str(mid) for mid in p.member_ids],
         "gold":          p.gold,
-        "light_sources": [serialize_light_source(ls) for ls in p.light_sources],
     }
 
 
@@ -540,14 +530,6 @@ def deserialize_npc_roster(d: dict) -> NPCRoster:
     return roster
 
 
-def deserialize_light_source(d: dict) -> LightSource:
-    return LightSource(
-        label=d["label"],
-        turns_remaining=d["turns_remaining"],
-        is_active=d["is_active"],
-    )
-
-
 def deserialize_party(d: dict) -> Party:
     return Party(
         party_id=_load_uuid(d["party_id"]),
@@ -555,7 +537,6 @@ def deserialize_party(d: dict) -> Party:
         leader_id=_load_uuid(d["leader_id"]),
         member_ids=[UUID(mid) for mid in d["member_ids"]],
         gold=d["gold"],
-        light_sources=[deserialize_light_source(ls) for ls in d["light_sources"]],
     )
 
 

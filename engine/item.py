@@ -20,7 +20,7 @@ from engine.azure_constants import (
 
 class Item:
     ITEM_TYPE = ItemType.ITEM.value
-    def __init__(self, item_id, name, description = "", isLight = False, purchaseable=False, price=0, slot_cost=1):
+    def __init__(self, item_id, name, description = "", isLight = False, purchaseable=False, price=0, slot_cost=1, max_light_turns=None, fuel_item_id=None):
         self.item_id = item_id
         self.name = name
         self.description = description
@@ -28,6 +28,8 @@ class Item:
         self.purchaseable = purchaseable
         self.price = price
         self.slot_cost = slot_cost
+        self.max_light_turns: int | None = max_light_turns
+        self.fuel_item_id: str | None = fuel_item_id
         self.prototype = None
         if type(self) is Item:
             self.updatePrototype()
@@ -96,6 +98,8 @@ class Item:
             ItemData.IS_LIGHT.value: self.isLight,
             ItemData.PURCHASEABLE.value: self.purchaseable,
             ItemData.PRICE.value: self.price,
+            ItemData.MAX_LIGHT_TURNS.value: self.max_light_turns,
+            ItemData.FUEL_ITEM_ID.value: self.fuel_item_id,
             ItemData.PROTOTYPE.value: self.prototype,
         }
 
@@ -441,15 +445,16 @@ def createItemFromData(itemData):
         "targetsStat": itemData.get(ItemData.TARGETS_STAT, "defense"),
     }
 
+    item = None
     match item_type:
         case ItemType.ITEM:
-            return Item(**base)
+            item = Item(**base)
 
         case ItemType.WEAPON:
-            return Weapon(**base, **equip, **weapon)
+            item = Weapon(**base, **equip, **weapon)
 
         case ItemType.CHARGE_WEAPON:
-            newItem = ChargeWeapon(
+            item = ChargeWeapon(
                 **base, **equip, **weapon,
                 maxCharges     = itemData.get(ItemData.MAX_CHARGES, -1),
                 destroyOnEmpty = itemData.get(ItemData.DESTROY_ON_EMPTY, False),
@@ -457,11 +462,10 @@ def createItemFromData(itemData):
             )
             # Restore current charges if serialised state differs from max
             if ItemData.CHARGES in itemData:
-                newItem.setCharges(itemData[ItemData.CHARGES])
-            return newItem
+                item.setCharges(itemData[ItemData.CHARGES])
 
         case ItemType.GEAR:
-            return Gear(
+            item = Gear(
                 **base, **equip,
                 slot       = itemData.get(ItemData.SLOT, ""),
                 health     = itemData.get(ItemData.HEALTH, 0),
@@ -470,14 +474,14 @@ def createItemFromData(itemData):
             )
 
         case ItemType.CONTAINER:
-            return ContainerItem(
+            item = ContainerItem(
                 **base, **equip,
                 contained_item_ids = itemData.get(ItemData.CONTAINED_ITEMS, []),
                 slot               = itemData.get(ItemData.SLOT, None),
             )
 
         case ItemType.UTILITY_SPELL:
-            return UtilitySpell(
+            item = UtilitySpell(
                 **base,
                 rank            = itemData.get(ItemData.RANK, ""),
                 tags            = itemData.get(ItemData.TAGS, []),
@@ -489,3 +493,8 @@ def createItemFromData(itemData):
         case _:
             warnings.warn(f"Unknown item type: {item_type}", stacklevel=2)
             return None
+
+    if item is not None:
+        item.max_light_turns = itemData.get(ItemData.MAX_LIGHT_TURNS.value)
+        item.fuel_item_id = itemData.get(ItemData.FUEL_ITEM_ID.value)
+    return item

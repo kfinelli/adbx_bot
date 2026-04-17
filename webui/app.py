@@ -46,7 +46,6 @@ from engine import (
     set_character_status,
     set_exit_state,
     set_feature_state,
-    set_light_source,
     set_npc_hp,
     set_npc_status,
     set_turn_number,
@@ -444,26 +443,6 @@ async def route_party_rechargedaily(channel_id: str):
             count += 1
     await save_session_async(state)
     return _respond(channel_id, flash=f"Recharged daily spells for {count} character(s).")
-
-
-# ---------------------------------------------------------------------------
-# Light source
-# ---------------------------------------------------------------------------
-
-@app.post("/session/{channel_id}/setlight", response_class=HTMLResponse)
-async def route_setlight(
-    channel_id: str,
-    label: Annotated[str, Form()],
-    turns: Annotated[int, Form()],
-):
-    state = store.get_session(channel_id)
-    if state is None:
-        return HTMLResponse("Session not found.", status_code=404)
-    turns_remaining = None if turns < 0 else turns
-    result = set_light_source(state, label, turns_remaining)
-    if not result.ok:
-        return _respond(channel_id, error=result.error)
-    return _respond(channel_id)
 
 
 # ---------------------------------------------------------------------------

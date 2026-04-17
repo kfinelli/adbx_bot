@@ -33,6 +33,7 @@ from .data_loader import (
     ACTION_REGISTRY,
     CLASS_DEFINITIONS,
     CONDITION_REGISTRY,
+    ITEM_REGISTRY,
     SKILL_REGISTRY,
     ActionDef,
     ConditionDef,
@@ -52,7 +53,7 @@ from .dice import (
 )
 from .encounter import check_random_encounter
 from .helpers import _err, _find_npc_in_roster, _now, _ok, _resolve_room, _snapshot
-from .light import LightManager, _tick_light
+from .light import _tick_light
 from .npc import NPCManager
 from .oracle import OracleManager
 from .room import RoomManager
@@ -272,12 +273,6 @@ def set_turn_number(state: GameState, turn_number: int):
     """Set turn number."""
     tm = TurnManager()
     return tm.set_turn_number(state, turn_number)
-
-
-def set_light_source(state: GameState, label: str, turns_remaining: int | None):
-    """Set light source."""
-    lm = LightManager()
-    return lm.set_light_source(state, label, turns_remaining)
 
 
 def register_room(state: GameState, room):
@@ -601,16 +596,24 @@ def render_status(state: GameState) -> str:
 
     # Light source
     if state.party:
-        light = state.party.active_light
-        if light:
-            remaining = (
-                str(light.turns_remaining) if light.turns_remaining is not None else "∞"
-            )
-            lines.append(f"{light.label}: {remaining} turns")
-            if light.turns_remaining == 0:
-                lines.append("Light out!")
-        else:
-            lines.append("No light source")
+        light_lines = []
+        for char_id in state.party.member_ids:
+            char = state.characters.get(char_id)
+            if char is None:
+                continue
+            for item_id in char.equipped_slots.values():
+                if not item_id:
+                    continue
+                defn = ITEM_REGISTRY.get(item_id)
+                if defn is None or getattr(defn, "max_light_turns", None) is None:
+                    continue
+                inv = next(
+                    (i for i in char.inventory if i.item_id == item_id and i.equipped),
+                    None,
+                )
+                if inv and inv.charges is not None:
+                    light_lines.append(f"{defn.name} ({char.name}): {inv.charges} turns")
+        lines.extend(light_lines if light_lines else ["No light source"])
 
         # Gold / XP
         lines.append(f"Gold: {state.party.gold}")
@@ -733,7 +736,6 @@ __all__ = [
     "CharacterManager",
     "NPCManager",
     "RoomManager",
-    "LightManager",
     "TurnManager",
     "OracleManager",
     "SessionManager",
@@ -762,7 +764,6 @@ __all__ = [
     "resolve_turn",
     "set_turn_number",
     "unsubmit_turn",
-    "set_light_source",
     "register_room",
     "set_room",
     "move_party_to_room",
