@@ -1517,29 +1517,32 @@ def character_sheet_panel(character: Character) -> str:
             return ' <span class="muted" style="font-size:0.7rem;border:1px solid #555;border-radius:3px;padding:0 3px" title="Encounter recharge">E</span>'
         return ""
 
-    def _charge_controls(item_id: str, charges: int | None, max_charges: int, recharge_period=None) -> str:
-        """Return inline charge badge + +/- and restore buttons for finite-charge spells."""
+    def _charge_controls(item_id: str, charges: int | None, max_charges: int, recharge_period=None, charge_endpoint: str = "spellcharge", recharge_endpoint: str = "spellrecharge", extra_fields: str = "") -> str:
+        """Return inline charge badge + +/- and restore buttons for finite-charge items."""
         if charges is None or max_charges < 0:
             return ""
         badge = f'<span class="muted" style="font-size:0.8rem">({charges}/{max_charges})</span>'
         period_tag = _recharge_tag(recharge_period)
         minus_form = (
-            f'<form method="post" action="/characters/{cid_str}/spellcharge" style="margin:0;display:inline">'
+            f'<form method="post" action="/characters/{cid_str}/{charge_endpoint}" style="margin:0;display:inline">'
             f'<input type="hidden" name="item_id" value="{item_id}">'
             f'<input type="hidden" name="delta" value="-1">'
+            f'{extra_fields}'
             f'<button class="btn-sm" type="submit" style="padding:1px 5px">−</button>'
             f'</form>'
         )
         plus_form = (
-            f'<form method="post" action="/characters/{cid_str}/spellcharge" style="margin:0;display:inline">'
+            f'<form method="post" action="/characters/{cid_str}/{charge_endpoint}" style="margin:0;display:inline">'
             f'<input type="hidden" name="item_id" value="{item_id}">'
             f'<input type="hidden" name="delta" value="1">'
+            f'{extra_fields}'
             f'<button class="btn-sm" type="submit" style="padding:1px 5px">+</button>'
             f'</form>'
         )
         restore_form = (
-            f'<form method="post" action="/characters/{cid_str}/spellrecharge" style="margin:0;display:inline">'
+            f'<form method="post" action="/characters/{cid_str}/{recharge_endpoint}" style="margin:0;display:inline">'
             f'<input type="hidden" name="item_id" value="{item_id}">'
+            f'{extra_fields}'
             f'<button class="btn-sm" type="submit" style="padding:1px 5px" title="Restore to max">↺</button>'
             f'</form>'
         )
@@ -1554,6 +1557,7 @@ def character_sheet_panel(character: Character) -> str:
         qty_str = f'<span class="muted"> ×{inv_item.quantity}</span>' if inv_item.quantity > 1 else ""
         equip_str = ' <span class="tag tag-open" style="font-size:0.7rem;padding:1px 5px">equip</span>' if inv_item.equipped else ""
         # Show charge controls for standalone ChargeWeapons with finite charges.
+        # Also show a charge badge for light-emitting items (torches, lanterns).
         standalone_charges = ""
         if (isinstance(defn, ChargeWeapon)
                 and inv_item.charges is not None
@@ -1566,6 +1570,16 @@ def character_sheet_panel(character: Character) -> str:
               and inv_item.charges is not None
               and defn.maxCharges < 0):
             standalone_charges = ' <span class="muted" style="font-size:0.8rem">(∞)</span>'
+        elif (defn is not None
+              and getattr(defn, "max_light_turns", None) is not None
+              and inv_item.charges is not None):
+            _equipped_field = f'<input type="hidden" name="equipped" value="{"1" if inv_item.equipped else "0"}">'
+            standalone_charges = _charge_controls(
+                inv_item.item_id, inv_item.charges, defn.max_light_turns,
+                charge_endpoint="lightcharge",
+                recharge_endpoint="lightrecharge",
+                extra_fields=_equipped_field,
+            )
         item_rows += (
             f'<tr>'
             f'<td>{item_name}{qty_str}{equip_str}{standalone_charges}</td>'

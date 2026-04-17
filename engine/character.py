@@ -601,6 +601,47 @@ class CharacterManager:
         state.updated_at = _now()
         return _ok(state, f"{defn.name} charges: {inv_item.charges}/{defn.maxCharges}.")
 
+    def adjust_light_charges(
+        self,
+        state: GameState,
+        character_id,
+        item_id: str,
+        delta: int,
+        equipped: bool,
+    ):
+        """
+        Adjust a light-emitting item's current charges by delta (positive or negative).
+
+        ``equipped`` disambiguates between the burning (equipped) item and any
+        unequipped partially-used items with the same item_id.
+        Result is clamped to [0, max_light_turns].
+        """
+        from engine import _now
+
+        char = state.characters.get(character_id)
+        if char is None:
+            return _err(state, f"Character {character_id} not found.")
+
+        inv_item = next(
+            (
+                i for i in char.inventory
+                if i.item_id == item_id
+                and i.charges is not None
+                and i.equipped == equipped
+            ),
+            None,
+        )
+        if inv_item is None:
+            return _err(state, f"No light item '{item_id}' with charges found on {char.name}.")
+
+        defn = ITEM_REGISTRY.get(item_id)
+        if defn is None or getattr(defn, "max_light_turns", None) is None:
+            return _err(state, f"'{item_id}' is not a light-emitting item.")
+
+        inv_item.charges = max(0, min(defn.max_light_turns, inv_item.charges + delta))
+        state.updated_at = _now()
+        return _ok(state, f"{defn.name} light charges: {inv_item.charges}/{defn.max_light_turns}.")
+
     def recharge_day_spells(
         self,
         state: GameState,

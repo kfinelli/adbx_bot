@@ -181,6 +181,12 @@ def adjust_spell_charges(state: GameState, character_id, item_id: str, delta: in
     return cm.adjust_spell_charges(state, character_id, item_id, delta)
 
 
+def adjust_light_charges(state: GameState, character_id, item_id: str, delta: int, equipped: bool):
+    """Adjust a light item's current charges by delta, clamped to [0, max_light_turns]."""
+    cm = CharacterManager()
+    return cm.adjust_light_charges(state, character_id, item_id, delta, equipped)
+
+
 def recharge_day_spells(state: GameState, character_id):
     """Restore all DAY-period spells to full charges for the given character."""
     cm = CharacterManager()
@@ -793,5 +799,6 @@ __all__ = [
     "distribute_xp",
     "check_random_encounter",
     "adjust_spell_charges",
+    "adjust_light_charges",
     "recharge_day_spells",
 ]

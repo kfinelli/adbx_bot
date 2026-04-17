@@ -113,7 +113,13 @@ def _character_sheet(char, state) -> str:
     for i in char.inventory:
         if i.container_id:
             continue  # rendered under its container below
-        line = f"  {i.quantity}x {i.definition.name}{'  [equipped]' if i.equipped else ''}"
+        defn = ITEM_REGISTRY.get(i.item_id)
+        _light_charges = ""
+        if (defn is not None
+                and getattr(defn, "max_light_turns", None) is not None
+                and i.charges is not None):
+            _light_charges = f" ({i.charges}/{defn.max_light_turns})"
+        line = f"  {i.quantity}x {i.definition.name}{_light_charges}{'  [equipped]' if i.equipped else ''}"
         _inv_parts.append(line)
         for _child in _contained.get(i.item_id, []):
             _cdefn = ITEM_REGISTRY.get(_child.item_id)

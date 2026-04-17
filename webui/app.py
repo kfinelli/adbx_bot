@@ -23,6 +23,7 @@ import store
 from discord_tasks import dispatch_oracle_answer, dispatch_turn_resolved, drain_level_ups
 from engine import (
     add_exit,
+    adjust_light_charges,
     adjust_spell_charges,
     answer_oracle,
     apply_condition,
@@ -1189,6 +1190,41 @@ async def route_character_spellrecharge(
         return _char_redirect(char_id, error="Character not found.")
     # Use a large positive delta; adjust_spell_charges clamps to maxCharges.
     result = adjust_spell_charges(state, char.character_id, item_id, delta=9999)
+    if not result.ok:
+        return _char_redirect(char_id, error=result.error)
+    await store.db.save_character_async(char)
+    sync_character_to_sessions(char)
+    return _char_redirect(char_id, flash=result.message)
+
+
+@app.post("/characters/{char_id}/lightcharge", response_class=HTMLResponse)
+async def route_character_lightcharge(
+    char_id: str,
+    item_id: Annotated[str, Form()],
+    delta: Annotated[int, Form()],
+    equipped: Annotated[int, Form()],
+):
+    state, char = _load_char_state(char_id)
+    if char is None:
+        return _char_redirect(char_id, error="Character not found.")
+    result = adjust_light_charges(state, char.character_id, item_id, delta, bool(equipped))
+    if not result.ok:
+        return _char_redirect(char_id, error=result.error)
+    await store.db.save_character_async(char)
+    sync_character_to_sessions(char)
+    return _char_redirect(char_id, flash=result.message)
+
+
+@app.post("/characters/{char_id}/lightrecharge", response_class=HTMLResponse)
+async def route_character_lightrecharge(
+    char_id: str,
+    item_id: Annotated[str, Form()],
+    equipped: Annotated[int, Form()],
+):
+    state, char = _load_char_state(char_id)
+    if char is None:
+        return _char_redirect(char_id, error="Character not found.")
+    result = adjust_light_charges(state, char.character_id, item_id, delta=9999, equipped=bool(equipped))
     if not result.ok:
         return _char_redirect(char_id, error=result.error)
     await store.db.save_character_async(char)
