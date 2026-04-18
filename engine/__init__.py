@@ -193,10 +193,10 @@ def recharge_day_spells(state: GameState, character_id):
     return cm.recharge_day_spells(state, character_id)
 
 
-def add_npc(state: GameState, npc):
+def add_npc(state: GameState, npc, room_id=None):
     """Add an NPC."""
     nm = NPCManager()
-    return nm.add_npc_to_room(state, npc)
+    return nm.add_npc_to_room(state, npc, room_id=room_id)
 
 
 def set_npc_hp(state: GameState, npc_id, new_hp: int):

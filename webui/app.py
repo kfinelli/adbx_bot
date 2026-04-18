@@ -608,6 +608,7 @@ async def route_addnpc(
     description: Annotated[str, Form()] = "",
     notes: Annotated[str, Form()] = "",
     hidden: Annotated[bool, Form()] = False,
+    view_room_id: Annotated[str, Form()] = "",
 ):
     state = store.get_session(channel_id)
     if state is None:
@@ -619,8 +620,10 @@ async def route_addnpc(
         description=description, notes=notes,
         hidden=hidden,
     )
-    eng_add_npc(state, npc)
-    return _respond(channel_id)
+    room_id = UUID(view_room_id) if view_room_id else None
+    eng_add_npc(state, npc, room_id=room_id)
+    await save_session_async(state)
+    return _respond(channel_id, view_room_id=view_room_id)
 
 
 @app.post("/session/{channel_id}/npc/{npc_id}/sethp", response_class=HTMLResponse)

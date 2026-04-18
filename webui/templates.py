@@ -1306,6 +1306,7 @@ def npc_panel(
 <div class="section-header"><h3>Add NPC</h3></div>
 <form hx-post="/session/{channel_id}/addnpc"
       hx-target="#dashboard" hx-swap="outerHTML">
+  <input type="hidden" name="view_room_id" value="{view_room_id}">
   <div class="row">
     <div><label>Name</label><input type="text" name="name" placeholder="Goblin A"></div>
     <div><label>HP</label><input type="number" name="hp" value="4" min="1"></div>
