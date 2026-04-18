@@ -46,6 +46,7 @@ from engine import (
     set_character_hp,
     set_character_status,
     set_exit_state,
+    set_exit_visibility,
     set_feature_state,
     set_npc_hp,
     set_npc_status,
@@ -574,6 +575,24 @@ async def route_exit_setstate(
     return _respond(channel_id, view_room_id=view_room_id)
 
 
+@app.post("/session/{channel_id}/exit/{exit_id}/setvisibility", response_class=HTMLResponse)
+async def route_exit_setvisibility(
+    channel_id: str,
+    exit_id: str,
+    hidden: Annotated[bool, Form()] = False,
+    view_room_id: Annotated[str, Form()] = "",
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    rid = _parse_uuid(view_room_id)
+    result = set_exit_visibility(state, UUID(exit_id), hidden, room_id=rid)
+    if not result.ok:
+        return _respond(channel_id, error=result.error, view_room_id=view_room_id)
+    await save_session_async(state)
+    return _respond(channel_id, view_room_id=view_room_id)
+
+
 # ---------------------------------------------------------------------------
 # NPC routes
 # ---------------------------------------------------------------------------
@@ -814,6 +833,7 @@ async def route_exit_update(
     destination_id: Annotated[str, Form()] = "",
     notes: Annotated[str, Form()] = "",
     auto_move: Annotated[str, Form()] = "",
+    hidden: Annotated[str, Form()] = "",
     view_room_id: Annotated[str, Form()] = "",
 ):
     state = store.get_session(channel_id)
@@ -825,7 +845,7 @@ async def route_exit_update(
         return _respond(channel_id, error=f"Unknown door state: {door_state}", view_room_id=view_room_id)
     rid = _parse_uuid(view_room_id)
     dest = _parse_uuid(destination_id)
-    result = update_exit(state, UUID(exit_id), label, description, ds, destination_id=dest, notes=notes, auto_move=bool(auto_move), room_id=rid)
+    result = update_exit(state, UUID(exit_id), label, description, ds, destination_id=dest, notes=notes, auto_move=bool(auto_move), hidden=bool(hidden), room_id=rid)
     if not result.ok:
         return _respond(channel_id, error=result.error, view_room_id=view_room_id)
     await save_session_async(state)

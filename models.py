@@ -78,7 +78,6 @@ class DoorState(Enum):
     CLOSED = "closed"
     LOCKED = "locked"
     STUCK  = "stuck"
-    SECRET = "secret"
 
 
 class RangeBand(Enum):
@@ -373,6 +372,7 @@ class Exit:
     auto_move:       bool           = False         # skip DM approval on /abscond
     description:     str            = ""            # "A wooden door reinforced with iron bars"
     notes:           str            = ""            # DM-facing notes (traps, keys, etc.)
+    hidden:          bool           = False         # invisible to players until revealed
 
 
 @dataclass

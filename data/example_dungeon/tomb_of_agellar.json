@@ -67,10 +67,11 @@
             "label": "Secret Passage",
             "direction": null,
             "destination_id": "98f73871-d9f1-4315-81ed-772ff185a4ba",
-            "door_state": "secret",
+            "door_state": "closed",
             "auto_move": false,
             "description": "A concealed opening revealed by twisting the horse\u2019s head",
-            "notes": ""
+            "notes": "",
+            "hidden": true
           }
         ],
         "visited": false,

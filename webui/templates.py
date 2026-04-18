@@ -957,6 +957,12 @@ def room_panel(
           auto-move (skip DM approval on /abscond)
         </label>
       </div>
+      <div style="margin-top:0.5rem">
+        <label style="display:inline-flex;align-items:center;gap:0.4rem;cursor:pointer">
+          <input type="checkbox" name="hidden" value="1" {"checked" if ex.hidden else ""}>
+          hidden (invisible to players until revealed)
+        </label>
+      </div>
       <div class="row" style="margin-top:0.5rem">
         <button type="submit">Save</button>
         <a href="{base_url}" style="align-self:center;font-size:0.85rem;color:#888">cancel</a>
@@ -971,9 +977,13 @@ def room_panel(
             )
             auto_badge = ' <span style="font-size:0.75rem;color:#4caf50;font-weight:600">[auto]</span>' if ex.auto_move else ""
             explored_badge = ' <span style="font-size:0.75rem;color:#888">[explored]</span>' if dest_visited else ""
+            hidden_badge = ' <span style="font-size:0.75rem;color:#888">[hidden]</span>' if ex.hidden else ""
+            row_style = ' style="opacity:0.55;font-style:italic"' if ex.hidden else ""
+            vis_label = "Reveal" if ex.hidden else "Hide"
+            vis_hidden_val = "false" if ex.hidden else "true"
             exits_html += f"""
-<tr>
-  <td><strong>{i}. {ex.label.capitalize()}</strong>{dest_name}{auto_badge}{explored_badge}<br>
+<tr{row_style}>
+  <td><strong>{i}. {ex.label.capitalize()}</strong>{dest_name}{auto_badge}{explored_badge}{hidden_badge}<br>
       <span class="muted">{ex.description}</span></td>
   <td style="white-space:nowrap">
     <form style="display:inline" hx-post="/session/{channel_id}/exit/{eid}/setstate"
@@ -982,6 +992,12 @@ def room_panel(
       <div class="row">
         <select name="door_state" onchange="this.form.requestSubmit()">{door_options}</select>
       </div>
+    </form>
+    <form style="display:inline" hx-post="/session/{channel_id}/exit/{eid}/setvisibility"
+          hx-target="#dashboard" hx-swap="outerHTML">
+      <input type="hidden" name="view_room_id" value="{view_room_id}">
+      <input type="hidden" name="hidden" value="{vis_hidden_val}">
+      <button class="btn-sm" type="submit">{vis_label}</button>
     </form>
     <a href="{exit_base}" class="btn-sm" style="margin-top:4px;display:inline-block">Edit</a>
     <form style="display:inline" hx-post="/session/{channel_id}/exit/{eid}/delete"

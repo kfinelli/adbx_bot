@@ -172,6 +172,7 @@ class RoomManager:
         destination_id = None,
         notes:          str = "",
         auto_move:      bool = False,
+        hidden:         bool = False,
         room_id = None,
     ):
         """Update an exit in a room."""
@@ -189,6 +190,7 @@ class RoomManager:
         ex.destination_id = destination_id
         ex.notes          = notes
         ex.auto_move      = auto_move
+        ex.hidden         = hidden
         state.updated_at  = _now()
         return _ok(state, fmt_string("room.exit.updated", label=ex.label))
 
@@ -238,6 +240,25 @@ class RoomManager:
                 ex.door_state = state_result.value
                 state.updated_at = _now()
                 return _ok(state, f"Exit '{ex.label}' → {state_result.value.value}.")
+        return _err(state, f"Exit {exit_id} not found.")
+
+    def set_exit_visibility(
+        self,
+        state,
+        exit_id,
+        hidden: bool,
+        room_id=None,
+    ):
+        """Show or hide an exit from player views."""
+        room = _resolve_room(state, room_id)
+        if room is None:
+            return _err(state, get_string("room.errors.no_current"))
+        for ex in room.exits:
+            if ex.exit_id == exit_id:
+                ex.hidden = hidden
+                state.updated_at = _now()
+                label = "hidden" if hidden else "visible"
+                return _ok(state, f"Exit '{ex.label}' is now {label}.")
         return _err(state, f"Exit {exit_id} not found.")
 
     def add_exit(

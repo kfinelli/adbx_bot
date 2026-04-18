@@ -363,13 +363,14 @@ def update_exit(
     destination_id=None,
     notes: str = "",
     auto_move: bool = False,
+    hidden: bool = False,
     room_id=None,
 ):
     """Update an exit."""
     rm = RoomManager()
     return rm.update_exit(
         state, exit_id, label, description, door_state,
-        destination_id, notes, auto_move, room_id,
+        destination_id, notes, auto_move, hidden, room_id,
     )
 
 
@@ -383,6 +384,12 @@ def set_exit_state(state: GameState, exit_id, new_state, room_id=None):
     """Set exit state."""
     rm = RoomManager()
     return rm.set_exit_state(state, exit_id, new_state, room_id)
+
+
+def set_exit_visibility(state: GameState, exit_id, hidden: bool, room_id=None):
+    """Show or hide an exit from player views."""
+    rm = RoomManager()
+    return rm.set_exit_visibility(state, exit_id, hidden, room_id)
 
 
 def add_exit(
@@ -489,15 +496,16 @@ def abscond(
     room = state.current_room
     if room is None:
         return _err(state, get_string("room.errors.no_current"))
-    if not room.exits:
+    visible_exits = [e for e in room.exits if not e.hidden]
+    if not visible_exits:
         return _err(state, get_string("explore.errors.no_exits"))
 
     idx = exit_number - 1
-    if idx < 0 or idx >= len(room.exits):
-        exit_count = len(room.exits)
+    if idx < 0 or idx >= len(visible_exits):
+        exit_count = len(visible_exits)
         return _err(state, fmt_string("explore.errors.exit_not_found", exit_number=exit_number, exit_count=exit_count))
 
-    exit_ = room.exits[idx]
+    exit_ = visible_exits[idx]
     if exit_.door_state in (DoorState.LOCKED, DoorState.STUCK):
         return _err(state, fmt_string("explore.errors.exit_blocked", label=exit_.label, door_state=exit_.door_state.value))
 
@@ -667,9 +675,10 @@ def render_status(state: GameState) -> str:
             for feat in room.features:
                 state_note = f" [{feat.state}]" if feat.state and feat.state != "intact" else ""
                 lines.append(f"  {feat.name}{state_note}: {feat.description}")
-        if room.exits:
+        visible_exits = [e for e in room.exits if not e.hidden]
+        if visible_exits:
             lines.append("Exits:")
-            for i, ex in enumerate(room.exits, 1):
+            for i, ex in enumerate(visible_exits, 1):
                 explored = (
                     state.dungeon is not None
                     and ex.destination_id is not None
@@ -786,6 +795,7 @@ __all__ = [
     "update_exit",
     "set_feature_state",
     "set_exit_state",
+    "set_exit_visibility",
     "add_exit",
     "say",
     "emote",

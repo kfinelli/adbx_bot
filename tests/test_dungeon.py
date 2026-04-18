@@ -15,6 +15,7 @@ from engine import (
     register_room,
     remove_npc,
     set_exit_state,
+    set_exit_visibility,
     set_feature_state,
     set_npc_hp,
     set_npc_status,
@@ -25,7 +26,7 @@ from engine import (
     update_npc,
     update_room,
 )
-from models import NPC, DoorState, Dungeon, Room, RoomFeature
+from models import NPC, DoorState, Dungeon, Exit, Room, RoomFeature
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -589,3 +590,89 @@ class TestImportDungeon:
         result = import_dungeon(active_state, dungeon)
         assert not result.ok
         assert "PRE_START" in result.error or "before" in result.error.lower()
+
+
+# ---------------------------------------------------------------------------
+# Exit visibility (hidden field)
+# ---------------------------------------------------------------------------
+
+class TestExitVisibility:
+    def test_hide_exit(self, bare_state):
+        set_room(bare_state, _make_room())
+        add_exit(bare_state, "north", "Archway.")
+        exit_ = bare_state.current_room.exits[0]
+        result = set_exit_visibility(bare_state, exit_.exit_id, hidden=True)
+        assert result.ok
+        assert bare_state.current_room.exits[0].hidden is True
+
+    def test_reveal_exit(self, bare_state):
+        set_room(bare_state, _make_room())
+        add_exit(bare_state, "north", "Archway.")
+        exit_ = bare_state.current_room.exits[0]
+        exit_.hidden = True
+        result = set_exit_visibility(bare_state, exit_.exit_id, hidden=False)
+        assert result.ok
+        assert bare_state.current_room.exits[0].hidden is False
+
+    def test_hidden_exit_not_in_render_status(self, bare_state):
+        from engine import render_status
+        set_room(bare_state, _make_room("Vault"))
+        add_exit(bare_state, "secret passage", "A blank wall.")
+        exit_ = bare_state.current_room.exits[0]
+        exit_.hidden = True
+        status = render_status(bare_state)
+        assert "secret passage" not in status.lower()
+
+    def test_visible_exit_in_render_status(self, bare_state):
+        from engine import render_status
+        set_room(bare_state, _make_room("Vault"))
+        add_exit(bare_state, "north", "Stone archway.")
+        status = render_status(bare_state)
+        assert "North" in status
+
+    def test_abscond_uses_visible_exit_index(self, active_state):
+        # Place a hidden exit first, then a visible exit second.
+        # /abscond 1 should go through the visible exit (index 1 of visible list).
+        char_id = list(active_state.party.member_ids)[0]
+        active_state.party.leader_id = char_id
+        set_room(active_state, _make_room("Entry"))
+        add_exit(active_state, "hidden tunnel", "Nothing to see here.")
+        active_state.current_room.exits[0].hidden = True
+        add_exit(active_state, "north", "Open passage.")
+        result = abscond(active_state, char_id, 1)
+        assert result.ok
+
+    def test_abscond_hidden_only_reports_no_exits(self, active_state):
+        char_id = list(active_state.party.member_ids)[0]
+        active_state.party.leader_id = char_id
+        set_room(active_state, _make_room("Entry"))
+        add_exit(active_state, "hidden door", "Blank stone.")
+        active_state.current_room.exits[0].hidden = True
+        result = abscond(active_state, char_id, 1)
+        assert not result.ok
+
+    def test_hidden_exit_serialization_roundtrip(self):
+        from serialization import deserialize_exit, serialize_exit
+        ex = Exit(label="trap door", description="In the floor.", hidden=True)
+        data = serialize_exit(ex)
+        assert data["hidden"] is True
+        loaded = deserialize_exit(data)
+        assert loaded.hidden is True
+        assert loaded.label == "trap door"
+
+    def test_hidden_defaults_false_on_old_json(self):
+        from serialization import deserialize_exit, serialize_exit
+        ex = Exit(label="north", description="Passage.")
+        data = serialize_exit(ex)
+        del data["hidden"]
+        loaded = deserialize_exit(data)
+        assert loaded.hidden is False
+
+    def test_backward_compat_secret_migrates(self):
+        from serialization import deserialize_exit, serialize_exit
+        ex = Exit(label="north", description="Passage.")
+        data = serialize_exit(ex)
+        data["door_state"] = "secret"
+        loaded = deserialize_exit(data)
+        assert loaded.door_state == DoorState.CLOSED
+        assert loaded.hidden is True

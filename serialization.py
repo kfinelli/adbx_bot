@@ -149,6 +149,7 @@ def serialize_exit(e: Exit) -> dict:
         "auto_move":      e.auto_move,
         "description":    e.description,
         "notes":          e.notes,
+        "hidden":         e.hidden,
     }
 
 
@@ -443,15 +444,24 @@ def deserialize_room_feature(d: dict) -> RoomFeature:
 
 
 def deserialize_exit(d: dict) -> Exit:
+    raw_state = d["door_state"]
+    hidden = d.get("hidden", False)
+    # Backward-compat: old "secret" door_state → hidden=True, door_state=CLOSED
+    if raw_state == "secret":
+        door_state = DoorState.CLOSED
+        hidden = True
+    else:
+        door_state = DoorState(raw_state)
     return Exit(
         exit_id=_load_uuid(d["exit_id"]),
         label=d["label"],
         direction=ExitDirection(d["direction"]) if d["direction"] else None,
         destination_id=_load_uuid(d["destination_id"]),
-        door_state=DoorState(d["door_state"]),
+        door_state=door_state,
         auto_move=d.get("auto_move", False),
         description=d["description"],
         notes=d["notes"],
+        hidden=hidden,
     )
 
 
