@@ -18,6 +18,7 @@ from engine import (
     set_feature_state,
     set_npc_hp,
     set_npc_status,
+    set_npc_visibility,
     set_room,
     update_exit,
     update_feature,
@@ -405,6 +406,54 @@ class TestNPCs:
     def test_remove_unknown_npc_fails(self, bare_state):
         result = remove_npc(bare_state, uuid4())
         assert not result.ok
+
+    def test_set_npc_visibility_hide(self, bare_state):
+        set_room(bare_state, _make_room())
+        npc = _make_npc()
+        add_npc(bare_state, npc)
+        result = set_npc_visibility(bare_state, npc.npc_id, hidden=True)
+        assert result.ok
+        assert bare_state.npcs_in_current_room[0].hidden is True
+
+    def test_set_npc_visibility_reveal(self, bare_state):
+        set_room(bare_state, _make_room())
+        npc = NPC(name="Skeleton", hp_max=6, hp_current=6, hidden=True)
+        add_npc(bare_state, npc)
+        result = set_npc_visibility(bare_state, npc.npc_id, hidden=False)
+        assert result.ok
+        assert bare_state.npcs_in_current_room[0].hidden is False
+
+    def test_hidden_npc_absent_from_render_status(self, bare_state):
+        from engine import render_status
+        set_room(bare_state, _make_room("Crypt"))
+        npc = NPC(name="Skeleton", hp_max=6, hp_current=6, hidden=True)
+        add_npc(bare_state, npc)
+        status = render_status(bare_state)
+        assert "Skeleton" not in status
+
+    def test_revealed_npc_present_in_render_status(self, bare_state):
+        from engine import render_status
+        set_room(bare_state, _make_room("Crypt"))
+        npc = NPC(name="Skeleton", hp_max=6, hp_current=6, hidden=False)
+        add_npc(bare_state, npc)
+        status = render_status(bare_state)
+        assert "Skeleton" in status
+
+    def test_hidden_npc_serialization_roundtrip(self):
+        from serialization import deserialize_npc, serialize_npc
+        npc = NPC(name="Ghost", hp_max=8, hp_current=8, hidden=True)
+        data = serialize_npc(npc)
+        assert data["hidden"] is True
+        loaded = deserialize_npc(data)
+        assert loaded.hidden is True
+
+    def test_hidden_field_defaults_false_on_old_json(self):
+        from serialization import deserialize_npc, serialize_npc
+        npc = NPC(name="Rat", hp_max=2, hp_current=2)
+        data = serialize_npc(npc)
+        del data["hidden"]  # simulate old JSON without the field
+        loaded = deserialize_npc(data)
+        assert loaded.hidden is False
 
 
 # ---------------------------------------------------------------------------

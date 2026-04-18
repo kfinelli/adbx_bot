@@ -1241,9 +1241,13 @@ def npc_panel(
             _e_name   = _html.escape(npc.name)
             _e_desc   = _html.escape(npc.description or "")
             _e_status = _html.escape(str(npc.status), quote=True)
+            hidden_badge = ' <span style="font-size:0.75rem;color:#888">[hidden]</span>' if npc.hidden else ""
+            row_style = ' style="opacity:0.55;font-style:italic"' if npc.hidden else ""
+            vis_label = "Reveal" if npc.hidden else "Hide"
+            vis_hidden_val = "false" if npc.hidden else "true"
             rows += f"""
-<tr>
-  <td><strong>{_e_name}</strong><br>
+<tr{row_style}>
+  <td><strong>{_e_name}</strong>{hidden_badge}<br>
       <span class="muted">{_e_desc}</span>
       {npc_combat_sub}</td>
   <td class="hp-bar">{npc.hp_current}/{npc.hp_max}</td>
@@ -1264,6 +1268,12 @@ def npc_panel(
         <input type="text" name="status" value="{_e_status}" placeholder="status">
         <button class="btn-sm" type="submit">Status</button>
       </div>
+    </form>
+    <form style="display:inline" hx-post="/session/{channel_id}/npc/{nid}/setvisibility"
+          hx-target="#dashboard" hx-swap="outerHTML" style="margin-bottom:4px">
+      <input type="hidden" name="view_room_id" value="{view_room_id}">
+      <input type="hidden" name="hidden" value="{vis_hidden_val}">
+      <button class="btn-sm" type="submit">{vis_label}</button>
     </form>
     <a href="{npc_base}" class="btn-sm">Edit</a>
     <form style="display:inline" hx-post="/session/{channel_id}/npc/{nid}/delete"
@@ -1292,6 +1302,11 @@ def npc_panel(
   </div>
   <label>DM Notes</label>
   <input type="text" name="notes" placeholder="DM-facing notes">
+  <div class="row" style="margin-top:0.4rem">
+    <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer">
+      <input type="checkbox" name="hidden" value="true"> Start hidden
+    </label>
+  </div>
   <button type="submit">Add NPC</button>
 </form>"""
 

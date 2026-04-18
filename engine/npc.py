@@ -115,6 +115,21 @@ class NPCManager:
         state.updated_at = _now()
         return _ok(state, fmt_string("npc.status_updated", name=npc.name, status=status_result.value))
 
+    def set_npc_visibility(
+        self,
+        state:  GameState,
+        npc_id,
+        hidden: bool,
+    ):
+        """Show or hide an NPC from player views."""
+        npc = _find_npc_in_roster(state, npc_id)
+        if npc is None:
+            return _err(state, fmt_string("npc.errors.not_found", npc_id=npc_id))
+        npc.hidden = hidden
+        state.updated_at = _now()
+        label = "hidden" if hidden else "visible"
+        return _ok(state, f"{npc.name} is now {label}.")
+
     def remove_npc_group(self, state: GameState, group_id):
         """Remove an NPC group from the roster."""
         success = state.npc_roster.remove_group(group_id)

@@ -228,6 +228,7 @@ def serialize_npc(n: NPC) -> dict:
         "status":            n.status,
         "notes":             n.notes,
         "active_conditions": [serialize_active_condition(cond) for cond in n.active_conditions],
+        "hidden":            n.hidden,
     }
 
 
@@ -509,6 +510,7 @@ def deserialize_npc(d: dict) -> NPC:
         status=d["status"],
         notes=d["notes"],
         active_conditions=[deserialize_active_condition(c) for c in d.get("active_conditions", [])],
+        hidden=d.get("hidden", False),
     )
 
 

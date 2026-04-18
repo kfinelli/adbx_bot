@@ -566,6 +566,7 @@ class NPC:
     status:            str               = "active"    # free-form: active/dead/fled/charmed/etc.
     notes:             str               = ""          # DM-facing
     active_conditions: list[ActiveCondition] = field(default_factory=list)
+    hidden:            bool              = False       # not shown to players until DM reveals
 
     @property
     def dodge(self) -> int:

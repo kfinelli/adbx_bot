@@ -211,6 +211,12 @@ def set_npc_status(state: GameState, npc_id, status: str):
     return nm.set_npc_status(state, npc_id, status)
 
 
+def set_npc_visibility(state: GameState, npc_id, hidden: bool):
+    """Show or hide an NPC from player views."""
+    nm = NPCManager()
+    return nm.set_npc_visibility(state, npc_id, hidden)
+
+
 def remove_npc_group(state: GameState, npc_id):
     """Remove an NPC by removing its group."""
     nm = NPCManager()
@@ -678,7 +684,7 @@ def render_status(state: GameState) -> str:
     lines.append(sep)
 
     # NPCs - get from roster based on current room
-    active_npcs = [n for n in state.npcs_in_current_room if n.status != "dead"]
+    active_npcs = [n for n in state.npcs_in_current_room if n.status != "dead" and not n.hidden]
     if active_npcs:
         lines.append("NPCs:")
         for npc in active_npcs:

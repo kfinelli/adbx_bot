@@ -838,7 +838,8 @@ class ClassActionView(discord.ui.View):
                     combatant_targets = state.active_characters
                 else:
                     combatant_targets = [
-                        n for n in state.npcs_in_current_room if n.status != "dead"
+                        n for n in state.npcs_in_current_room
+                        if n.status != "dead" and not n.hidden
                     ]
                 if not combatant_targets:
                     await interaction.response.send_message(

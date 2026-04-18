@@ -49,6 +49,7 @@ from engine import (
     set_feature_state,
     set_npc_hp,
     set_npc_status,
+    set_npc_visibility,
     set_turn_number,
     start_session,
     unsubmit_turn,
@@ -587,6 +588,7 @@ async def route_addnpc(
     hit_dice: Annotated[int, Form()] = 1,
     description: Annotated[str, Form()] = "",
     notes: Annotated[str, Form()] = "",
+    hidden: Annotated[bool, Form()] = False,
 ):
     state = store.get_session(channel_id)
     if state is None:
@@ -596,6 +598,7 @@ async def route_addnpc(
         defense=defense, damage_dice=damage_dice,
         hit_dice=hit_dice,
         description=description, notes=notes,
+        hidden=hidden,
     )
     eng_add_npc(state, npc)
     return _respond(channel_id)
@@ -633,6 +636,24 @@ async def route_npc_setstatus(
         return _respond(channel_id, error=result.error, view_room_id=view_room_id)
     await save_session_async(state)
     return _respond(channel_id, view_room_id=view_room_id)
+
+
+@app.post("/session/{channel_id}/npc/{npc_id}/setvisibility", response_class=HTMLResponse)
+async def route_npc_setvisibility(
+    channel_id: str,
+    npc_id: str,
+    hidden: Annotated[bool, Form()] = False,
+    view_room_id: Annotated[str, Form()] = "",
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    result = set_npc_visibility(state, UUID(npc_id), hidden)
+    if not result.ok:
+        return _respond(channel_id, error=result.error, view_room_id=view_room_id)
+    await save_session_async(state)
+    return _respond(channel_id, view_room_id=view_room_id)
+
 
 @app.post("/session/{channel_id}/oracle/{number}/answer", response_class=HTMLResponse)
 async def route_oracle_answer(
