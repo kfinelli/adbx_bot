@@ -1,0 +1,9 @@
+{
+  "condition_id": "protected",
+  "label": "Protected",
+  "duration_type": "permanent",
+  "stackable": true,
+  "hooks": {},
+  "stat_modifiers": {"defense": 100},
+  "grants_actions": []
+}

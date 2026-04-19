@@ -597,9 +597,13 @@ def _hook_apply_condition(
     Apply a condition to action.target_id, or to actor_id if params["target"] == "self".
 
     params:
-      condition  (str, required) — condition_id to apply
-      duration   (int, default 3) — duration in rounds; omit for permanent
-      target     (str, optional) — "self" to apply to the actor instead of action.target_id
+      condition       (str, required) — condition_id to apply
+      duration        (int | null, default 3) — duration in rounds; null for permanent
+      target          (str, optional) — "self" to apply to the actor instead of action.target_id
+      repeal_existing (bool, default False) — remove all prior instances of this condition
+                      placed by this actor (any target) before applying the new one
+      stacks_by_level (dict, optional) — compute initial stacks from actor's job level.
+                      Shape: {"job": "KNIGHT", "tiers": [[min_level, stacks], ...]}
     """
     condition_id = params.get("condition")
     if not condition_id:
@@ -622,9 +626,31 @@ def _hook_apply_condition(
         log.append(f"[apply_condition({condition_id}): target not on battlefield]")
         return
 
+    # Remove all prior instances of this condition applied by this actor
+    if params.get("repeal_existing"):
+        for char in state.active_characters:
+            char.active_conditions = [
+                c for c in char.active_conditions
+                if not (c.condition_id == condition_id and c.source_id == actor_id)
+            ]
+
+    # Compute stacks from actor job level if requested
+    stacks = 1
+    sbl = params.get("stacks_by_level")
+    if sbl:
+        actor_char = state.characters.get(actor_id)
+        if actor_char:
+            job_key = sbl["job"].lower()
+            job_exp = actor_char.jobs.get(job_key)
+            if job_exp:
+                for min_lv, s in reversed(sbl["tiers"]):
+                    if job_exp.level >= min_lv:
+                        stacks = s
+                        break
+
     duration = params.get("duration", 3)
     from engine.combat import apply_condition
-    apply_condition(state, target_id, condition_id, duration=duration, source_id=actor_id)
+    apply_condition(state, target_id, condition_id, duration=duration, source_id=actor_id, stacks=stacks)
 
     cond_def = CONDITION_REGISTRY.get(condition_id)
     label    = cond_def.label if cond_def else condition_id

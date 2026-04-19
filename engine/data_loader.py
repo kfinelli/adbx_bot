@@ -108,6 +108,9 @@ class ActionDef:
     requires_destination: bool             = False
     range_requirement:    int | str | None = None
     effect_tags:          list[HookEntry]  = field(default_factory=list)
+    consumes_act:         bool             = True
+    consumes_move:        bool             = False
+    consumes_oracle:      bool             = False
 
 
 @dataclass
@@ -358,6 +361,9 @@ def _load_action(path: Path) -> ActionDef:
         requires_destination=bool(data["requires_destination"]),
         range_requirement=data.get("range_requirement"),
         effect_tags=raw_tags,
+        consumes_act=bool(data.get("consumes_act", True)),
+        consumes_move=bool(data.get("consumes_move", False)),
+        consumes_oracle=bool(data.get("consumes_oracle", False)),
     )
 
 

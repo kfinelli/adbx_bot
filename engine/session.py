@@ -88,10 +88,13 @@ class SessionManager:
         state.rounds_started_at_turn = None
         state.battlefield = None
         # Expire any conditions scoped to rounds (duration_rounds is not None).
-        # Permanent conditions (duration_rounds=None) survive into exploration.
+        # Permanent conditions (duration_rounds=None) survive into exploration,
+        # except combat-only permanents like "protected" which are cleared here.
+        _COMBAT_ONLY_CONDITIONS = {"protected"}
         for char in state.characters.values():
             char.active_conditions = [
-                c for c in char.active_conditions if c.duration_rounds is None
+                c for c in char.active_conditions
+                if c.duration_rounds is None and c.condition_id not in _COMBAT_ONLY_CONDITIONS
             ]
         for group in state.npc_roster.groups.values():
             for npc in group.npcs:

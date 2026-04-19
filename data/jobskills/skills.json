@@ -126,8 +126,9 @@
     },
     "knight_protector": {
       "name": "Protector",
-      "type": 4,
-      "desc": "Give +1 DEF to one other party member or NPC. This bonus increases to +2 at level 3, and to +3 at level 5.\nYou may switch targets on your turn as part of an oracle action."
+      "type": 2,
+      "action_id": "set_protector_target",
+      "desc": "Give +100 DEF to one other party member. Bonus scales to +200 at L3 and +300 at L5. Oracle action — usable once per round."
     },
     "knight_rep": {
       "name": "Honorable Reputation",

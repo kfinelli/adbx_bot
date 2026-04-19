@@ -835,7 +835,10 @@ class ClassActionView(discord.ui.View):
 
             elif action_def.requires_target in ("allies", "enemies"):
                 if action_def.requires_target == "allies":
-                    combatant_targets = state.active_characters
+                    combatant_targets = [
+                        c for c in state.active_characters
+                        if c.character_id != owner_char.character_id
+                    ]
                 else:
                     combatant_targets = [
                         n for n in state.npcs_in_current_room
