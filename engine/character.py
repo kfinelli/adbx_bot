@@ -794,6 +794,63 @@ class CharacterManager:
         state.updated_at = _now()
         return _ok(state, f"{char.name} unequipped {item_name} from the {slot.value} slot.")
 
+    def set_familiar_weapon(
+        self,
+        state: GameState,
+        character_id,
+        instance_id: str | None,
+        dm_reset: bool = False,
+    ):
+        """
+        Set or clear the Weapon Forte familiar weapon for a Dilettante character.
+
+        - instance_id=None clears all familiar flags (DM reset; skips skill check).
+        - Otherwise, validates the character has dilettante_weapon_forte, that no
+          weapon is already familiar (one-use restriction), and sets familiar=True
+          on the matching InventoryItem.
+        """
+        from engine import _now
+
+        char = state.characters.get(character_id)
+        if char is None:
+            return _err(state, f"Character {character_id} not found.")
+
+        if instance_id is None:
+            # DM reset: clear all familiar flags unconditionally
+            for item in char.inventory:
+                item.familiar = False
+            state.updated_at = _now()
+            return _ok(state, f"Weapon Forte selection cleared for {char.name}.")
+
+        # Skill gate
+        if not dm_reset:
+            skill_ids = {s.skill_id for s in self.get_active_skills(char)}
+            if "dilettante_weapon_forte" not in skill_ids:
+                return _err(state, f"{char.name} does not have the Weapon Forte skill.")
+
+        # One-use restriction
+        already_familiar = next((i for i in char.inventory if i.familiar), None)
+        if already_familiar is not None:
+            defn = ITEM_REGISTRY.get(already_familiar.item_id)
+            name = defn.name if defn else already_familiar.item_id
+            return _err(
+                state,
+                f"You have already selected {name} as your Forte weapon. "
+                "Ask your DM to reset the selection.",
+            )
+
+        inv_item = next((i for i in char.inventory if i.instance_id == instance_id), None)
+        if inv_item is None:
+            return _err(state, "Weapon not found in inventory.")
+
+        defn = ITEM_REGISTRY.get(inv_item.item_id)
+        if defn is None or not isinstance(defn, Weapon):
+            return _err(state, "Only weapons can be selected as a Forte weapon.")
+
+        inv_item.familiar = True
+        state.updated_at = _now()
+        return _ok(state, f"{defn.name} is now {char.name}'s Forte weapon.")
+
     # ------------------------------------------------------------------
     # XP and level-up
     # ------------------------------------------------------------------

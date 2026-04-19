@@ -205,6 +205,13 @@ character:
     no_items: "You have no equippable items."
     choose_item: "Choose an item from your inventory to equip:"
     choose_slot: "Choose a slot to unequip:"
+  weapon_forte:
+    button_label: "Weapon Forte"
+    choose: "Choose a weapon to designate as your Forte weapon (SVY replaces its normal stat):"
+    no_weapons: "You have no weapons in your inventory."
+    set: "{name} is now your Forte weapon."
+    already_set: "You have already selected {name} as your Forte weapon. Ask your DM to reset the selection."
+    cleared: "Weapon Forte selection cleared."
   errors:
     already_in_session: "**{name}** has already arrived."
     already_have_character: "You already have a character (**{name}**) in this session."

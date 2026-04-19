@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import discord
 
-from engine import equip_item, unequip_item
+from engine import equip_item, set_familiar_weapon, unequip_item
 from engine.azure_constants import UI_SLOTS, ItemSlot, RechargePeriod
 from engine.character import CharacterManager
 from engine.data_loader import CONDITION_REGISTRY, ITEM_REGISTRY
-from engine.item import EquipItem, UtilitySpell
+from engine.item import EquipItem, UtilitySpell, Weapon
 from engine.strings import get_string
 from store import save_session_async
 
@@ -418,6 +418,7 @@ class EquipMenuView(discord.ui.View):
     """
     Top-level equipment menu — Equip / Unequip / Done buttons.
     This is what the player sees immediately after the character sheet is sent.
+    Dilettante characters with Weapon Forte also get a skill-specific button.
     """
 
     def __init__(self, char, state, channel_id: str):
@@ -425,6 +426,22 @@ class EquipMenuView(discord.ui.View):
         self.char = char
         self.state = state
         self.channel_id = channel_id
+
+        # Conditionally add Weapon Forte button for Dilettantes with the skill
+        skill_ids = {s.skill_id for s in CharacterManager.get_active_skills(char)}
+        if "dilettante_weapon_forte" in skill_ids:
+            btn = discord.ui.Button(
+                label=get_string("character.weapon_forte.button_label"),
+                style=discord.ButtonStyle.primary,
+            )
+            btn.callback = self._weapon_forte_btn
+            self.add_item(btn)
+
+    async def _weapon_forte_btn(self, interaction: discord.Interaction):
+        await interaction.response.edit_message(
+            content=get_string("character.weapon_forte.choose"),
+            view=FamiliarWeaponView(self.char, self.state, self.channel_id),
+        )
 
     @discord.ui.button(label="Equip Item", style=discord.ButtonStyle.primary)
     async def equip_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -445,4 +462,94 @@ class EquipMenuView(discord.ui.View):
         await interaction.response.edit_message(
             content=_character_sheet(self.char, self.state),
             view=None,
+        )
+
+
+class FamiliarWeaponView(discord.ui.View):
+    """
+    Shown when a Dilettante taps "Weapon Forte".
+    Lists all weapons in inventory; selecting one sets it as the Forte weapon.
+    Also offers a Clear option if one is already selected.
+    """
+
+    def __init__(self, char, state, channel_id: str):
+        super().__init__(timeout=120)
+        self.char = char
+        self.state = state
+        self.channel_id = channel_id
+
+        options = []
+        has_familiar = any(i.familiar for i in char.inventory)
+
+        for inv in char.inventory:
+            if inv.container_id:
+                continue
+            defn = ITEM_REGISTRY.get(inv.item_id)
+            if defn is None or not isinstance(defn, Weapon):
+                continue
+            equipped_marker = " (equipped)" if inv.equipped else ""
+            familiar_marker = " ✓" if inv.familiar else ""
+            label = f"{defn.name}{familiar_marker}{equipped_marker}"
+            options.append(discord.SelectOption(
+                label=label[:100],
+                value=inv.instance_id,
+                description="Currently selected as Forte weapon" if inv.familiar else None,
+            ))
+
+        if has_familiar:
+            options.append(discord.SelectOption(
+                label="← Clear selection",
+                value="__clear",
+                description="Remove the current Forte weapon designation",
+            ))
+
+        if not options:
+            options = [discord.SelectOption(
+                label="(no weapons in inventory)",
+                value="__none",
+            )]
+
+        select = discord.ui.Select(
+            placeholder="Choose a weapon…",
+            options=options[:25],
+        )
+        select.callback = self._on_select
+        self.add_item(select)
+
+        back = discord.ui.Button(label="← Back", style=discord.ButtonStyle.secondary)
+        back.callback = self._on_back
+        self.add_item(back)
+
+    async def _on_select(self, interaction: discord.Interaction):
+        value = interaction.data["values"][0]
+
+        if value == "__none":
+            await interaction.response.edit_message(
+                content=get_string("character.weapon_forte.no_weapons"),
+                view=EquipMenuView(self.char, self.state, self.channel_id),
+            )
+            return
+
+        if value == "__clear":
+            result = set_familiar_weapon(self.state, self.char.character_id, None)
+            await save_session_async(self.state)
+            msg = result.message if result.ok else result.error
+            await interaction.response.edit_message(
+                content=msg,
+                view=EquipMenuView(self.char, self.state, self.channel_id),
+            )
+            return
+
+        result = set_familiar_weapon(self.state, self.char.character_id, value)
+        await save_session_async(self.state)
+        msg = result.message if result.ok else result.error
+        await interaction.response.edit_message(
+            content=msg,
+            view=EquipMenuView(self.char, self.state, self.channel_id),
+        )
+
+    async def _on_back(self, interaction: discord.Interaction):
+        await interaction.response.edit_message(
+            content=_character_sheet(self.char, self.state),
+            view=EquipMenuView(self.char, self.state, self.channel_id),
         )

@@ -124,6 +124,18 @@ def unequip_item(state: GameState, character_id, slot):
     return cm.unequip_item(state, character_id, slot)
 
 
+def set_familiar_weapon(state: GameState, character_id, instance_id: str | None):
+    """
+    Set (or clear) the Weapon Forte familiar weapon for a Dilettante character.
+
+    instance_id=None clears the selection (DM reset).
+    Returns EngineResult with ok=False if the character lacks the skill or already
+    has a familiar weapon selected.
+    """
+    cm = CharacterManager()
+    return cm.set_familiar_weapon(state, character_id, instance_id)
+
+
 def remove_item(state: GameState, character_id, item_id: str, quantity: int = 1):
     """
     Remove item(s) from a character's inventory.

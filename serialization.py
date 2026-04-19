@@ -73,6 +73,7 @@ def serialize_inventory_item(item: InventoryItem) -> dict:
         "notes":        item.notes,
         "container_id": item.container_id,
         "instance_id":  item.instance_id,
+        "familiar":     item.familiar,
     }
 
 
@@ -378,6 +379,7 @@ def deserialize_inventory_item(d: dict) -> InventoryItem:
         notes=d.get("notes", ""),
         container_id=d.get("container_id"),
         instance_id=d.get("instance_id") or _uuid.uuid4().hex,
+        familiar=d.get("familiar", False),
     )
 
 

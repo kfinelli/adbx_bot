@@ -26,7 +26,7 @@ from engine import (
     open_turn,
     start_session,
 )
-from engine.combat import CombatAction, _execute_action, apply_condition
+from engine.combat import CombatAction, _execute_action
 from models import (
     NPC,
     ActiveCondition,
@@ -35,9 +35,7 @@ from models import (
     Party,
     PlayerTurnSubmission,
     Room,
-    SessionMode,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
