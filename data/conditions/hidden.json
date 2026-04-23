@@ -1,0 +1,11 @@
+{
+  "condition_id": "hidden",
+  "label": "Hidden",
+  "duration_type": "permanent",
+  "stackable": false,
+  "hooks": {
+    "on_attack": {"tag": "remove_condition", "condition": "hidden"}
+  },
+  "stat_modifiers": {"bypass_defense": 1},
+  "grants_actions": []
+}

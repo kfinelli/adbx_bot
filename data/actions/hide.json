@@ -1,0 +1,16 @@
+{
+  "action_id": "hide",
+  "label": "Hide",
+  "button_style": "secondary",
+  "action_type": "combat",
+  "description": "Use oracle + move actions to enter hidden state. Cannot be targeted while hidden. First attack from hidden bypasses target DEF.",
+  "requires_target": "none",
+  "requires_destination": false,
+  "range_requirement": null,
+  "consumes_act": false,
+  "consumes_move": true,
+  "consumes_oracle": true,
+  "effect_tags": [
+    {"tag": "apply_condition", "condition": "hidden", "duration": null, "target": "self"}
+  ]
+}

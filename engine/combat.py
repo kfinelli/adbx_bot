@@ -55,6 +55,7 @@ from .combat_hooks import (
     _effective_finesse,  # noqa: F401 — re-exported for tests
     _effective_stat_mod,  # noqa: F401 — re-exported for tests
     _find_npc,
+    _fire_on_attack_hooks,
     _fire_turn_start_hooks,
     _hook_apply_condition,  # noqa: F401 — re-exported for tests
     _hook_move_to_band,
@@ -429,6 +430,10 @@ def _execute_action(
     for hook_entry in action_def.effect_tags:
         _dispatch_hook(hook_entry, state, actor_id, action, log)
 
+    # Fire on_attack condition hooks after attack actions resolve
+    if action_def.action_type == "attack":
+        _fire_on_attack_hooks(state, actor_id, action, log)
+
     # Mark resource consumption flags after successful execution
     if cs is not None:
         if action_def.consumes_oracle:
@@ -441,6 +446,17 @@ def _execute_action(
 # _npc_decide
 # ---------------------------------------------------------------------------
 
+def _has_condition(state: GameState, cid: UUID, condition_id: str) -> bool:
+    """Return True if the combatant has an active instance of the given condition."""
+    char = state.characters.get(cid)
+    if char:
+        return any(c.condition_id == condition_id for c in char.active_conditions)
+    npc = _find_npc(state, cid)
+    if npc:
+        return any(c.condition_id == condition_id for c in npc.active_conditions)
+    return False
+
+
 def _npc_decide(
     state:  GameState,
     npc_id: UUID,
@@ -450,6 +466,7 @@ def _npc_decide(
     living_players = [
         (cid, pcs) for cid, pcs in state.battlefield.combatants.items()
         if pcs.is_player and _is_alive(state, cid)
+        and not _has_condition(state, cid, "hidden")
     ]
     if not living_players:
         return None

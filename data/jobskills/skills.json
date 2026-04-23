@@ -154,7 +154,8 @@
     },
     "thief_hide": {
       "name": "Hide",
-      "type": 3,
+      "type": 2,
+      "action_id": "hide",
       "desc": "*(you must use your oracle and move actions to use this in combat)*\nYou may hide on your turn. Opponents cannot target you while you are hidden. If you successfully attack while hidden, the damage bypasses your opponent's DEF, but you are no longer hidden."
     },
     "thief_disarm": {

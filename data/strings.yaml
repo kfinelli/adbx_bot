@@ -175,6 +175,7 @@ combat:
     flee_success: "{actor_name} rolls {roll} + {finesse} = **{total}** vs {threshold}; the party flees!"
     flee_failure: "{actor_name} rolls {roll} + {finesse} = {total} vs {threshold}; failed to abscond."
     condition_expired: "{name}'s {cond_name} condition has expired."
+    condition_removed: "{name} is no longer {cond_name}."
     no_action: "The round passes without incident."
     stunned: "{actor_name} is stunned and cannot act this round!"
     action_out_of_range: "{actor_name} cannot use {label} from {band}, target is {dist} band(s) away (max {max_range})."

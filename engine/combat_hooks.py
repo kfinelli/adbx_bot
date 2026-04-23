@@ -356,6 +356,16 @@ def _hook_weapon_attack(
         if targets_stat == "resistance"
         else _effective_defense(state, target_id)
     )
+    # If actor has bypass_defense (e.g. attacking from hidden), ignore mitigation
+    actor_combatant = state.characters.get(actor_id) or _find_npc(state, actor_id)
+    if actor_combatant:
+        bypass = sum(
+            CONDITION_REGISTRY[c.condition_id].stat_modifiers.get("bypass_defense", 0) * c.stacks
+            for c in actor_combatant.active_conditions
+            if c.condition_id in CONDITION_REGISTRY
+        )
+        if bypass > 0:
+            mitigation = 0
     damage = max(damage - mitigation, 0)
     if target_char:
         target_char.hp_current = max(0, target_char.hp_current - damage)
@@ -660,6 +670,34 @@ def _hook_apply_condition(
         log.append(fmt_string("combat.log.condition_applied", actor_name=actor_name, label=label, target_name=target_name, duration=duration))
 
 
+def _hook_remove_condition(
+    state:    GameState,
+    actor_id: UUID,
+    action,              # CombatAction | None
+    log:      list[str],
+    params:   dict,
+) -> None:
+    """
+    Remove all instances of a named condition from the actor.
+
+    params:
+      condition (str, required) — condition_id to remove
+    """
+    condition_id = params.get("condition")
+    if not condition_id:
+        log.append("[remove_condition: 'condition' param is required]")
+        return
+    combatant = state.characters.get(actor_id) or _find_npc(state, actor_id)
+    if combatant is None:
+        return
+    before = len(combatant.active_conditions)
+    combatant.active_conditions = [c for c in combatant.active_conditions if c.condition_id != condition_id]
+    if len(combatant.active_conditions) < before:
+        cond_def = CONDITION_REGISTRY.get(condition_id)
+        label = cond_def.label if cond_def else condition_id
+        log.append(fmt_string("combat.log.condition_removed", name=_combatant_name(state, actor_id), cond_name=label))
+
+
 def _hook_skip_action(
     state:    GameState,
     actor_id: UUID,
@@ -849,9 +887,10 @@ _HOOK_DISPATCH: dict[str, object] = {
     "move_to_band":    _hook_move_to_band,
     "block_movement":  _hook_block_movement,
     # Conditions
-    "apply_condition": _hook_apply_condition,
-    "deal_damage":     _hook_deal_damage,
-    "skip_action":     _hook_skip_action,
+    "apply_condition":  _hook_apply_condition,
+    "remove_condition": _hook_remove_condition,
+    "deal_damage":      _hook_deal_damage,
+    "skip_action":      _hook_skip_action,
     # Flee
     "abscond_roll":    _hook_abscond_roll,
     # Gear management
@@ -925,3 +964,16 @@ def _tick_conditions(state: GameState, log: list[str]) -> None:
         return
     for combatant_id in list(state.battlefield.combatants):
         _tick_actor_conditions(state, combatant_id, log)
+
+
+def _fire_on_attack_hooks(state: GameState, actor_id: UUID, action, log: list[str]) -> None:
+    """Fire on_attack hooks for the actor after they execute an attack action."""
+    char      = state.characters.get(actor_id)
+    npc       = _find_npc(state, actor_id)
+    combatant = char if char else npc
+    for cond in list(combatant.active_conditions if combatant else []):
+        cond_def = CONDITION_REGISTRY.get(cond.condition_id)
+        if cond_def:
+            entry = cond_def.hooks.get("on_attack")
+            if entry:
+                _dispatch_hook(entry, state, actor_id, action, log)
