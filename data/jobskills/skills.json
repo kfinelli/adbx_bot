@@ -191,8 +191,10 @@
     "dilettante_knack": {
       "name": "Knack",
       "type": 9,
-      "desc": "You may either:\n - Make a SVY check in place of another check.\n - Use your SVY save in place of another save.\nGain an additional use at level 3, and again at level 5. Regain all uses at the start of a combat encounter.",
-      "uses": 1
+      "desc": "You may either:\n - Make a SVY check in place of another check.\n - Use your SVY save in place of another save.\nGain an additional use at level 3, and again at level 5. Regain all uses at the end of a combat encounter.",
+      "uses": 1,
+      "uses_scaling": [3, 5],
+      "recharge_period": "encounter"
     },
     "dilettante_weapon_forte": {
       "name": "Weapon Forte",

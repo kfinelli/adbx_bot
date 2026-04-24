@@ -609,6 +609,49 @@ class CharacterManager:
         state.updated_at = _now()
         return _ok(state, f"{defn.name} charges: {inv_item.charges}/{defn.maxCharges}.")
 
+    @staticmethod
+    def get_skill_max_uses(skill_def, job_level: int) -> int:
+        """Compute max uses of a limited-use skill at the given job level."""
+        if skill_def.uses is None:
+            return 0
+        return skill_def.uses + sum(
+            1 for lvl in skill_def.uses_scaling if job_level >= lvl
+        )
+
+    def adjust_skill_uses(
+        self,
+        state: GameState,
+        character_id,
+        skill_id: str,
+        delta: int,
+    ):
+        """
+        Adjust a skill's current uses by delta (positive or negative).
+
+        Result is clamped to [0, max_uses]. Passing delta=9999 effectively
+        restores the skill to full uses.
+        """
+        from engine import _now
+
+        char = state.characters.get(character_id)
+        if char is None:
+            return _err(state, f"Character {character_id} not found.")
+
+        skill_def = next(
+            (s for s in self.get_active_skills(char) if s.skill_id == skill_id),
+            None,
+        )
+        if skill_def is None or skill_def.uses is None:
+            return _err(state, f"'{skill_id}' is not a limited-use skill for {char.name}.")
+
+        job_exp = char.jobs.get(skill_def.source)
+        job_level = job_exp.level if job_exp else char.level
+        max_uses = self.get_skill_max_uses(skill_def, job_level)
+        current = char.skill_uses.get(skill_id, max_uses)
+        char.skill_uses[skill_id] = max(0, min(max_uses, current + delta))
+        state.updated_at = _now()
+        return _ok(state, f"{skill_def.name} uses: {char.skill_uses[skill_id]}/{max_uses}.")
+
     def adjust_light_charges(
         self,
         state: GameState,
@@ -684,10 +727,20 @@ class CharacterManager:
             inv_item.charges = defn.maxCharges
             count += 1
 
+        # Also restore day-period skill uses.
+        skill_count = 0
+        for skill in self.get_active_skills(char):
+            if skill.uses is None or skill.recharge_period != "day":
+                continue
+            job_exp = char.jobs.get(skill.source)
+            job_level = job_exp.level if job_exp else char.level
+            char.skill_uses[skill.skill_id] = self.get_skill_max_uses(skill, job_level)
+            skill_count += 1
+
         state.updated_at = _now()
-        if count == 0:
-            return _ok(state, f"{char.name} has no daily spells to recharge.")
-        return _ok(state, f"Recharged {count} daily spell(s) for {char.name}.")
+        if count == 0 and skill_count == 0:
+            return _ok(state, f"{char.name} has no daily spells or skills to recharge.")
+        return _ok(state, f"Recharged {count} daily spell(s) and {skill_count} daily skill(s) for {char.name}.")
 
     def remove_item(
         self,

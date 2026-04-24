@@ -127,6 +127,7 @@ def serialize_character(c: Character) -> dict:
         "created_at":       _dt(c.created_at),
         "is_pregenerated":  c.is_pregenerated,
         "active_conditions": [serialize_active_condition(cond) for cond in c.active_conditions],
+        "skill_uses":        dict(c.skill_uses),
     }
 
 
@@ -432,6 +433,7 @@ def deserialize_character(d: dict) -> Character:
         created_at=_load_dt(d["created_at"]),
         is_pregenerated=d["is_pregenerated"],
         active_conditions=[deserialize_active_condition(c) for c in d.get("active_conditions", [])],
+        skill_uses=dict(d.get("skill_uses", {})),
     )
 
 

@@ -188,7 +188,15 @@ def _character_sheet(char, state) -> str:
     if active_skills:
         skill_lines = []
         for skill in active_skills:
-            skill_lines.append(f"  {skill.name}: {skill.description}")
+            if skill.uses is not None:
+                job_exp = char.jobs.get(skill.source)
+                job_level = job_exp.level if job_exp else char.level
+                max_uses = CharacterManager.get_skill_max_uses(skill, job_level)
+                current = char.skill_uses.get(skill.skill_id, max_uses)
+                uses_str = f" [{current}/{max_uses} uses]"
+            else:
+                uses_str = ""
+            skill_lines.append(f" \u2023 {skill.name}{uses_str}: {skill.description}")
         sheet_lines.append("Skills:")
         sheet_lines.extend(skill_lines)
         sheet_lines.append(sep)

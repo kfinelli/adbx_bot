@@ -24,6 +24,7 @@ from discord_tasks import dispatch_oracle_answer, dispatch_turn_resolved, drain_
 from engine import (
     add_exit,
     adjust_light_charges,
+    adjust_skill_uses,
     adjust_spell_charges,
     answer_oracle,
     apply_condition,
@@ -1234,6 +1235,40 @@ async def route_character_spellrecharge(
         return _char_redirect(char_id, error="Character not found.")
     # Use a large positive delta; adjust_spell_charges clamps to maxCharges.
     result = adjust_spell_charges(state, char.character_id, item_id, delta=9999)
+    if not result.ok:
+        return _char_redirect(char_id, error=result.error)
+    await store.db.save_character_async(char)
+    sync_character_to_sessions(char)
+    return _char_redirect(char_id, flash=result.message)
+
+
+@app.post("/characters/{char_id}/skillcharge", response_class=HTMLResponse)
+async def route_character_skillcharge(
+    char_id: str,
+    skill_id: Annotated[str, Form()],
+    delta: Annotated[int, Form()],
+):
+    state, char = _load_char_state(char_id)
+    if char is None:
+        return _char_redirect(char_id, error="Character not found.")
+    result = adjust_skill_uses(state, char.character_id, skill_id, delta)
+    if not result.ok:
+        return _char_redirect(char_id, error=result.error)
+    await store.db.save_character_async(char)
+    sync_character_to_sessions(char)
+    return _char_redirect(char_id, flash=result.message)
+
+
+@app.post("/characters/{char_id}/skillrecharge", response_class=HTMLResponse)
+async def route_character_skillrecharge(
+    char_id: str,
+    skill_id: Annotated[str, Form()],
+):
+    state, char = _load_char_state(char_id)
+    if char is None:
+        return _char_redirect(char_id, error="Character not found.")
+    # Use a large positive delta; adjust_skill_uses clamps to max_uses.
+    result = adjust_skill_uses(state, char.character_id, skill_id, delta=9999)
     if not result.ok:
         return _char_redirect(char_id, error=result.error)
     await store.db.save_character_async(char)

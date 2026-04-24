@@ -199,6 +199,12 @@ def adjust_light_charges(state: GameState, character_id, item_id: str, delta: in
     return cm.adjust_light_charges(state, character_id, item_id, delta, equipped)
 
 
+def adjust_skill_uses(state: GameState, character_id, skill_id: str, delta: int):
+    """Adjust a skill's current uses by delta, clamped to [0, max_uses]."""
+    cm = CharacterManager()
+    return cm.adjust_skill_uses(state, character_id, skill_id, delta)
+
+
 def recharge_day_spells(state: GameState, character_id):
     """Restore all DAY-period spells to full charges for the given character."""
     cm = CharacterManager()
@@ -686,7 +692,7 @@ def render_status(state: GameState) -> str:
             lines.append("Features:")
             for feat in room.features:
                 state_note = f" [{feat.state}]" if feat.state and feat.state != "intact" else ""
-                lines.append(f"  {feat.name}{state_note}: {feat.description}")
+                lines.append(f" \u2023 {feat.name}{state_note}: {feat.description}")
         visible_exits = [e for e in room.exits if not e.hidden]
         if visible_exits:
             lines.append("Exits:")
@@ -828,5 +834,6 @@ __all__ = [
     "check_random_encounter",
     "adjust_spell_charges",
     "adjust_light_charges",
+    "adjust_skill_uses",
     "recharge_day_spells",
 ]

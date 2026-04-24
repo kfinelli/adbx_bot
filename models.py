@@ -184,6 +184,10 @@ class Character:
 
     active_conditions: list[ActiveCondition] = field(default_factory=list)
 
+    # Runtime tracking of limited-use skill uses. Keys are skill_id strings;
+    # values are remaining uses. Missing key means "at max uses" (backward compat).
+    skill_uses: dict[str, int] = field(default_factory=dict)
+
     # Metadata
     created_at:      datetime          = field(default_factory=lambda: datetime.now(UTC))
     is_pregenerated: bool              = False

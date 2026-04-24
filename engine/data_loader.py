@@ -187,8 +187,10 @@ class SkillDef:
     stat:        str | None = None
     bonus:       int        = 0
     rank:        str | None = None
-    uses:        int | None = None
-    check:       dict | None = None
+    uses:           int | None  = None
+    uses_scaling:   list[int]   = field(default_factory=list)
+    recharge_period: str | None = None
+    check:          dict | None = None
 
 
 @dataclass
@@ -424,8 +426,15 @@ def _load_skill_definition(skill_id: str, sdata: dict, path: Path) -> SkillDef:
     """
     _validate_keys(sdata, _SKILL_DEF_REQUIRED, path)
 
-    skill_type = int(sdata["type"])
-    uses_raw   = sdata.get("uses")
+    skill_type       = int(sdata["type"])
+    uses_raw         = sdata.get("uses")
+    recharge_period  = sdata.get("recharge_period")
+    _VALID_RECHARGE  = {"encounter", "day"}
+    if recharge_period is not None and recharge_period not in _VALID_RECHARGE:
+        raise ValueError(
+            f"{path}: skill '{skill_id}' has invalid recharge_period '{recharge_period}'; "
+            f"must be one of {sorted(_VALID_RECHARGE)}"
+        )
 
     skill = SkillDef(
         skill_id=skill_id,
@@ -437,6 +446,8 @@ def _load_skill_definition(skill_id: str, sdata: dict, path: Path) -> SkillDef:
         dm_notes=sdata.get("dm_notes", ""),
         action_id=sdata.get("action_id"),
         uses=int(uses_raw) if uses_raw is not None else None,
+        uses_scaling=list(sdata.get("uses_scaling", [])),
+        recharge_period=recharge_period,
         check=sdata.get("check"),
     )
 
