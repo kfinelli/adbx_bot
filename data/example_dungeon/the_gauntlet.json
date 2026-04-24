@@ -388,8 +388,214 @@
             "exit_id": "ab801c6f-41a6-4739-b9b7-662f100d1903",
             "label": "Wooden Door (W)",
             "direction": null,
+            "destination_id": "4f1c3f56-89e5-43d4-ad6c-4ef9c1493d21",
+            "door_state": "closed",
+            "auto_move": false,
+            "description": "Ordinary wooden door",
+            "notes": "",
+            "hidden": false
+          }
+        ],
+        "visited": false,
+        "authored": true,
+        "exploration_xp": 0,
+        "random_encounter_modifier": 1.0
+      },
+      "4f1c3f56-89e5-43d4-ad6c-4ef9c1493d21": {
+        "room_id": "4f1c3f56-89e5-43d4-ad6c-4ef9c1493d21",
+        "name": "Defense Room",
+        "description": "The occupants of this large room are over a dozen tall grey humanoids with dog-like faces. They are armed with axes and long bows and wear leather armor. As they see you, they rush towards you menacingly.",
+        "notes": "Room 14\nGnoll personal treasures are as follows: leader - 250gp plus a seal (with an eagle motif) made of jasper (value - 600gp); gnolls - 6d60gp each. One has a gold medallion (value - 210gp), and a silver table fork (value - 80gp).\n",
+        "features": [
+          {
+            "feature_id": "9b8b2357-f70a-444c-8471-fc9d3b861ae8",
+            "name": "Tap Mechanism",
+            "description": "Massive device including a large iron cauldron mounted on brackets in a fireplace. A pipe with a tap runs from the cauldron down into an empty trough draining through holes in the floor",
+            "state": "closed",
+            "notes": ""
+          },
+          {
+            "feature_id": "987e50cc-3797-46c1-9328-6cc9b3e98722",
+            "name": "Oil jars",
+            "description": "Seven oil jars sit near the fireplace",
+            "state": "intact",
+            "notes": ""
+          },
+          {
+            "feature_id": "c64dc097-fe32-4ffd-8286-125f7d81f6f9",
+            "name": "Winch Mechanisms",
+            "description": "Two winches, each with a bell tied on",
+            "state": "intact",
+            "notes": ""
+          },
+          {
+            "feature_id": "c18a9a1f-19b7-4b18-be21-73240d2bd865",
+            "name": "Furniture",
+            "description": "three benches, four tables, eight chairs, seven lockers",
+            "state": "intact",
+            "notes": ""
+          },
+          {
+            "feature_id": "0f16f4b0-bcbf-4063-8e51-83ab5a97e076",
+            "name": "Assorted items",
+            "description": "flagons of wine, leather cups, pewter platters, bone dice, bone counters, whetstone, 25 torches",
+            "state": "intact",
+            "notes": ""
+          }
+        ],
+        "exits": [
+          {
+            "exit_id": "3beba4da-40b7-4a4d-9759-0a9302ae6d03",
+            "label": "Wooden door (E)",
+            "direction": null,
+            "destination_id": "27da4ff9-dab0-415e-abef-6e0d7aff9b0b",
+            "door_state": "open",
+            "auto_move": false,
+            "description": "Ordinary wooden door",
+            "notes": "",
+            "hidden": false
+          },
+          {
+            "exit_id": "8f9c6571-9150-427e-8401-7ac5e784c743",
+            "label": "Wooden door (n)",
+            "direction": null,
             "destination_id": null,
             "door_state": "closed",
+            "auto_move": false,
+            "description": "Ordinary wooden door in an alcove on the western side of the room",
+            "notes": "",
+            "hidden": false
+          },
+          {
+            "exit_id": "021d0ffa-e9e7-47cd-ae36-253a7ce7e293",
+            "label": "Reinforced wooden door (n)",
+            "direction": null,
+            "destination_id": "dd99e1a3-9892-4d13-a98c-56e4b89de399",
+            "door_state": "closed",
+            "auto_move": false,
+            "description": "First of two doors situated in an alcove on the eastern side of the room",
+            "notes": "",
+            "hidden": false
+          },
+          {
+            "exit_id": "81bf8666-a7d6-46e4-bfbc-abc37dc8fad9",
+            "label": "Reinforced wooden door (e)",
+            "direction": null,
+            "destination_id": null,
+            "door_state": "closed",
+            "auto_move": false,
+            "description": "Second of two doors situated in an alcove on the eastern side of the room",
+            "notes": "",
+            "hidden": false
+          }
+        ],
+        "visited": false,
+        "authored": true,
+        "exploration_xp": 0,
+        "random_encounter_modifier": 1.0
+      },
+      "dd99e1a3-9892-4d13-a98c-56e4b89de399": {
+        "room_id": "dd99e1a3-9892-4d13-a98c-56e4b89de399",
+        "name": "Gate Watchroom",
+        "description": "Seated around a small table in the center of this small room are four tall humanoid creatures with grey skins and dog-like faces. Two of them are arm-wrestling while the other two cheer them on.",
+        "notes": "Room 15\nPersonal treasure consists of 4d60gp each. One of them has a bloodstone gem (340gp) and magical black armbands that cure insomnia.",
+        "features": [
+          {
+            "feature_id": "cc11d139-8304-4b9b-bdcd-4ff484f1d002",
+            "name": "Small pile of firewood",
+            "description": "Dry firewood",
+            "state": "intact",
+            "notes": ""
+          },
+          {
+            "feature_id": "6768d925-e72c-405d-afd0-3965a558f58a",
+            "name": "Bundle of torches",
+            "description": "six torches",
+            "state": "intact",
+            "notes": ""
+          },
+          {
+            "feature_id": "1cf47786-89a4-4e9e-bdea-1c8148512368",
+            "name": "Table",
+            "description": "On the table: large hourglass, slate with chalk",
+            "state": "intact",
+            "notes": ""
+          }
+        ],
+        "exits": [
+          {
+            "exit_id": "4ff32f3f-87b8-4712-ab6f-033b250d1523",
+            "label": "Reinforced wooden door (S)",
+            "direction": null,
+            "destination_id": null,
+            "door_state": "open",
+            "auto_move": false,
+            "description": "Wooden door with iron bands",
+            "notes": "",
+            "hidden": false
+          }
+        ],
+        "visited": false,
+        "authored": true,
+        "exploration_xp": 0,
+        "random_encounter_modifier": 1.0
+      },
+      "20ac1220-8be6-4dba-9419-989a9793bb70": {
+        "room_id": "20ac1220-8be6-4dba-9419-989a9793bb70",
+        "name": "Stable",
+        "description": "This is a stable, with five stalls against the eastern wall. Three of these contain horses which whinny plaintively when they see you. They look under-fed and ungroomed, and the room smells as if the stalls have not been cleaned for many days.",
+        "notes": "Room 16. ",
+        "features": [],
+        "exits": [
+          {
+            "exit_id": "a8a7d614-c437-495f-a011-fd9c227f7ae3",
+            "label": "Reinforced wooden door (S)",
+            "direction": null,
+            "destination_id": "4f1c3f56-89e5-43d4-ad6c-4ef9c1493d21",
+            "door_state": "open",
+            "auto_move": false,
+            "description": "Wooden door reinforced with iron bands",
+            "notes": "",
+            "hidden": false
+          },
+          {
+            "exit_id": "2cb934de-05d1-43de-b88a-9f6cba989eaf",
+            "label": "Wooden door (n)",
+            "direction": null,
+            "destination_id": "65929ca6-691e-48a4-a97a-c75c0496ac32",
+            "door_state": "closed",
+            "auto_move": false,
+            "description": "Ordinary wooden door",
+            "notes": "",
+            "hidden": false
+          }
+        ],
+        "visited": false,
+        "authored": true,
+        "exploration_xp": 0,
+        "random_encounter_modifier": 1.0
+      },
+      "65929ca6-691e-48a4-a97a-c75c0496ac32": {
+        "room_id": "65929ca6-691e-48a4-a97a-c75c0496ac32",
+        "name": "Tack Room",
+        "description": "This room has many hooks, pegs and shelves on its walls, but all are bare. Everything in the room, consisting mostly of tack, harness and feed, has been thrown into a large, untidy heap on the floor.",
+        "notes": "Room 17.\nIf the adventurers take the time to sort out the heap they will\nfind 20 sacks of oats, six saddles, 10 bridles, eight saddlebags,\ntwo sets of leather barding, a set of chain barding, 12 saddle\nblankets, a small anvil, a small portable forge and bellows,\nblacksmith\u2019s tools, horseshoes, nails, four sacks of charcoal,\nleather-working tools, combs, brushes, saddlesoap and horse\nliniment",
+        "features": [
+          {
+            "feature_id": "fec9b09e-d2b4-4131-9643-8960afe034b0",
+            "name": "Heap of Tack",
+            "description": "A big pile of horse supplies",
+            "state": "intack",
+            "notes": ""
+          }
+        ],
+        "exits": [
+          {
+            "exit_id": "51c74e68-6e6e-4fe5-8dc9-a640fa624e75",
+            "label": "Wooden Door (S)",
+            "direction": null,
+            "destination_id": "20ac1220-8be6-4dba-9419-989a9793bb70",
+            "door_state": "open",
             "auto_move": false,
             "description": "Ordinary wooden door",
             "notes": "",
@@ -811,6 +1017,166 @@
         "possible_rooms": [],
         "movement_logic": "stationary",
         "current_room_id": "27da4ff9-dab0-415e-abef-6e0d7aff9b0b",
+        "patrol_route": []
+      },
+      "6a07285b-843d-4a76-b724-b2c9ccd80b66": {
+        "group_id": "6a07285b-843d-4a76-b724-b2c9ccd80b66",
+        "name": null,
+        "npcs": [
+          {
+            "npc_id": "cf0977da-d858-4d35-99f8-81cfabf93443",
+            "name": "Gnoll Leader",
+            "description": "",
+            "hp_max": 450,
+            "hp_current": 450,
+            "defense": 100,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "2d400",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 3,
+            "weapon_range": 0,
+            "status": "active",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
+          },
+          {
+            "npc_id": "65d1966a-7341-4db3-9eef-74b172f78271",
+            "name": "Gnoll A",
+            "description": "",
+            "hp_max": 400,
+            "hp_current": 400,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "4d100",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 2,
+            "weapon_range": 0,
+            "status": "active",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
+          },
+          {
+            "npc_id": "60788631-32dc-4b68-a6b6-eef66d59b36d",
+            "name": "Gnoll Archer A",
+            "description": "",
+            "hp_max": 400,
+            "hp_current": 400,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "2d300",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 2,
+            "weapon_range": 2,
+            "status": "active",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
+          }
+        ],
+        "possible_rooms": [],
+        "movement_logic": "stationary",
+        "current_room_id": "4f1c3f56-89e5-43d4-ad6c-4ef9c1493d21",
+        "patrol_route": []
+      },
+      "c6966db2-7b00-48c8-9290-2ca7de7c570c": {
+        "group_id": "c6966db2-7b00-48c8-9290-2ca7de7c570c",
+        "name": null,
+        "npcs": [
+          {
+            "npc_id": "72e17ebd-de21-4145-b764-6e5b2c229852",
+            "name": "Gnoll A",
+            "description": "",
+            "hp_max": 400,
+            "hp_current": 400,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "4d100",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 2,
+            "weapon_range": 0,
+            "status": "active",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
+          }
+        ],
+        "possible_rooms": [],
+        "movement_logic": "stationary",
+        "current_room_id": "dd99e1a3-9892-4d13-a98c-56e4b89de399",
+        "patrol_route": []
+      },
+      "a572314e-d77d-4aaa-9e32-1b441fc7da57": {
+        "group_id": "a572314e-d77d-4aaa-9e32-1b441fc7da57",
+        "name": null,
+        "npcs": [
+          {
+            "npc_id": "7720fe4d-6b57-480e-b823-4232fb0625ba",
+            "name": "Warhorse A",
+            "description": "",
+            "hp_max": 425,
+            "hp_current": 425,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "3d100",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 2,
+            "weapon_range": 0,
+            "status": "active",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
+          }
+        ],
+        "possible_rooms": [],
+        "movement_logic": "stationary",
+        "current_room_id": "20ac1220-8be6-4dba-9419-989a9793bb70",
         "patrol_route": []
       }
     }

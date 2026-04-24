@@ -2,6 +2,9 @@
 NPC management for the dungeon crawler engine.
 """
 
+import copy
+from uuid import uuid4
+
 from models import NPC, GameState, NPCGroup, NPCMovementLogic
 from validation import validate_hp_value, validate_non_empty_string
 
@@ -151,15 +154,18 @@ class NPCManager:
 
     def update_npc(
         self,
-        state:       GameState,
+        state:        GameState,
         npc_id,
-        name:        str,
-        description: str,
-        hp_max:      int,
-        hp_current:  int,
-        defense:     int,
-        notes:       str = "",
-        hit_dice:    int = 1,
+        name:         str,
+        description:  str,
+        hp_max:       int,
+        hp_current:   int,
+        defense:      int,
+        notes:        str = "",
+        hit_dice:     int = 1,
+        resistance:   int = 0,
+        weapon_range: int = 0,
+        damage_dice:  str = "1d6",
     ):
         """Update an NPC's attributes. Searches the entire roster."""
         npc = _find_npc_in_roster(state, npc_id)
@@ -196,12 +202,48 @@ class NPCManager:
         if not notes_result:
             return _err(state, notes_result.error)
 
-        npc.name        = name_result.value
-        npc.description = desc_result.value
-        npc.hp_max      = hp_max_result.value
-        npc.hp_current  = hp_current_result.value
-        npc.defense     = def_result.value
-        npc.notes       = notes_result.value
-        npc.hit_dice    = max(1, int(hit_dice))
+        npc.name         = name_result.value
+        npc.description  = desc_result.value
+        npc.hp_max       = hp_max_result.value
+        npc.hp_current   = hp_current_result.value
+        npc.defense      = def_result.value
+        npc.notes        = notes_result.value
+        npc.hit_dice     = max(1, int(hit_dice))
+        npc.resistance   = max(0, int(resistance))
+        npc.weapon_range = max(0, int(weapon_range))
+        if damage_dice and damage_dice.strip():
+            npc.damage_dice = damage_dice.strip()
         state.updated_at = _now()
         return _ok(state, fmt_string("npc.updated", name=npc.name))
+
+    def copy_npc(self, state: GameState, npc_id, room_id=None):
+        """Deep-copy an NPC and place the copy in the same room."""
+        npc = _find_npc_in_roster(state, npc_id)
+        if npc is None:
+            return _err(state, fmt_string("npc.errors.not_found", npc_id=npc_id))
+
+        group = _find_npcgroup_with_npc(state, npc_id)
+        target_room = room_id if room_id is not None else (
+            group.current_room_id if group else state.current_room_id
+        )
+
+        def _modify_end(s):
+            '''helper to make new NPC name'''
+            if not s or not s[-1].isalpha():
+                return s + "A"
+
+            # Simple increment logic
+            last = s[-1]
+            if last == 'Z': return s[:-1] + 'AA' # Example Z wrap
+            if last == 'z': return s[:-1] + 'aa'
+
+            return s[:-1] + chr(ord(last) + 1)
+
+        new_npc = copy.deepcopy(npc)
+        new_npc.npc_id = uuid4()
+        new_npc.active_conditions = []
+        new_npc.hp_current = new_npc.hp_max
+        raw_name = _modify_end(npc.name)
+        new_npc.name = raw_name[:50]
+
+        return self.add_npc_to_room(state, new_npc, room_id=target_room)

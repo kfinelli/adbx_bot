@@ -487,7 +487,7 @@ class NPCGroup:
         for i in range(len(self.npcs)):
             if self.npcs[i].npc_id == npc_id:
                 del self.npcs[i]
-            return True
+                return True
         return False
 
 @dataclass

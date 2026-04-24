@@ -16,7 +16,8 @@ from datetime import UTC
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, Response
 
 import store
@@ -55,6 +56,7 @@ from engine import (
     set_turn_number,
     start_session,
     unsubmit_turn,
+    update_dungeon,
     update_exit,
     update_feature,
     update_npc,
@@ -62,6 +64,9 @@ from engine import (
 )
 from engine import (
     add_npc as eng_add_npc,
+)
+from engine import (
+    copy_npc as eng_copy_npc,
 )
 from models import (
     NPC,
@@ -82,6 +87,29 @@ from webui.templates import (
 )
 
 app = FastAPI(title="DM Control Panel")
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(request: Request, exc: RequestValidationError) -> HTMLResponse:
+    """Return HTML on 422 so HTMX can swap it into #dashboard instead of silently failing."""
+    errors = "; ".join(
+        f"{e['loc'][-1]}: {e['msg']}" for e in exc.errors()
+    )
+    channel_id = request.path_params.get("channel_id", "")
+    if channel_id:
+        state = store.get_session(channel_id)
+        if state:
+            from webui.templates import dashboard_fragment
+            try:
+                html = dashboard_fragment(state, error=f"Validation error: {errors}")
+                return HTMLResponse(html, status_code=422)
+            except Exception:
+                pass
+    return HTMLResponse(
+        f'<div id="dashboard"><div class="error">Validation error: {errors}</div></div>',
+        status_code=422,
+    )
+
 
 _bot = None
 
@@ -121,12 +149,18 @@ async def _sync_discord(channel_id: str) -> None:
 
 
 def _respond(channel_id: str, flash: str = "", error: str = "", sync: bool = True, view_room_id: str = "", edit_id: str = "") -> HTMLResponse:
+    import traceback
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse('<div class="error">Session not found.</div>')
     if sync and _bot:
         asyncio.create_task(_sync_discord(channel_id))
-    return HTMLResponse(dashboard_fragment(state, flash=flash, error=error, view_room_id=view_room_id, edit_id=edit_id))
+    try:
+        return HTMLResponse(dashboard_fragment(state, flash=flash, error=error, view_room_id=view_room_id, edit_id=edit_id))
+    except Exception as exc:
+        tb = traceback.format_exc()
+        print(f"[_respond] dashboard_fragment error: {exc}\n{tb}", file=sys.stderr)
+        return HTMLResponse(f'<div id="dashboard"><div class="error">Render error: {exc}</div></div>')
 
 
 # ---------------------------------------------------------------------------
@@ -537,6 +571,7 @@ async def route_addexit(
     label: Annotated[str, Form()],
     description: Annotated[str, Form()],
     door_state: Annotated[str, Form()] = "open",
+    destination_id: Annotated[str, Form()] = "",
     view_room_id: Annotated[str, Form()] = "",
 ):
     state = store.get_session(channel_id)
@@ -547,7 +582,8 @@ async def route_addexit(
     except ValueError:
         return _respond(channel_id, error=f"Unknown door state: {door_state}", view_room_id=view_room_id)
     rid = _parse_uuid(view_room_id)
-    result = add_exit(state, label, description, ds, room_id=rid)
+    dest = _parse_uuid(destination_id)
+    result = add_exit(state, label, description, ds, room_id=rid, destination_id=dest)
     if not result.ok:
         return _respond(channel_id, error=result.error, view_room_id=view_room_id)
     await save_session_async(state)
@@ -606,6 +642,8 @@ async def route_addnpc(
     defense: Annotated[int, Form()] = 0,
     damage_dice: Annotated[str, Form()] = "1d6",
     hit_dice: Annotated[int, Form()] = 1,
+    resistance: Annotated[int, Form()] = 0,
+    weapon_range: Annotated[int, Form()] = 0,
     description: Annotated[str, Form()] = "",
     notes: Annotated[str, Form()] = "",
     hidden: Annotated[bool, Form()] = False,
@@ -618,6 +656,7 @@ async def route_addnpc(
         name=name, hp_max=hp, hp_current=hp,
         defense=defense, damage_dice=damage_dice,
         hit_dice=hit_dice,
+        resistance=resistance, weapon_range=weapon_range,
         description=description, notes=notes,
         hidden=hidden,
     )
@@ -700,8 +739,27 @@ async def route_oracle_answer(
 
 
 # ---------------------------------------------------------------------------
-# Dungeon import / export
+# Dungeon import / export / update
 # ---------------------------------------------------------------------------
+
+@app.post("/session/{channel_id}/dungeon/update", response_class=HTMLResponse)
+async def route_dungeon_update(
+    channel_id: str,
+    name: Annotated[str, Form()],
+    description: Annotated[str, Form()] = "",
+    random_encounter_interval: Annotated[int, Form()] = 6,
+    random_encounter_roll: Annotated[str, Form()] = "1d6",
+    view_room_id: Annotated[str, Form()] = "",
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    result = update_dungeon(state, name, description, random_encounter_interval, random_encounter_roll)
+    if not result.ok:
+        return _respond(channel_id, error=result.error, view_room_id=view_room_id)
+    await save_session_async(state)
+    return _respond(channel_id, flash=result.message, view_room_id=view_room_id)
+
 
 @app.post("/session/{channel_id}/dungeon/import", response_class=HTMLResponse)
 async def route_dungeon_import(channel_id: str, file: UploadFile = File(...)):
@@ -882,22 +940,34 @@ async def route_npc_update(
     channel_id: str,
     npc_id: str,
     name: Annotated[str, Form()],
-    description: Annotated[str, Form()],
     hp_max: Annotated[int, Form()],
     hp_current: Annotated[int, Form()],
     defense: Annotated[int, Form()],
+    description: Annotated[str, Form()] = "",
     notes: Annotated[str, Form()] = "",
     hit_dice: Annotated[int, Form()] = 1,
+    resistance: Annotated[int, Form()] = 0,
+    weapon_range: Annotated[int, Form()] = 0,
+    damage_dice: Annotated[str, Form()] = "1d6",
     view_room_id: Annotated[str, Form()] = "",
 ):
+    import traceback
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse("Session not found.", status_code=404)
-    result = update_npc(state, UUID(npc_id), name, description, hp_max, hp_current, defense, notes, hit_dice)
-    if not result.ok:
-        return _respond(channel_id, error=result.error, view_room_id=view_room_id)
-    await save_session_async(state)
-    return _respond(channel_id, flash=result.message, view_room_id=view_room_id)
+    try:
+        result = update_npc(
+            state, UUID(npc_id), name, description, hp_max, hp_current, defense,
+            notes, hit_dice, resistance, weapon_range, damage_dice,
+        )
+        if not result.ok:
+            return _respond(channel_id, error=result.error, view_room_id=view_room_id)
+        await save_session_async(state)
+        return _respond(channel_id, flash=result.message, view_room_id=view_room_id)
+    except Exception as exc:
+        tb = traceback.format_exc()
+        print(f"[route_npc_update] ERROR for npc_id={npc_id}: {exc}\n{tb}", file=sys.stderr)
+        return _respond(channel_id, error=f"Server error: {exc}", view_room_id=view_room_id)
 
 
 @app.post("/session/{channel_id}/npc/{npc_id}/delete", response_class=HTMLResponse)
@@ -910,6 +980,23 @@ async def route_npc_delete(
     if state is None:
         return HTMLResponse("Session not found.", status_code=404)
     result = remove_npc(state, UUID(npc_id))
+    if not result.ok:
+        return _respond(channel_id, error=result.error, view_room_id=view_room_id)
+    await save_session_async(state)
+    return _respond(channel_id, view_room_id=view_room_id)
+
+
+@app.post("/session/{channel_id}/npc/{npc_id}/copy", response_class=HTMLResponse)
+async def route_npc_copy(
+    channel_id: str,
+    npc_id: str,
+    view_room_id: Annotated[str, Form()] = "",
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    rid = _parse_uuid(view_room_id)
+    result = eng_copy_npc(state, UUID(npc_id), room_id=rid)
     if not result.ok:
         return _respond(channel_id, error=result.error, view_room_id=view_room_id)
     await save_session_async(state)

@@ -178,6 +178,15 @@ def page(title: str, body: str) -> str:
     td {{ padding: 4px 8px; border-bottom: 1px solid #0f3460; vertical-align: middle; }}
     tr:last-child td {{ border-bottom: none; }}
   </style>
+  <script>
+    // Force HTMX to swap even on 4xx/5xx responses, so error messages
+    // are shown and edit forms close rather than staying stuck open.
+    document.addEventListener('htmx:beforeSwap', function(evt) {{
+      if (evt.detail.xhr.status >= 400) {{
+        evt.detail.shouldSwap = true;
+      }}
+    }});
+  </script>
 </head>
 <body>
 {body}
@@ -1009,6 +1018,13 @@ def room_panel(
   </td>
 </tr>"""
 
+    # Build destination room options (all authored rooms except this one)
+    dest_options = '<option value="">— none —</option>'
+    if state.dungeon:
+        for r in sorted(state.dungeon.rooms.values(), key=lambda r: r.name.lower()):
+            if r.room_id != room.room_id and r.authored:
+                dest_options += f'<option value="{r.room_id}">{_html.escape(r.name)}</option>'
+
     add_exit_html = f"""
 <hr class="divider">
 <div class="section-header"><h3>Add Exit</h3></div>
@@ -1021,6 +1037,8 @@ def room_panel(
     <select name="door_state">
       {"".join(f'<option value="{d.value}">{d.value}</option>' for d in DoorState)}
     </select></div>
+    <div><label>Destination</label>
+    <select name="destination_id">{dest_options}</select></div>
   </div>
   <label>Description</label>
   <textarea name="description" rows="2" placeholder="Player-visible description"></textarea>
@@ -1053,9 +1071,12 @@ def dungeon_panel(state: GameState, view_room_id: str = "") -> str:
     channel_id = state.platform_channel_id
     dungeon = state.dungeon
 
-    # --- Header summary + export
+    # --- Header summary + export + edit form
     if dungeon:
         safe_name = dungeon.name.replace(" ", "_").lower()
+        _e_dname = _html.escape(dungeon.name, quote=True)
+        _e_ddesc = _html.escape(dungeon.description or "", quote=True)
+        _e_droll = _html.escape(dungeon.random_encounter_roll or "1d6", quote=True)
         summary = (
             f"<p><strong>{dungeon.name}</strong> &mdash; "
             f"{len(dungeon.rooms)} room(s)</p>"
@@ -1064,9 +1085,29 @@ def dungeon_panel(state: GameState, view_room_id: str = "") -> str:
             f'<a class="btn btn-sm" href="/session/{channel_id}/dungeon/export" '
             f'download="{safe_name}.json">Export JSON</a>'
         )
+        dungeon_edit_html = f"""
+<hr class="divider">
+<div class="section-header"><h3 style="font-size:0.9rem">Dungeon Settings</h3></div>
+<form hx-post="/session/{channel_id}/dungeon/update"
+      hx-target="#dashboard" hx-swap="outerHTML">
+  <input type="hidden" name="view_room_id" value="{view_room_id}">
+  <label>Name</label>
+  <input type="text" name="name" value="{_e_dname}" required>
+  <label>Description</label>
+  <textarea name="description" rows="2">{_e_ddesc}</textarea>
+  <div class="row">
+    <div><label>Enc. Interval (turns)</label>
+    <input type="number" name="random_encounter_interval"
+           value="{dungeon.random_encounter_interval}" min="1" style="width:70px"></div>
+    <div><label>Enc. Roll</label>
+    <input type="text" name="random_encounter_roll" value="{_e_droll}" style="width:70px"></div>
+  </div>
+  <button type="submit">Save</button>
+</form>"""
     else:
         summary = '<p class="muted">No dungeon loaded.</p>'
         export_btn = ""
+        dungeon_edit_html = ""
 
     # --- Import form (PRE_START only)
     if state.mode == SessionMode.PRE_START:
@@ -1141,6 +1182,7 @@ def dungeon_panel(state: GameState, view_room_id: str = "") -> str:
   {summary}
   {export_btn}
   {import_html}
+  {dungeon_edit_html}
   {room_list_html}
   {new_room_html}
 </div>"""
@@ -1223,9 +1265,10 @@ def npc_panel(
         nid = str(npc.npc_id)
         npc_base = f"{base_url}&edit={nid}"
         if edit_id == nid:
-            _e_name  = _html.escape(npc.name, quote=True)
-            _e_desc  = _html.escape(npc.description or "", quote=True)
-            _e_notes = _html.escape(npc.notes or "", quote=True)
+            _e_name   = _html.escape(npc.name, quote=True)
+            _e_desc   = _html.escape(npc.description or "", quote=True)
+            _e_notes  = _html.escape(npc.notes or "", quote=True)
+            _e_dmg    = _html.escape(npc.damage_dice or "1d6", quote=True)
             rows += f"""
 <tr>
   <td colspan="3">
@@ -1240,6 +1283,10 @@ def npc_panel(
       </div>
       <div class="row">
         <div><label>HD</label><input type="number" name="hit_dice" value="{npc.hit_dice}" min="1" style="width:55px"></div>
+        <div><label>RES</label><input type="number" name="resistance" value="{npc.resistance}" min="0" style="width:55px"></div>
+        <div><label>Range</label><input type="number" name="weapon_range" value="{npc.weapon_range}" min="0" style="width:55px"></div>
+        <div><label>Damage</label><input type="text" name="damage_dice" value="{_e_dmg}" style="width:70px"></div>
+        <div><label>Dodge</label><span style="align-self:center;font-size:0.9rem">{npc.dodge}</span></div>
       </div>
       <label>Description</label>
       <input type="text" name="description" value="{_e_desc}">
@@ -1292,6 +1339,11 @@ def npc_panel(
       <button class="btn-sm" type="submit">{vis_label}</button>
     </form>
     <a href="{npc_base}" class="btn-sm">Edit</a>
+    <form style="display:inline" hx-post="/session/{channel_id}/npc/{nid}/copy"
+          hx-target="#dashboard" hx-swap="outerHTML">
+      <input type="hidden" name="view_room_id" value="{view_room_id}">
+      <button class="btn-sm" type="submit">Copy</button>
+    </form>
     <form style="display:inline" hx-post="/session/{channel_id}/npc/{nid}/delete"
           hx-target="#dashboard" hx-swap="outerHTML"
           hx-confirm="Remove {_e_name}?">
@@ -1311,10 +1363,12 @@ def npc_panel(
     <div><label>Name</label><input type="text" name="name" placeholder="Goblin A"></div>
     <div><label>HP</label><input type="number" name="hp" value="4" min="1"></div>
     <div><label>DEF</label><input type="number" name="defense" value="0" min="0"></div>
+    <div><label>RES</label><input type="number" name="resistance" value="0" min="0" style="width:55px"></div>
   </div>
   <div class="row">
-    <div><label>Damage</label><input type="text" name="damage_dice" value="1d6"></div>
-    <div><label>HD</label><input type="number" name="hit_dice" value="1" min="1"></div>
+    <div><label>Damage</label><input type="text" name="damage_dice" value="1d6" style="width:70px"></div>
+    <div><label>HD</label><input type="number" name="hit_dice" value="1" min="1" style="width:55px"></div>
+    <div><label>Range</label><input type="number" name="weapon_range" value="0" min="0" style="width:55px"></div>
     <div><label>Description</label><input type="text" name="description" placeholder="Brief description"></div>
   </div>
   <label>DM Notes</label>

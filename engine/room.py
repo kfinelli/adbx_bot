@@ -263,12 +263,13 @@ class RoomManager:
 
     def add_exit(
         self,
-        state:       GameState,
-        label:       str,
-        description: str,
+        state:          GameState,
+        label:          str,
+        description:    str,
         door_state=DoorState.OPEN,
-        notes:       str = "",
-        room_id = None,
+        notes:          str = "",
+        room_id=None,
+        destination_id=None,
     ):
         """DM adds a new exit."""
         room = _resolve_room(state, room_id)
@@ -301,6 +302,8 @@ class RoomManager:
             door_state=door_result.value,
             notes=notes_result.value,
         )
+        if destination_id is not None and state.dungeon and destination_id in state.dungeon.rooms:
+            exit_.destination_id = destination_id
         room.exits.append(exit_)
         n = len(room.exits)
         state.updated_at = _now()

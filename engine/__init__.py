@@ -262,13 +262,23 @@ def update_npc(
     defense: int,
     notes: str = "",
     hit_dice: int = 1,
+    resistance: int = 0,
+    weapon_range: int = 0,
+    damage_dice: str = "1d6",
 ):
     """Update an NPC."""
     nm = NPCManager()
     return nm.update_npc(
         state, npc_id, name, description, hp_max,
         hp_current, defense, notes, hit_dice,
+        resistance, weapon_range, damage_dice,
     )
+
+
+def copy_npc(state: GameState, npc_id, room_id=None):
+    """Copy an NPC, placing the duplicate in the same room."""
+    nm = NPCManager()
+    return nm.copy_npc(state, npc_id, room_id=room_id)
 
 
 def open_turn(state: GameState, due_at=None):
@@ -417,10 +427,11 @@ def add_exit(
     door_state=DoorState.OPEN,
     notes: str = "",
     room_id=None,
+    destination_id=None,
 ):
     """Add an exit."""
     rm = RoomManager()
-    return rm.add_exit(state, label, description, door_state, notes, room_id)
+    return rm.add_exit(state, label, description, door_state, notes, room_id, destination_id)
 
 
 def say(state: GameState, speaker: str, text: str):
@@ -486,6 +497,31 @@ def import_dungeon(state: GameState, dungeon, npc_roster=None):
     """Import a dungeon and optionally an NPC roster."""
     sm = SessionManager()
     return sm.import_dungeon(state, dungeon, npc_roster)
+
+
+def update_dungeon(
+    state: GameState,
+    name: str,
+    description: str = "",
+    random_encounter_interval: int = 6,
+    random_encounter_roll: str = "1d6",
+):
+    """Update dungeon metadata (name, description, encounter settings)."""
+    from validation import validate_non_empty_string
+    dungeon = state.dungeon
+    if dungeon is None:
+        return _err(state, "No dungeon loaded.")
+    name_result = validate_non_empty_string(name, "Dungeon name", max_length=100)
+    if not name_result:
+        return _err(state, name_result.error)
+    dungeon.name = name_result.value
+    dungeon.description = description.strip()
+    dungeon.random_encounter_interval = max(1, int(random_encounter_interval))
+    roll = random_encounter_roll.strip()
+    if roll:
+        dungeon.random_encounter_roll = roll
+    state.updated_at = _now()
+    return _ok(state, f"Dungeon '{dungeon.name}' updated.")
 
 
 def abscond(
@@ -825,6 +861,8 @@ __all__ = [
     "enter_rounds",
     "exit_rounds",
     "import_dungeon",
+    "update_dungeon",
+    "copy_npc",
     "abscond",
     "render_status_header",
     "render_status",
