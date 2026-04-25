@@ -165,12 +165,9 @@
     },
     "thief_slip": {
       "name": "Slip",
-      "type": 4,
-      "desc": "On a successful FNS check, enemies cannot attack you for leaving the current zone until next turn.",
-      "check": {
-        "DC": 900,
-        "Stat": "FNS"
-      }
+      "type": 2,
+      "desc": "On a successful FNS check (DC 900), gain immunity to opportunity attacks and move one range band. Consumes your move action.",
+      "action_id": "slip"
     },
     "thief_disarmor": {
       "name": "Disarmor",

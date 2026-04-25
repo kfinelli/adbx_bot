@@ -810,6 +810,47 @@ def _hook_abscond_roll(
         log.append(fmt_string("combat.log.flee_failure", actor_name=actor_name, roll=roll, finesse=finesse, total=total, threshold=threshold))
 
 
+def _hook_stat_check(
+    state:    GameState,
+    actor_id: UUID,
+    action,              # CombatAction | None
+    log:      list[str],
+    params:   dict,
+) -> None:
+    """
+    General 1d1000 + stat vs DC check.
+    params:
+      stat:       AzureStats field name — "physique" | "finesse" | "reason" | "savvy"
+      dc:         int
+      on_success: list of hook entries dispatched on success (optional)
+      on_failure: list of hook entries dispatched on failure (optional)
+    """
+    stat_name  = params.get("stat", "finesse")
+    dc         = int(params.get("dc", 900))
+    actor_name = _combatant_name(state, actor_id)
+
+    roll       = random.randint(1, 1000)
+    stat_value = _effective_stat_mod(state, actor_id, stat_name)
+    total      = roll + stat_value
+
+    if total >= dc:
+        log.append(fmt_string(
+            "combat.log.stat_check_success",
+            actor_name=actor_name, stat=stat_name.upper()[:3],
+            roll=roll, stat_value=stat_value, total=total, dc=dc,
+        ))
+        for entry in params.get("on_success", []):
+            _dispatch_hook(entry, state, actor_id, action, log)
+    else:
+        log.append(fmt_string(
+            "combat.log.stat_check_failure",
+            actor_name=actor_name, stat=stat_name.upper()[:3],
+            roll=roll, stat_value=stat_value, total=total, dc=dc,
+        ))
+        for entry in params.get("on_failure", []):
+            _dispatch_hook(entry, state, actor_id, action, log)
+
+
 def _hook_resolve_equip(
     state:    GameState,
     actor_id: UUID,
@@ -893,6 +934,8 @@ _HOOK_DISPATCH: dict[str, object] = {
     "skip_action":      _hook_skip_action,
     # Flee
     "abscond_roll":    _hook_abscond_roll,
+    # General stat check
+    "stat_check":      _hook_stat_check,
     # Gear management
     "resolve_equip":   _hook_resolve_equip,
     "resolve_unequip": _hook_resolve_unequip,
