@@ -88,10 +88,13 @@ class SessionManager:
         state.rounds_started_at_turn = None
         state.battlefield = None
         # Expire any conditions scoped to rounds (duration_rounds is not None).
-        # Permanent conditions (duration_rounds=None) survive into exploration.
+        # Permanent conditions (duration_rounds=None) survive into exploration,
+        # except combat-only permanents like "protected" which are cleared here.
+        _COMBAT_ONLY_CONDITIONS = {"protected"}
         for char in state.characters.values():
             char.active_conditions = [
-                c for c in char.active_conditions if c.duration_rounds is None
+                c for c in char.active_conditions
+                if c.duration_rounds is None and c.condition_id not in _COMBAT_ONLY_CONDITIONS
             ]
         for group in state.npc_roster.groups.values():
             for npc in group.npcs:
@@ -119,6 +122,15 @@ class SessionManager:
                 if defn.maxCharges < 0:
                     continue
                 inv_item.charges = defn.maxCharges
+        # Restore encounter-period skill uses for all characters.
+        from engine.character import CharacterManager
+        for char in state.characters.values():
+            for skill in CharacterManager.get_active_skills(char):
+                if skill.uses is None or skill.recharge_period != "encounter":
+                    continue
+                job_exp = char.jobs.get(skill.source)
+                job_level = job_exp.level if job_exp else char.level
+                char.skill_uses[skill.skill_id] = CharacterManager.get_skill_max_uses(skill, job_level)
         state.updated_at = _now()
         return _ok(state, get_string("session.returning_to_exploration"))
 

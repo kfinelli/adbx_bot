@@ -1,0 +1,10 @@
+{
+  "condition_id": "slipping",
+  "label": "Slipping",
+  "duration_type": "rounds",
+  "stackable": false,
+  "hooks": {},
+  "stat_modifiers": {},
+  "grants_actions": [],
+  "tags": ["opportunity-attack-immune"]
+}

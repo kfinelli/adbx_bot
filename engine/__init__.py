@@ -124,6 +124,18 @@ def unequip_item(state: GameState, character_id, slot):
     return cm.unequip_item(state, character_id, slot)
 
 
+def set_familiar_weapon(state: GameState, character_id, instance_id: str | None):
+    """
+    Set (or clear) the Weapon Forte familiar weapon for a Dilettante character.
+
+    instance_id=None clears the selection (DM reset).
+    Returns EngineResult with ok=False if the character lacks the skill or already
+    has a familiar weapon selected.
+    """
+    cm = CharacterManager()
+    return cm.set_familiar_weapon(state, character_id, instance_id)
+
+
 def remove_item(state: GameState, character_id, item_id: str, quantity: int = 1):
     """
     Remove item(s) from a character's inventory.
@@ -185,6 +197,12 @@ def adjust_light_charges(state: GameState, character_id, item_id: str, delta: in
     """Adjust a light item's current charges by delta, clamped to [0, max_light_turns]."""
     cm = CharacterManager()
     return cm.adjust_light_charges(state, character_id, item_id, delta, equipped)
+
+
+def adjust_skill_uses(state: GameState, character_id, skill_id: str, delta: int):
+    """Adjust a skill's current uses by delta, clamped to [0, max_uses]."""
+    cm = CharacterManager()
+    return cm.adjust_skill_uses(state, character_id, skill_id, delta)
 
 
 def recharge_day_spells(state: GameState, character_id):
@@ -674,7 +692,7 @@ def render_status(state: GameState) -> str:
             lines.append("Features:")
             for feat in room.features:
                 state_note = f" [{feat.state}]" if feat.state and feat.state != "intact" else ""
-                lines.append(f"  {feat.name}{state_note}: {feat.description}")
+                lines.append(f" \u2023 {feat.name}{state_note}: {feat.description}")
         visible_exits = [e for e in room.exits if not e.hidden]
         if visible_exits:
             lines.append("Exits:")
@@ -816,5 +834,6 @@ __all__ = [
     "check_random_encounter",
     "adjust_spell_charges",
     "adjust_light_charges",
+    "adjust_skill_uses",
     "recharge_day_spells",
 ]

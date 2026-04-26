@@ -356,6 +356,16 @@ def _hook_weapon_attack(
         if targets_stat == "resistance"
         else _effective_defense(state, target_id)
     )
+    # If actor has bypass_defense (e.g. attacking from hidden), ignore mitigation
+    actor_combatant = state.characters.get(actor_id) or _find_npc(state, actor_id)
+    if actor_combatant:
+        bypass = sum(
+            CONDITION_REGISTRY[c.condition_id].stat_modifiers.get("bypass_defense", 0) * c.stacks
+            for c in actor_combatant.active_conditions
+            if c.condition_id in CONDITION_REGISTRY
+        )
+        if bypass > 0:
+            mitigation = 0
     damage = max(damage - mitigation, 0)
     if target_char:
         target_char.hp_current = max(0, target_char.hp_current - damage)
@@ -597,9 +607,13 @@ def _hook_apply_condition(
     Apply a condition to action.target_id, or to actor_id if params["target"] == "self".
 
     params:
-      condition  (str, required) — condition_id to apply
-      duration   (int, default 3) — duration in rounds; omit for permanent
-      target     (str, optional) — "self" to apply to the actor instead of action.target_id
+      condition       (str, required) — condition_id to apply
+      duration        (int | null, default 3) — duration in rounds; null for permanent
+      target          (str, optional) — "self" to apply to the actor instead of action.target_id
+      repeal_existing (bool, default False) — remove all prior instances of this condition
+                      placed by this actor (any target) before applying the new one
+      stacks_by_level (dict, optional) — compute initial stacks from actor's job level.
+                      Shape: {"job": "KNIGHT", "tiers": [[min_level, stacks], ...]}
     """
     condition_id = params.get("condition")
     if not condition_id:
@@ -622,9 +636,31 @@ def _hook_apply_condition(
         log.append(f"[apply_condition({condition_id}): target not on battlefield]")
         return
 
+    # Remove all prior instances of this condition applied by this actor
+    if params.get("repeal_existing"):
+        for char in state.active_characters:
+            char.active_conditions = [
+                c for c in char.active_conditions
+                if not (c.condition_id == condition_id and c.source_id == actor_id)
+            ]
+
+    # Compute stacks from actor job level if requested
+    stacks = 1
+    sbl = params.get("stacks_by_level")
+    if sbl:
+        actor_char = state.characters.get(actor_id)
+        if actor_char:
+            job_key = sbl["job"].lower()
+            job_exp = actor_char.jobs.get(job_key)
+            if job_exp:
+                for min_lv, s in reversed(sbl["tiers"]):
+                    if job_exp.level >= min_lv:
+                        stacks = s
+                        break
+
     duration = params.get("duration", 3)
     from engine.combat import apply_condition
-    apply_condition(state, target_id, condition_id, duration=duration, source_id=actor_id)
+    apply_condition(state, target_id, condition_id, duration=duration, source_id=actor_id, stacks=stacks)
 
     cond_def = CONDITION_REGISTRY.get(condition_id)
     label    = cond_def.label if cond_def else condition_id
@@ -632,6 +668,34 @@ def _hook_apply_condition(
         log.append(fmt_string("combat.log.condition_applied_self", actor_name=actor_name, label=label, duration=duration))
     else:
         log.append(fmt_string("combat.log.condition_applied", actor_name=actor_name, label=label, target_name=target_name, duration=duration))
+
+
+def _hook_remove_condition(
+    state:    GameState,
+    actor_id: UUID,
+    action,              # CombatAction | None
+    log:      list[str],
+    params:   dict,
+) -> None:
+    """
+    Remove all instances of a named condition from the actor.
+
+    params:
+      condition (str, required) — condition_id to remove
+    """
+    condition_id = params.get("condition")
+    if not condition_id:
+        log.append("[remove_condition: 'condition' param is required]")
+        return
+    combatant = state.characters.get(actor_id) or _find_npc(state, actor_id)
+    if combatant is None:
+        return
+    before = len(combatant.active_conditions)
+    combatant.active_conditions = [c for c in combatant.active_conditions if c.condition_id != condition_id]
+    if len(combatant.active_conditions) < before:
+        cond_def = CONDITION_REGISTRY.get(condition_id)
+        label = cond_def.label if cond_def else condition_id
+        log.append(fmt_string("combat.log.condition_removed", name=_combatant_name(state, actor_id), cond_name=label))
 
 
 def _hook_skip_action(
@@ -746,6 +810,47 @@ def _hook_abscond_roll(
         log.append(fmt_string("combat.log.flee_failure", actor_name=actor_name, roll=roll, finesse=finesse, total=total, threshold=threshold))
 
 
+def _hook_stat_check(
+    state:    GameState,
+    actor_id: UUID,
+    action,              # CombatAction | None
+    log:      list[str],
+    params:   dict,
+) -> None:
+    """
+    General 1d1000 + stat vs DC check.
+    params:
+      stat:       AzureStats field name — "physique" | "finesse" | "reason" | "savvy"
+      dc:         int
+      on_success: list of hook entries dispatched on success (optional)
+      on_failure: list of hook entries dispatched on failure (optional)
+    """
+    stat_name  = params.get("stat", "finesse")
+    dc         = int(params.get("dc", 900))
+    actor_name = _combatant_name(state, actor_id)
+
+    roll       = random.randint(1, 1000)
+    stat_value = _effective_stat_mod(state, actor_id, stat_name)
+    total      = roll + stat_value
+
+    if total >= dc:
+        log.append(fmt_string(
+            "combat.log.stat_check_success",
+            actor_name=actor_name, stat=stat_name.upper()[:3],
+            roll=roll, stat_value=stat_value, total=total, dc=dc,
+        ))
+        for entry in params.get("on_success", []):
+            _dispatch_hook(entry, state, actor_id, action, log)
+    else:
+        log.append(fmt_string(
+            "combat.log.stat_check_failure",
+            actor_name=actor_name, stat=stat_name.upper()[:3],
+            roll=roll, stat_value=stat_value, total=total, dc=dc,
+        ))
+        for entry in params.get("on_failure", []):
+            _dispatch_hook(entry, state, actor_id, action, log)
+
+
 def _hook_resolve_equip(
     state:    GameState,
     actor_id: UUID,
@@ -823,11 +928,14 @@ _HOOK_DISPATCH: dict[str, object] = {
     "move_to_band":    _hook_move_to_band,
     "block_movement":  _hook_block_movement,
     # Conditions
-    "apply_condition": _hook_apply_condition,
-    "deal_damage":     _hook_deal_damage,
-    "skip_action":     _hook_skip_action,
+    "apply_condition":  _hook_apply_condition,
+    "remove_condition": _hook_remove_condition,
+    "deal_damage":      _hook_deal_damage,
+    "skip_action":      _hook_skip_action,
     # Flee
     "abscond_roll":    _hook_abscond_roll,
+    # General stat check
+    "stat_check":      _hook_stat_check,
     # Gear management
     "resolve_equip":   _hook_resolve_equip,
     "resolve_unequip": _hook_resolve_unequip,
@@ -899,3 +1007,16 @@ def _tick_conditions(state: GameState, log: list[str]) -> None:
         return
     for combatant_id in list(state.battlefield.combatants):
         _tick_actor_conditions(state, combatant_id, log)
+
+
+def _fire_on_attack_hooks(state: GameState, actor_id: UUID, action, log: list[str]) -> None:
+    """Fire on_attack hooks for the actor after they execute an attack action."""
+    char      = state.characters.get(actor_id)
+    npc       = _find_npc(state, actor_id)
+    combatant = char if char else npc
+    for cond in list(combatant.active_conditions if combatant else []):
+        cond_def = CONDITION_REGISTRY.get(cond.condition_id)
+        if cond_def:
+            entry = cond_def.hooks.get("on_attack")
+            if entry:
+                _dispatch_hook(entry, state, actor_id, action, log)

@@ -174,10 +174,14 @@ combat:
     flee_blocked: "{actor_name} tries to flee but {blocker} is blocking the way!"
     flee_success: "{actor_name} rolls {roll} + {finesse} = **{total}** vs {threshold}; the party flees!"
     flee_failure: "{actor_name} rolls {roll} + {finesse} = {total} vs {threshold}; failed to abscond."
+    stat_check_success: "{actor_name} rolls {roll} + {stat_value} = **{total}** vs DC {dc} — success!"
+    stat_check_failure: "{actor_name} rolls {roll} + {stat_value} = {total} vs DC {dc} — failed."
     condition_expired: "{name}'s {cond_name} condition has expired."
+    condition_removed: "{name} is no longer {cond_name}."
     no_action: "The round passes without incident."
     stunned: "{actor_name} is stunned and cannot act this round!"
     action_out_of_range: "{actor_name} cannot use {label} from {band}, target is {dist} band(s) away (max {max_range})."
+    oracle_already_used: "{actor_name} has already used their oracle action this round."
     moved_to: "Moved to **{destination}**."
   condition:
     applied: "{target_name} is now {label}."
@@ -204,6 +208,13 @@ character:
     no_items: "You have no equippable items."
     choose_item: "Choose an item from your inventory to equip:"
     choose_slot: "Choose a slot to unequip:"
+  weapon_forte:
+    button_label: "Weapon Forte"
+    choose: "Choose a weapon to designate as your Forte weapon (SVY replaces its normal stat):"
+    no_weapons: "You have no weapons in your inventory."
+    set: "{name} is now your Forte weapon."
+    already_set: "You have already selected {name} as your Forte weapon. Ask your DM to reset the selection."
+    cleared: "Weapon Forte selection cleared."
   errors:
     already_in_session: "**{name}** has already arrived."
     already_have_character: "You already have a character (**{name}**) in this session."

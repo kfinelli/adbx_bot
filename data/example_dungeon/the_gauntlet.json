@@ -29,7 +29,8 @@
             "door_state": "closed",
             "auto_move": true,
             "description": "The gateway consists of a round-topped arch and has a pair of stone doors with brass handles.",
-            "notes": ""
+            "notes": "",
+            "hidden": false
           }
         ],
         "visited": false,
@@ -60,7 +61,8 @@
             "door_state": "open",
             "auto_move": true,
             "description": "The gateway leads back to the lower gates of the keep.",
-            "notes": ""
+            "notes": "",
+            "hidden": false
           },
           {
             "exit_id": "0cdb55e3-bc86-4e97-bb49-b977ebbd9f3c",
@@ -70,7 +72,8 @@
             "door_state": "closed",
             "auto_move": false,
             "description": "Identical in appearance to the southern gateway, leads north.",
-            "notes": ""
+            "notes": "",
+            "hidden": false
           },
           {
             "exit_id": "84a883c2-8ffa-4347-b2ec-4b96f8c4df6f",
@@ -80,7 +83,8 @@
             "door_state": "closed",
             "auto_move": false,
             "description": "Identical in appearance to the southern gateway, leads east.",
-            "notes": ""
+            "notes": "",
+            "hidden": false
           }
         ],
         "visited": false,
@@ -118,7 +122,8 @@
             "door_state": "open",
             "auto_move": false,
             "description": "Eastern gateway leading back to The Gateway of Berghof",
-            "notes": ""
+            "notes": "",
+            "hidden": false
           }
         ],
         "visited": false,
@@ -141,7 +146,8 @@
             "door_state": "open",
             "auto_move": false,
             "description": "Back to the Gateway of Berghof",
-            "notes": ""
+            "notes": "",
+            "hidden": false
           },
           {
             "exit_id": "04ed425e-2e42-40f3-962d-695846da870b",
@@ -151,7 +157,8 @@
             "door_state": "closed",
             "auto_move": false,
             "description": "A partition of unclear substance and origin",
-            "notes": ""
+            "notes": "",
+            "hidden": false
           }
         ],
         "visited": false,
@@ -196,7 +203,8 @@
             "door_state": "open",
             "auto_move": false,
             "description": "Uneven screen of unknown substance and origin",
-            "notes": ""
+            "notes": "",
+            "hidden": false
           },
           {
             "exit_id": "864fd79e-a4de-4a54-ade4-a8255d15c681",
@@ -206,7 +214,8 @@
             "door_state": "closed",
             "auto_move": false,
             "description": "Uneven screen of unknown substance and origin",
-            "notes": ""
+            "notes": "",
+            "hidden": false
           }
         ],
         "visited": false,
@@ -244,17 +253,19 @@
             "door_state": "open",
             "auto_move": false,
             "description": "Uneven screen of unknown material and origin",
-            "notes": ""
+            "notes": "",
+            "hidden": false
           },
           {
             "exit_id": "efb3643c-76a4-4e4c-9395-15d6c7cc53f9",
             "label": "Wooden door (e)",
             "direction": null,
-            "destination_id": null,
+            "destination_id": "301fe2b0-d37f-4495-8fdf-1242823c9552",
             "door_state": "closed",
-            "auto_move": false,
+            "auto_move": true,
             "description": "Standard wooden door with iron handle",
-            "notes": ""
+            "notes": "",
+            "hidden": false
           }
         ],
         "visited": false,
@@ -265,34 +276,150 @@
       "301fe2b0-d37f-4495-8fdf-1242823c9552": {
         "room_id": "301fe2b0-d37f-4495-8fdf-1242823c9552",
         "name": "Painted room",
-        "description": "This octagonal room has a slender, stone pillar near the wall at each corner. The ceiling is painted to represent a domed roof, supported by these pillars, and the walls show a country scene which continues all the way around the room. With a little imagination, you could be standing in a summer house, surrounded by pleasant pastures and woodlands, at the top of a grassy slope leading down to a large lake.",
+        "description": "This octagonal room has a slender, stone pillar near the wall at each corner. The ceiling is painted to represent a domed roof, supported by these pillars, and the walls show a country scene which continues all the way around the room. With a little imagination, you could be standing near a summer house, surrounded by pleasant pastures and woodlands, at the top of a grassy slope leading down to a large lake.",
         "notes": "",
+        "features": [
+          {
+            "feature_id": "7b65eaba-3493-4dc1-87a2-af52442ff9e0",
+            "name": "Wall painting",
+            "description": "Depicts buildings on the SE wall. Paths leading into the horizon are depicted on the NE and NW walls.",
+            "state": "intact",
+            "notes": ""
+          },
+          {
+            "feature_id": "c9ae2836-360f-4ae1-be76-99667b91b156",
+            "name": "Pillars",
+            "description": "Four slender pillars stand at each corner of the room",
+            "state": "intact",
+            "notes": ""
+          }
+        ],
+        "exits": [
+          {
+            "exit_id": "a03f3700-5722-4f3f-b14d-77d2230d18f1",
+            "label": "Painted Door (NW)",
+            "direction": null,
+            "destination_id": "825c1784-525a-4a97-b2b3-df3225357161",
+            "door_state": "open",
+            "auto_move": false,
+            "description": "A door integrated into the painting as leading down a pathway to the horizon",
+            "notes": "",
+            "hidden": false
+          },
+          {
+            "exit_id": "74fa43d5-02f3-42f1-b2cf-ac08d8ab9e27",
+            "label": "Painted Door (SE)",
+            "direction": null,
+            "destination_id": "8723bd17-4b1c-4b5d-9a99-bac407ca5d24",
+            "door_state": "closed",
+            "auto_move": true,
+            "description": "A door integrated into the painting as a door to another house",
+            "notes": "",
+            "hidden": false
+          },
+          {
+            "exit_id": "36e72038-2ef4-457b-9847-c3d9a16dc1a3",
+            "label": "Painted door (NE)",
+            "direction": null,
+            "destination_id": "27da4ff9-dab0-415e-abef-6e0d7aff9b0b",
+            "door_state": "closed",
+            "auto_move": false,
+            "description": "A door integrated into the painting as leading down a pathway to the horizon",
+            "notes": "",
+            "hidden": true
+          }
+        ],
+        "visited": false,
+        "authored": true,
+        "exploration_xp": 0,
+        "random_encounter_modifier": 1.0
+      },
+      "8723bd17-4b1c-4b5d-9a99-bac407ca5d24": {
+        "room_id": "8723bd17-4b1c-4b5d-9a99-bac407ca5d24",
+        "name": "Release Chamber",
+        "description": "This room is circular and seems to be unoccupied. With the exception of a circular area in the center of the floor, the walls, floor and ceiling are of a smooth\npale grey stone. The circular area contains a stark spiral pattern in black and white",
+        "notes": "Room 9",
         "features": [],
-        "exits": [],
+        "exits": [
+          {
+            "exit_id": "cbaee0c5-1b6b-41c7-b0a2-9d94754896ae",
+            "label": "Stone Door (NW)",
+            "direction": null,
+            "destination_id": "301fe2b0-d37f-4495-8fdf-1242823c9552",
+            "door_state": "open",
+            "auto_move": true,
+            "description": "Ordinary door leading back to the painted room",
+            "notes": "",
+            "hidden": false
+          }
+        ],
+        "visited": false,
+        "authored": true,
+        "exploration_xp": 0,
+        "random_encounter_modifier": 0.0
+      },
+      "27da4ff9-dab0-415e-abef-6e0d7aff9b0b": {
+        "room_id": "27da4ff9-dab0-415e-abef-6e0d7aff9b0b",
+        "name": "Dormitory",
+        "description": "The air in this room is filled with the strong smell of sweat and the sound of none-too-gentle snoring. Much of the floor is covered with straw on which sprawl half a dozen humanoids wearing leather armor. One of them is clutching a flagon.",
+        "notes": "The sleeping gnolls each have 40d6gp. In addition one of them has a silver mirror (value-200gp) and another hasa rock crystal gem (value - 140gp). \nIf the adventurers take the opportunity to search the straw bedding, they will discover the following items: a small ivory ball (value - 300gp), a pair of silver tweezers (value - 10Ogp), and 73gp in coins.",
+        "features": [
+          {
+            "feature_id": "d840c727-6c6d-4300-9500-a70c1be19580",
+            "name": "Straw Bedding",
+            "description": "Straw spread across the floor serves as bedding for the gnolls",
+            "state": "filthy",
+            "notes": ""
+          }
+        ],
+        "exits": [
+          {
+            "exit_id": "096a0f82-8608-4cf1-9542-fc0c3cd9268e",
+            "label": "Stairway to Basement",
+            "direction": null,
+            "destination_id": "301fe2b0-d37f-4495-8fdf-1242823c9552",
+            "door_state": "open",
+            "auto_move": false,
+            "description": "Return to the Painted Room",
+            "notes": "",
+            "hidden": false
+          },
+          {
+            "exit_id": "ab801c6f-41a6-4739-b9b7-662f100d1903",
+            "label": "Wooden Door (W)",
+            "direction": null,
+            "destination_id": null,
+            "door_state": "closed",
+            "auto_move": false,
+            "description": "Ordinary wooden door",
+            "notes": "",
+            "hidden": false
+          }
+        ],
         "visited": false,
         "authored": true,
         "exploration_xp": 0,
         "random_encounter_modifier": 1.0
       }
     },
-    "entrance_id": null,
+    "entrance_id": "ba8d77a2-9b69-46cf-992a-5a4cd963e80a",
     "random_encounter_interval": 6,
     "random_encounter_roll": "1d6",
     "random_encounter_roster": []
   },
   "npc_roster": {
     "groups": {
-      "ceeb1615-1783-4b67-a6ed-29221ea629aa": {
-        "group_id": "ceeb1615-1783-4b67-a6ed-29221ea629aa",
-        "name": null,
+      "11d0394c-3f5c-4197-b765-182032732636": {
+        "group_id": "11d0394c-3f5c-4197-b765-182032732636",
+        "name": "Automatons",
         "npcs": [
           {
-            "npc_id": "156adc86-92e0-44ef-9c4d-e330f1b48650",
-            "name": "Automaton",
-            "description": "armored, wielding a mace",
-            "hp_max": 225,
-            "hp_current": 225,
-            "defense": 200,
+            "npc_id": "609a95e5-6af7-4389-a190-1ac54db0f728",
+            "name": "Chainmail Automaton",
+            "description": "Armed with a mace",
+            "hp_max": 600,
+            "hp_current": 600,
+            "defense": 150,
             "resistance": 0,
             "ability_scores": {
               "physique": 0,
@@ -309,14 +436,15 @@
             "weapon_range": 0,
             "status": "active",
             "notes": "",
-            "active_conditions": []
+            "active_conditions": [],
+            "hidden": true
           },
           {
-            "npc_id": "1860638d-fbf4-4558-8538-0c43c4f8b982",
-            "name": "Automaton",
-            "description": "",
-            "hp_max": 4,
-            "hp_current": 4,
+            "npc_id": "0d963341-316b-4df7-be3d-8ea4946d02cc",
+            "name": "Robed Automaton",
+            "description": "Armed with a staff",
+            "hp_max": 400,
+            "hp_current": 400,
             "defense": 0,
             "resistance": 0,
             "ability_scores": {
@@ -327,22 +455,23 @@
             },
             "movement_speed": 90,
             "attack_bonus": 0,
-            "damage_dice": "1d6",
+            "damage_dice": "6d130",
             "morale": 7,
             "saving_throw": 15,
-            "hit_dice": 1,
+            "hit_dice": 4,
             "weapon_range": 0,
             "status": "active",
             "notes": "",
-            "active_conditions": []
+            "active_conditions": [],
+            "hidden": true
           },
           {
-            "npc_id": "a65ba551-330a-4483-8cce-e3be8bddd846",
-            "name": "Automaton",
-            "description": "armored, wielding a mace",
-            "hp_max": 4,
-            "hp_current": 4,
-            "defense": 0,
+            "npc_id": "875e04ca-ace6-45ed-979f-56063b997cdb",
+            "name": "Plate Automaton",
+            "description": "Armed with a sword",
+            "hp_max": 800,
+            "hp_current": 800,
+            "defense": 200,
             "resistance": 0,
             "ability_scores": {
               "physique": 0,
@@ -352,19 +481,336 @@
             },
             "movement_speed": 90,
             "attack_bonus": 0,
-            "damage_dice": "1d6",
+            "damage_dice": "4d200",
             "morale": 7,
             "saving_throw": 15,
-            "hit_dice": 1,
+            "hit_dice": 8,
             "weapon_range": 0,
             "status": "active",
             "notes": "",
-            "active_conditions": []
+            "active_conditions": [],
+            "hidden": true
           }
         ],
         "possible_rooms": [],
         "movement_logic": "stationary",
-        "current_room_id": null,
+        "current_room_id": "b20a22a5-7ce4-4a29-8780-581e520036c1",
+        "patrol_route": []
+      },
+      "44a4cfd9-bd4b-46da-a9fd-3e3f61dc6ff6": {
+        "group_id": "44a4cfd9-bd4b-46da-a9fd-3e3f61dc6ff6",
+        "name": "Worker Ants",
+        "npcs": [
+          {
+            "npc_id": "0bd2e6a1-73c3-4391-9845-182cca3f83ee",
+            "name": "Worker Ant A",
+            "description": "",
+            "hp_max": 200,
+            "hp_current": 200,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "4d100",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 2,
+            "weapon_range": 0,
+            "status": "active",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
+          },
+          {
+            "npc_id": "6be28d79-a5ea-46cd-8b9b-7d2bdb3096c0",
+            "name": "Worker Ant B",
+            "description": "",
+            "hp_max": 200,
+            "hp_current": 200,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "4d100",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 2,
+            "weapon_range": 0,
+            "status": "active",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
+          },
+          {
+            "npc_id": "df7b85bb-2c9c-4145-a018-018a5d7be1c4",
+            "name": "Worker Ant C",
+            "description": "",
+            "hp_max": 200,
+            "hp_current": 200,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "4d100",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 2,
+            "weapon_range": 0,
+            "status": "active",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
+          },
+          {
+            "npc_id": "4687055c-2f64-433c-9ba8-cc6430af34c3",
+            "name": "Worker Ant D",
+            "description": "",
+            "hp_max": 200,
+            "hp_current": 200,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "4d100",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 200,
+            "weapon_range": 0,
+            "status": "active",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
+          }
+        ],
+        "possible_rooms": [],
+        "movement_logic": "stationary",
+        "current_room_id": "caba1f5f-8876-446c-80c0-cfba1db259a2",
+        "patrol_route": []
+      },
+      "5f166fd9-c6d3-4639-9a91-376d116c6875": {
+        "group_id": "5f166fd9-c6d3-4639-9a91-376d116c6875",
+        "name": "Ant Queen and Guards",
+        "npcs": [
+          {
+            "npc_id": "f1860d84-3dc2-42c1-af85-e43c58afac87",
+            "name": "Giant Queen Ant",
+            "description": "",
+            "hp_max": 2000,
+            "hp_current": 2000,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "1",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 10,
+            "weapon_range": 0,
+            "status": "active",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
+          },
+          {
+            "npc_id": "fb5a86bb-0407-4c00-8c7f-5570cc3f36a1",
+            "name": "Soldier Ant A",
+            "description": "",
+            "hp_max": 250,
+            "hp_current": 250,
+            "defense": 25,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "4d120",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 3,
+            "weapon_range": 0,
+            "status": "active",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
+          },
+          {
+            "npc_id": "2a80306f-30e4-4be8-9771-d76b27015eee",
+            "name": "Soldier Ant B",
+            "description": "",
+            "hp_max": 250,
+            "hp_current": 250,
+            "defense": 25,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "4d120",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 3,
+            "weapon_range": 0,
+            "status": "active",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
+          }
+        ],
+        "possible_rooms": [],
+        "movement_logic": "stationary",
+        "current_room_id": "825c1784-525a-4a97-b2b3-df3225357161",
+        "patrol_route": []
+      },
+      "33c76083-8b53-4db4-b002-3a5b7f64ad1e": {
+        "group_id": "33c76083-8b53-4db4-b002-3a5b7f64ad1e",
+        "name": "Sleeping Gnolls",
+        "npcs": [
+          {
+            "npc_id": "b6ab63a0-3c82-4ec5-92a0-8a0450b432aa",
+            "name": "Gnoll A",
+            "description": "",
+            "hp_max": 400,
+            "hp_current": 400,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "2d400",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 2,
+            "weapon_range": 0,
+            "status": "asleep",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
+          },
+          {
+            "npc_id": "09826714-e67f-4d18-8f55-c97b01831956",
+            "name": "Gnoll B",
+            "description": "",
+            "hp_max": 400,
+            "hp_current": 400,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "2d400",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 2,
+            "weapon_range": 0,
+            "status": "asleep",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
+          },
+          {
+            "npc_id": "f0bd029f-27a3-4b89-8617-f528f72f2d41",
+            "name": "Gnoll C",
+            "description": "",
+            "hp_max": 400,
+            "hp_current": 400,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "2d400",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 2,
+            "weapon_range": 0,
+            "status": "asleep",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
+          },
+          {
+            "npc_id": "13a51a61-804e-4508-9b2c-2fe80f9d2a05",
+            "name": "Gnoll D",
+            "description": "",
+            "hp_max": 400,
+            "hp_current": 400,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "2d400",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 2,
+            "weapon_range": 0,
+            "status": "asleep",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
+          }
+        ],
+        "possible_rooms": [],
+        "movement_logic": "stationary",
+        "current_room_id": "27da4ff9-dab0-415e-abef-6e0d7aff9b0b",
         "patrol_route": []
       }
     }

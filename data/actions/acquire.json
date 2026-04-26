@@ -1,0 +1,11 @@
+{
+  "action_id": "acquire",
+  "label": "Acquire",
+  "button_style": "secondary",
+  "action_type": "affect",
+  "description": "FNS check (DC set by DM). Attempt to steal from a nearby enemy. Always requires DM resolution.",
+  "requires_target": "none",
+  "requires_destination": false,
+  "range_requirement": null,
+  "effect_tags": []
+}

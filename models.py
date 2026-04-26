@@ -136,6 +136,7 @@ class InventoryItem:
     notes:        str    = ""
     container_id: str | None = None   # instance_id of owning ContainerItem, if any
     instance_id:  str    = field(default_factory=lambda: __import__("uuid").uuid4().hex)
+    familiar:     bool   = False       # Dilettante Weapon Forte: use SVY instead of normal stat
 
     @property
     def definition(self):
@@ -182,6 +183,10 @@ class Character:
     equipped_slots:  dict[str, str | None] = field(default_factory=dict)
 
     active_conditions: list[ActiveCondition] = field(default_factory=list)
+
+    # Runtime tracking of limited-use skill uses. Keys are skill_id strings;
+    # values are remaining uses. Missing key means "at max uses" (backward compat).
+    skill_uses: dict[str, int] = field(default_factory=dict)
 
     # Metadata
     created_at:      datetime          = field(default_factory=lambda: datetime.now(UTC))
@@ -302,6 +307,13 @@ class Character:
                 agile_inv = _copy.copy(inv_item)
                 agile_inv.item_id = f"{inv_item.item_id}__agile"
                 results.append((agile_inv, agile_def))
+            if inv_item.familiar and getattr(definition, "stat", "physique") != "savvy":
+                familiar_def = _copy.copy(definition)
+                familiar_def.stat = "savvy"
+                familiar_def.name = f"{definition.name} [Forte]"
+                familiar_inv = _copy.copy(inv_item)
+                familiar_inv.item_id = f"{inv_item.item_id}__familiar"
+                results.append((familiar_inv, familiar_def))
             for tag in definition.getTags():
                 if tag.startswith("Throwable "):
                     try:

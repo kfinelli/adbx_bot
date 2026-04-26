@@ -815,7 +815,7 @@ class ClassActionView(discord.ui.View):
 
             if action_def.action_type == "affect":
                 await interaction.response.send_modal(
-                    AffectModal(char_id=self.char_id, channel_id=self.channel_id)
+                    AffectModal(char_id=self.char_id, channel_id=self.channel_id, action_id=action_id)
                 )
                 return
 
@@ -835,7 +835,10 @@ class ClassActionView(discord.ui.View):
 
             elif action_def.requires_target in ("allies", "enemies"):
                 if action_def.requires_target == "allies":
-                    combatant_targets = state.active_characters
+                    combatant_targets = [
+                        c for c in state.active_characters
+                        if c.character_id != owner_char.character_id
+                    ]
                 else:
                     combatant_targets = [
                         n for n in state.npcs_in_current_room
@@ -1199,10 +1202,13 @@ class AffectModal(discord.ui.Modal):
     which bypasses auto-resolution and hands the round to the DM.
     """
 
-    def __init__(self, char_id: UUID, channel_id: str) -> None:
-        super().__init__(title="Affect — Free Action", timeout=300)
+    def __init__(self, char_id: UUID, channel_id: str, action_id: str = "affect") -> None:
+        action_def = ACTION_REGISTRY.get(action_id)
+        title = f"{action_def.label} — Free Action" if action_def else "Affect — Free Action"
+        super().__init__(title=title, timeout=300)
         self.char_id    = char_id
         self.channel_id = channel_id
+        self.action_id  = action_id
 
         self.text = discord.ui.TextInput(
             label=get_string("ui.affect.label"),
@@ -1234,8 +1240,10 @@ class AffectModal(discord.ui.Modal):
             )
             return
 
-        action      = CombatAction(action_id="affect", free_text=self.text.value)
-        action_text = f"Affect: {self.text.value}"
+        action_def  = ACTION_REGISTRY.get(self.action_id)
+        label_str   = action_def.label if action_def else "Affect"
+        action      = CombatAction(action_id=self.action_id, free_text=self.text.value)
+        action_text = f"{label_str}: {self.text.value}"
         turn_number = state.turn_number
 
         result = submit_turn(

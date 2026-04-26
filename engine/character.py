@@ -609,6 +609,49 @@ class CharacterManager:
         state.updated_at = _now()
         return _ok(state, f"{defn.name} charges: {inv_item.charges}/{defn.maxCharges}.")
 
+    @staticmethod
+    def get_skill_max_uses(skill_def, job_level: int) -> int:
+        """Compute max uses of a limited-use skill at the given job level."""
+        if skill_def.uses is None:
+            return 0
+        return skill_def.uses + sum(
+            1 for lvl in skill_def.uses_scaling if job_level >= lvl
+        )
+
+    def adjust_skill_uses(
+        self,
+        state: GameState,
+        character_id,
+        skill_id: str,
+        delta: int,
+    ):
+        """
+        Adjust a skill's current uses by delta (positive or negative).
+
+        Result is clamped to [0, max_uses]. Passing delta=9999 effectively
+        restores the skill to full uses.
+        """
+        from engine import _now
+
+        char = state.characters.get(character_id)
+        if char is None:
+            return _err(state, f"Character {character_id} not found.")
+
+        skill_def = next(
+            (s for s in self.get_active_skills(char) if s.skill_id == skill_id),
+            None,
+        )
+        if skill_def is None or skill_def.uses is None:
+            return _err(state, f"'{skill_id}' is not a limited-use skill for {char.name}.")
+
+        job_exp = char.jobs.get(skill_def.source)
+        job_level = job_exp.level if job_exp else char.level
+        max_uses = self.get_skill_max_uses(skill_def, job_level)
+        current = char.skill_uses.get(skill_id, max_uses)
+        char.skill_uses[skill_id] = max(0, min(max_uses, current + delta))
+        state.updated_at = _now()
+        return _ok(state, f"{skill_def.name} uses: {char.skill_uses[skill_id]}/{max_uses}.")
+
     def adjust_light_charges(
         self,
         state: GameState,
@@ -684,10 +727,20 @@ class CharacterManager:
             inv_item.charges = defn.maxCharges
             count += 1
 
+        # Also restore day-period skill uses.
+        skill_count = 0
+        for skill in self.get_active_skills(char):
+            if skill.uses is None or skill.recharge_period != "day":
+                continue
+            job_exp = char.jobs.get(skill.source)
+            job_level = job_exp.level if job_exp else char.level
+            char.skill_uses[skill.skill_id] = self.get_skill_max_uses(skill, job_level)
+            skill_count += 1
+
         state.updated_at = _now()
-        if count == 0:
-            return _ok(state, f"{char.name} has no daily spells to recharge.")
-        return _ok(state, f"Recharged {count} daily spell(s) for {char.name}.")
+        if count == 0 and skill_count == 0:
+            return _ok(state, f"{char.name} has no daily spells or skills to recharge.")
+        return _ok(state, f"Recharged {count} daily spell(s) and {skill_count} daily skill(s) for {char.name}.")
 
     def remove_item(
         self,
@@ -793,6 +846,63 @@ class CharacterManager:
 
         state.updated_at = _now()
         return _ok(state, f"{char.name} unequipped {item_name} from the {slot.value} slot.")
+
+    def set_familiar_weapon(
+        self,
+        state: GameState,
+        character_id,
+        instance_id: str | None,
+        dm_reset: bool = False,
+    ):
+        """
+        Set or clear the Weapon Forte familiar weapon for a Dilettante character.
+
+        - instance_id=None clears all familiar flags (DM reset; skips skill check).
+        - Otherwise, validates the character has dilettante_weapon_forte, that no
+          weapon is already familiar (one-use restriction), and sets familiar=True
+          on the matching InventoryItem.
+        """
+        from engine import _now
+
+        char = state.characters.get(character_id)
+        if char is None:
+            return _err(state, f"Character {character_id} not found.")
+
+        if instance_id is None:
+            # DM reset: clear all familiar flags unconditionally
+            for item in char.inventory:
+                item.familiar = False
+            state.updated_at = _now()
+            return _ok(state, f"Weapon Forte selection cleared for {char.name}.")
+
+        # Skill gate
+        if not dm_reset:
+            skill_ids = {s.skill_id for s in self.get_active_skills(char)}
+            if "dilettante_weapon_forte" not in skill_ids:
+                return _err(state, f"{char.name} does not have the Weapon Forte skill.")
+
+        # One-use restriction
+        already_familiar = next((i for i in char.inventory if i.familiar), None)
+        if already_familiar is not None:
+            defn = ITEM_REGISTRY.get(already_familiar.item_id)
+            name = defn.name if defn else already_familiar.item_id
+            return _err(
+                state,
+                f"You have already selected {name} as your Forte weapon. "
+                "Ask your DM to reset the selection.",
+            )
+
+        inv_item = next((i for i in char.inventory if i.instance_id == instance_id), None)
+        if inv_item is None:
+            return _err(state, "Weapon not found in inventory.")
+
+        defn = ITEM_REGISTRY.get(inv_item.item_id)
+        if defn is None or not isinstance(defn, Weapon):
+            return _err(state, "Only weapons can be selected as a Forte weapon.")
+
+        inv_item.familiar = True
+        state.updated_at = _now()
+        return _ok(state, f"{defn.name} is now {char.name}'s Forte weapon.")
 
     # ------------------------------------------------------------------
     # XP and level-up

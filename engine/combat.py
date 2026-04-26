@@ -55,6 +55,7 @@ from .combat_hooks import (
     _effective_finesse,  # noqa: F401 — re-exported for tests
     _effective_stat_mod,  # noqa: F401 — re-exported for tests
     _find_npc,
+    _fire_on_attack_hooks,
     _fire_turn_start_hooks,
     _hook_apply_condition,  # noqa: F401 — re-exported for tests
     _hook_move_to_band,
@@ -132,7 +133,8 @@ class CombatAction:
 
     @property
     def is_affect(self) -> bool:
-        return self.action_id == "affect"
+        action_def = ACTION_REGISTRY.get(self.action_id)
+        return action_def is not None and action_def.action_type == "affect"
 
     def to_dict(self) -> dict:
         return {
@@ -202,11 +204,13 @@ def apply_condition(
     condition_id: str,
     duration:     int | None = None,
     source_id:    UUID | None = None,
+    stacks:       int = 1,
 ) -> object:  # EngineResult
     """
     Apply a status condition to a combatant by ID.
     duration=None means permanent (removed only by explicit dispel).
     Re-applying an existing condition refreshes its duration.
+    stacks sets the initial stack count for stackable conditions.
     """
     if condition_id not in CONDITION_REGISTRY:
         return _err(state, f"Unknown condition '{condition_id}'.")
@@ -221,22 +225,35 @@ def apply_condition(
     target_name = _combatant_name(state, target_id)
 
     # Stackable conditions accumulate stacks rather than being replaced.
+    # Only increment the existing instance if the source matches (same source reapplying).
     if cond_def.stackable:
         existing = next(
-            (c for c in combatant.active_conditions if c.condition_id == condition_id), None
+            (c for c in combatant.active_conditions
+             if c.condition_id == condition_id and c.source_id == source_id),
+            None,
         )
         if existing is not None:
             existing.stacks += 1
             state.updated_at = _now()
             return _ok(state, fmt_string("combat.condition.stacked", target_name=target_name, label=cond_def.label, stacks=existing.stacks))
 
-    combatant.active_conditions = [
-        c for c in combatant.active_conditions if c.condition_id != condition_id
-    ]
+    if cond_def.stackable:
+        # For stackable conditions with multiple sources, preserve other sources' instances.
+        # Remove only this source's existing instance (if any) before re-adding.
+        combatant.active_conditions = [
+            c for c in combatant.active_conditions
+            if not (c.condition_id == condition_id and c.source_id == source_id)
+        ]
+    else:
+        # Non-stackable: replace any existing instance regardless of source.
+        combatant.active_conditions = [
+            c for c in combatant.active_conditions if c.condition_id != condition_id
+        ]
     combatant.active_conditions.append(ActiveCondition(
         condition_id=condition_id,
         duration_rounds=duration,
         source_id=source_id,
+        stacks=stacks,
     ))
     state.updated_at = _now()
     return _ok(state, fmt_string("combat.condition.applied", target_name=target_name, label=cond_def.label))
@@ -386,6 +403,15 @@ def _execute_action(
         log.append(f"[Unknown action '{action.action_id}' — skipped]")
         return
 
+    # Gate oracle-consuming actions
+    cs = state.battlefield.combatants.get(actor_id) if state.battlefield else None
+    if action_def.consumes_oracle and cs is not None and cs.used_oracle:
+        log.append(fmt_string(
+            "combat.log.oracle_already_used",
+            actor_name=_combatant_name(state, actor_id),
+        ))
+        return
+
     if isinstance(action_def.range_requirement, int):
         actor_cs  = state.battlefield.combatants.get(actor_id)
         target_cs = state.battlefield.combatants.get(action.target_id) if action.target_id else None
@@ -405,10 +431,32 @@ def _execute_action(
     for hook_entry in action_def.effect_tags:
         _dispatch_hook(hook_entry, state, actor_id, action, log)
 
+    # Fire on_attack condition hooks after attack actions resolve
+    if action_def.action_type == "attack":
+        _fire_on_attack_hooks(state, actor_id, action, log)
+
+    # Mark resource consumption flags after successful execution
+    if cs is not None:
+        if action_def.consumes_oracle:
+            cs.used_oracle = True
+        if action_def.consumes_move:
+            cs.used_move = True
+
 
 # ---------------------------------------------------------------------------
 # _npc_decide
 # ---------------------------------------------------------------------------
+
+def _has_condition(state: GameState, cid: UUID, condition_id: str) -> bool:
+    """Return True if the combatant has an active instance of the given condition."""
+    char = state.characters.get(cid)
+    if char:
+        return any(c.condition_id == condition_id for c in char.active_conditions)
+    npc = _find_npc(state, cid)
+    if npc:
+        return any(c.condition_id == condition_id for c in npc.active_conditions)
+    return False
+
 
 def _npc_decide(
     state:  GameState,
@@ -419,6 +467,7 @@ def _npc_decide(
     living_players = [
         (cid, pcs) for cid, pcs in state.battlefield.combatants.items()
         if pcs.is_player and _is_alive(state, cid)
+        and not _has_condition(state, cid, "hidden")
     ]
     if not living_players:
         return None

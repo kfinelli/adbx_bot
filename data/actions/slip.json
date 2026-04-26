@@ -1,0 +1,22 @@
+{
+  "action_id": "slip",
+  "label": "Slip",
+  "button_style": "primary",
+  "action_type": "move",
+  "description": "FNS check (1d1000+FNS) vs DC 900. On success, gain immunity to opportunity attacks and move one range band.",
+  "requires_target": "none",
+  "requires_destination": true,
+  "consumes_act": false,
+  "consumes_move": true,
+  "effect_tags": [
+    {
+      "tag": "stat_check",
+      "stat": "finesse",
+      "dc": 900,
+      "on_success": [
+        {"tag": "apply_condition", "condition": "slipping", "duration": 1, "target": "self"},
+        "move_to_band"
+      ]
+    }
+  ]
+}

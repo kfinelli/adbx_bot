@@ -126,8 +126,9 @@
     },
     "knight_protector": {
       "name": "Protector",
-      "type": 4,
-      "desc": "Give +1 DEF to one other party member or NPC. This bonus increases to +2 at level 3, and to +3 at level 5.\nYou may switch targets on your turn as part of an oracle action."
+      "type": 2,
+      "action_id": "set_protector_target",
+      "desc": "Give +100 DEF to one other party member. Bonus scales to +200 at L3 and +300 at L5. Oracle action — usable once per round."
     },
     "knight_rep": {
       "name": "Honorable Reputation",
@@ -149,11 +150,12 @@
       "type": 2,
       "desc": "DC: ? + [target FNS].\nMake a finesse check to steal an unequipped item from an enemy.",
       "dm_notes": "Base DCs are usually:\n500 - unequipped items\n700 - held items (level 3 or higher)\n900 - equipped items (level 5)\nSome items may be easier or harder to steal at your discretion",
-      "action_id": "affect"
+      "action_id": "acquire"
     },
     "thief_hide": {
       "name": "Hide",
-      "type": 3,
+      "type": 2,
+      "action_id": "hide",
       "desc": "*(you must use your oracle and move actions to use this in combat)*\nYou may hide on your turn. Opponents cannot target you while you are hidden. If you successfully attack while hidden, the damage bypasses your opponent's DEF, but you are no longer hidden."
     },
     "thief_disarm": {
@@ -163,12 +165,9 @@
     },
     "thief_slip": {
       "name": "Slip",
-      "type": 4,
-      "desc": "On a successful FNS check, enemies cannot attack you for leaving the current zone until next turn.",
-      "check": {
-        "DC": 900,
-        "Stat": "FNS"
-      }
+      "type": 2,
+      "desc": "On a successful FNS check (DC 900), gain immunity to opportunity attacks and move one range band. Consumes your move action.",
+      "action_id": "slip"
     },
     "thief_disarmor": {
       "name": "Disarmor",
@@ -189,8 +188,10 @@
     "dilettante_knack": {
       "name": "Knack",
       "type": 9,
-      "desc": "You may either:\n - Make a SVY check in place of another check.\n - Use your SVY save in place of another save.\nGain an additional use at level 3, and again at level 5. Regain all uses at the start of a combat encounter.",
-      "uses": 1
+      "desc": "You may either:\n - Make a SVY check in place of another check.\n - Use your SVY save in place of another save.\nGain an additional use at level 3, and again at level 5. Regain all uses at the end of a combat encounter.",
+      "uses": 1,
+      "uses_scaling": [3, 5],
+      "recharge_period": "encounter"
     },
     "dilettante_weapon_forte": {
       "name": "Weapon Forte",

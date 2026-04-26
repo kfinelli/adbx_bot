@@ -1,0 +1,22 @@
+{
+  "action_id": "set_protector_target",
+  "label": "Set Protector",
+  "button_style": "primary",
+  "action_type": "attack",
+  "description": "Apply your Protector bonus to an ally (oracle action, once per round). Switching targets replaces the existing protection.",
+  "requires_target": "allies",
+  "requires_destination": false,
+  "range_requirement": null,
+  "consumes_act": false,
+  "consumes_move": false,
+  "consumes_oracle": true,
+  "effect_tags": [
+    {
+      "tag": "apply_condition",
+      "condition": "protected",
+      "duration": null,
+      "repeal_existing": true,
+      "stacks_by_level": {"job": "KNIGHT", "tiers": [[1, 1], [3, 2], [5, 3]]}
+    }
+  ]
+}

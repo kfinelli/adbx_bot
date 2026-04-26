@@ -1580,6 +1580,36 @@ def character_sheet_panel(character: Character) -> str:
         )
         return f' {badge}{period_tag} {minus_form}{plus_form}{restore_form}'
 
+    def _skill_charge_controls(skill_id: str, current: int, max_uses: int, recharge_period: str | None = None) -> str:
+        """Return inline uses badge + +/- and restore buttons for limited-use skills."""
+        period_tag_str = ""
+        if recharge_period == "encounter":
+            period_tag_str = ' <span class="muted" style="font-size:0.7rem;border:1px solid #555;border-radius:3px;padding:0 3px" title="Encounter recharge">E</span>'
+        elif recharge_period == "day":
+            period_tag_str = ' <span class="muted" style="font-size:0.7rem;border:1px solid #555;border-radius:3px;padding:0 3px" title="Daily recharge">D</span>'
+        badge = f'<span class="muted" style="font-size:0.8rem">({current}/{max_uses})</span>'
+        minus_form = (
+            f'<form method="post" action="/characters/{cid_str}/skillcharge" style="margin:0;display:inline">'
+            f'<input type="hidden" name="skill_id" value="{skill_id}">'
+            f'<input type="hidden" name="delta" value="-1">'
+            f'<button class="btn-sm" type="submit" style="padding:1px 5px">−</button>'
+            f'</form>'
+        )
+        plus_form = (
+            f'<form method="post" action="/characters/{cid_str}/skillcharge" style="margin:0;display:inline">'
+            f'<input type="hidden" name="skill_id" value="{skill_id}">'
+            f'<input type="hidden" name="delta" value="1">'
+            f'<button class="btn-sm" type="submit" style="padding:1px 5px">+</button>'
+            f'</form>'
+        )
+        restore_form = (
+            f'<form method="post" action="/characters/{cid_str}/skillrecharge" style="margin:0;display:inline">'
+            f'<input type="hidden" name="skill_id" value="{skill_id}">'
+            f'<button class="btn-sm" type="submit" style="padding:1px 5px" title="Restore to max">↺</button>'
+            f'</form>'
+        )
+        return f' {badge}{period_tag_str} {minus_form}{plus_form}{restore_form}'
+
     item_rows = ""
     for inv_item in character.inventory:
         if inv_item.container_id:
@@ -1657,11 +1687,22 @@ def character_sheet_panel(character: Character) -> str:
 
     active_skills = CharacterManager.get_active_skills(character)
     if active_skills:
-        skill_rows = "".join(
-            f'<tr><td style="font-weight:500;white-space:nowrap;padding-right:1rem">{s.name}</td>'
-            f'<td class="muted" style="font-size:0.9rem">{s.description}</td></tr>'
-            for s in active_skills
-        )
+        skill_rows = ""
+        for s in active_skills:
+            if s.uses is not None:
+                job_exp = character.jobs.get(s.source)
+                job_level = job_exp.level if job_exp else character.level
+                max_uses = CharacterManager.get_skill_max_uses(s, job_level)
+                current_uses = character.skill_uses.get(s.skill_id, max_uses)
+                uses_controls = _skill_charge_controls(s.skill_id, current_uses, max_uses, s.recharge_period)
+            else:
+                uses_controls = ""
+            skill_rows += (
+                f'<tr>'
+                f'<td style="font-weight:500;white-space:nowrap;padding-right:1rem">{s.name}{uses_controls}</td>'
+                f'<td class="muted" style="font-size:0.9rem">{s.description}</td>'
+                f'</tr>'
+            )
     else:
         skill_rows = '<tr><td colspan="2" class="muted">None</td></tr>'
     skills_html = f'<table style="margin-bottom:0.75rem">{skill_rows}</table>'
