@@ -97,8 +97,14 @@ class TestCombatAction:
     def test_is_affect_true_for_affect(self):
         assert CombatAction(action_id="affect").is_affect is True
 
+    def test_is_affect_true_for_acquire(self):
+        assert CombatAction(action_id="acquire").is_affect is True
+
     def test_is_affect_false_for_attack(self):
         assert CombatAction(action_id="attack").is_affect is False
+
+    def test_is_affect_false_for_unknown_action(self):
+        assert CombatAction(action_id="unknown_xyz").is_affect is False
 
     def test_to_dict_and_from_dict_attack(self):
         tid = uuid4()
@@ -533,6 +539,27 @@ class TestAutoResolveTrigger:
         assert result.ok
         assert result.notify_dm is True            # DM must resolve
         assert state.current_turn is not None      # still open/closed for DM
+        assert state.current_turn.status == TurnStatus.CLOSED
+
+    def test_acquire_submission_suppresses_auto_resolve(self):
+        """Acquire (affect-type) among submissions → DM resolution required."""
+        state = _make_party_state()
+        enter_rounds(state)
+        open_turn(state)
+
+        npc = state.npcs_in_current_room[0]
+        char_ids = list(state.characters.keys())
+
+        attack  = CombatAction(action_id="attack",  target_id=npc.npc_id)
+        acquire = CombatAction(action_id="acquire", free_text="I snatch the goblin's dagger.")
+
+        submit_turn(state, char_ids[0], "Attack",   combat_action=attack.to_dict())
+        result = submit_turn(state, char_ids[1], "Acquire", combat_action=acquire.to_dict())
+
+        assert result.ok
+        assert result.auto_resolved is False
+        assert result.notify_dm is True
+        assert state.current_turn is not None
         assert state.current_turn.status == TurnStatus.CLOSED
 
     def test_exploration_mode_never_auto_resolves(self):

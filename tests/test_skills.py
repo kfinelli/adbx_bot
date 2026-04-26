@@ -376,3 +376,66 @@ class TestSkillUses:
         max_uses = CharacterManager.get_skill_max_uses(skill, job_level)
         current = char.skill_uses.get("dilettante_knack", max_uses)
         assert current == max_uses
+
+
+# ---------------------------------------------------------------------------
+# Thief skill level gates (Acquire / Disarm / Disarmor)
+# ---------------------------------------------------------------------------
+
+class TestThiefSkillLevelGates:
+
+    def _make_thief(self, state):
+        result = create_character(state, "Rogue", CharacterClass.THIEF, "", owner_id="user_001")
+        assert result.ok
+        return next(iter(state.characters.values()))
+
+    def test_thief_level_1_has_acquire(self):
+        state = _make_state()
+        char = self._make_thief(state)
+        skills = CharacterManager.get_active_skills(char)
+        skill_ids = [s.skill_id for s in skills]
+        assert "thief_acquire" in skill_ids
+        acquire = next(s for s in skills if s.skill_id == "thief_acquire")
+        assert acquire.action_id == "acquire"
+
+    def test_thief_level_1_does_not_have_disarm(self):
+        state = _make_state()
+        char = self._make_thief(state)
+        skills = CharacterManager.get_active_skills(char)
+        assert not any(s.skill_id == "thief_disarm" for s in skills)
+
+    def test_thief_level_3_has_disarm(self):
+        state = _make_state()
+        char = self._make_thief(state)
+        _level_up_to(state, char.character_id, 3)
+        skills = CharacterManager.get_active_skills(char)
+        skill_ids = [s.skill_id for s in skills]
+        assert "thief_disarm" in skill_ids
+        disarm = next(s for s in skills if s.skill_id == "thief_disarm")
+        assert disarm.skill_type == SkillType.SIMPLE.value
+        assert disarm.action_id is None
+
+    def test_thief_level_2_does_not_have_disarm(self):
+        state = _make_state()
+        char = self._make_thief(state)
+        _level_up_to(state, char.character_id, 2)
+        skills = CharacterManager.get_active_skills(char)
+        assert not any(s.skill_id == "thief_disarm" for s in skills)
+
+    def test_thief_level_5_has_disarmor(self):
+        state = _make_state()
+        char = self._make_thief(state)
+        _level_up_to(state, char.character_id, 5)
+        skills = CharacterManager.get_active_skills(char)
+        skill_ids = [s.skill_id for s in skills]
+        assert "thief_disarmor" in skill_ids
+        disarmor = next(s for s in skills if s.skill_id == "thief_disarmor")
+        assert disarmor.skill_type == SkillType.SIMPLE.value
+        assert disarmor.action_id is None
+
+    def test_thief_level_4_does_not_have_disarmor(self):
+        state = _make_state()
+        char = self._make_thief(state)
+        _level_up_to(state, char.character_id, 4)
+        skills = CharacterManager.get_active_skills(char)
+        assert not any(s.skill_id == "thief_disarmor" for s in skills)

@@ -12,6 +12,7 @@ from models import (
     TurnStatus,
 )
 
+from .data_loader import ACTION_REGISTRY
 from .helpers import _err, _now, _ok, _snapshot
 from .light import _tick_light
 from .strings import fmt_string, get_string
@@ -117,7 +118,8 @@ class TurnManager:
             ]
             all_structured = all(
                 s.combat_action is not None and
-                s.combat_action.get("action_id") != "affect"
+                ACTION_REGISTRY.get(s.combat_action.get("action_id", ""), None) is not None and
+                ACTION_REGISTRY[s.combat_action["action_id"]].action_type != "affect"
                 for s in latest_subs
             )
             if all_structured:

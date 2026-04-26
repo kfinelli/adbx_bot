@@ -150,7 +150,7 @@
       "type": 2,
       "desc": "DC: ? + [target FNS].\nMake a finesse check to steal an unequipped item from an enemy.",
       "dm_notes": "Base DCs are usually:\n500 - unequipped items\n700 - held items (level 3 or higher)\n900 - equipped items (level 5)\nSome items may be easier or harder to steal at your discretion",
-      "action_id": "affect"
+      "action_id": "acquire"
     },
     "thief_hide": {
       "name": "Hide",

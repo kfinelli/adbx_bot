@@ -133,7 +133,8 @@ class CombatAction:
 
     @property
     def is_affect(self) -> bool:
-        return self.action_id == "affect"
+        action_def = ACTION_REGISTRY.get(self.action_id)
+        return action_def is not None and action_def.action_type == "affect"
 
     def to_dict(self) -> dict:
         return {
