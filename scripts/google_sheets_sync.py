@@ -202,6 +202,41 @@ def _parse_hook_cell(value: str, field: str, row_id: str):
     return s
 
 
+def _compact_json_dumps(obj, indent: int = 2, _depth: int = 0) -> str:
+    """
+    Serialize to JSON with indentation, but keep dicts/lists whose compact
+    representation fits within 80 chars on a single line. Produces stable
+    output across import/export roundtrips for objects like stacks_by_level
+    and stat_modifiers that are naturally expressed as one-liners.
+    """
+    COMPACT_MAX = 80
+    pad = " " * (indent * _depth)
+    inner = " " * (indent * (_depth + 1))
+
+    if isinstance(obj, dict):
+        if not obj:
+            return "{}"
+        compact = json.dumps(obj)
+        if len(compact) <= COMPACT_MAX:
+            return compact
+        pairs = [
+            f"{inner}{json.dumps(k)}: {_compact_json_dumps(v, indent, _depth + 1)}"
+            for k, v in obj.items()
+        ]
+        return "{\n" + ",\n".join(pairs) + "\n" + pad + "}"
+
+    if isinstance(obj, list):
+        if not obj:
+            return "[]"
+        compact = json.dumps(obj)
+        if len(compact) <= COMPACT_MAX:
+            return compact
+        items = [f"{inner}{_compact_json_dumps(v, indent, _depth + 1)}" for v in obj]
+        return "[\n" + ",\n".join(items) + "\n" + pad + "]"
+
+    return json.dumps(obj)
+
+
 # ---------------------------------------------------------------------------
 # Normalisation — items
 # ---------------------------------------------------------------------------
@@ -276,6 +311,11 @@ def _normalise_action(row: dict) -> dict:
         action["range_requirement"] = "weapon"
     else:
         action["range_requirement"] = _int_or_zero(range_raw)
+
+    for cons_field in ("consumes_act", "consumes_move", "consumes_oracle"):
+        raw = str(row.get(cons_field, "")).strip()
+        if raw:
+            action[cons_field] = _bool(raw)
 
     effect_tags = _parse_json_cell(row.get("effect_tags", ""), "effect_tags", action_id)
     action["effect_tags"] = effect_tags if effect_tags is not None else []
@@ -377,6 +417,16 @@ def _normalise_skill(row: dict, skill_id: str) -> dict:
     if uses_raw:
         skill["uses"] = _int_or_zero(uses_raw)
 
+    uses_scaling_raw = str(row.get("uses_scaling", "")).strip()
+    if uses_scaling_raw:
+        parsed = _parse_json_cell(uses_scaling_raw, "uses_scaling", skill_id)
+        if isinstance(parsed, list):
+            skill["uses_scaling"] = parsed
+
+    recharge_period_raw = str(row.get("recharge_period", "")).strip()
+    if recharge_period_raw:
+        skill["recharge_period"] = recharge_period_raw
+
     check = _parse_json_cell(row.get("check", ""), "check", skill_id)
     if isinstance(check, dict):
         skill["check"] = check
@@ -469,7 +519,7 @@ def _sync_actions(book, data_dir: Path) -> None:
 
     for action in actions:
         out_path = actions_dir / f"{action['action_id']}.json"
-        out_path.write_text(json.dumps(action, indent=2) + "\n")
+        out_path.write_text(_compact_json_dumps(action) + "\n")
     print(f"  Written: {len(actions)} action files", file=sys.stderr)
 
 
@@ -490,7 +540,7 @@ def _sync_conditions(book, data_dir: Path) -> None:
 
     for condition in conditions:
         out_path = conditions_dir / f"{condition['condition_id']}.json"
-        out_path.write_text(json.dumps(condition, indent=2) + "\n")
+        out_path.write_text(_compact_json_dumps(condition) + "\n")
     print(f"  Written: {len(conditions)} condition files", file=sys.stderr)
 
 
@@ -511,7 +561,7 @@ def _sync_jobs(book, data_dir: Path) -> None:
 
     for job in jobs:
         out_path = classes_dir / f"{job['key'].lower()}.json"
-        out_path.write_text(json.dumps(job, indent=2) + "\n")
+        out_path.write_text(_compact_json_dumps(job) + "\n")
     print(f"  Written: {len(jobs)} class files", file=sys.stderr)
 
 
@@ -522,7 +572,7 @@ def _sync_skills(book, data_dir: Path) -> None:
     print(f"  skills: {count} definitions", file=sys.stderr)
 
     out_path = data_dir / "jobskills" / "skills.json"
-    out_path.write_text(json.dumps(skills_data, indent=2) + "\n")
+    out_path.write_text(_compact_json_dumps(skills_data) + "\n")
     print(f"  Written: {out_path.relative_to(_PROJECT_ROOT)}", file=sys.stderr)
 
 
@@ -543,12 +593,13 @@ def _export_actions_csv(data_dir: Path, exports_dir: Path) -> None:
     actions_dir = data_dir / "actions"
     fieldnames = [
         "action_id", "label", "button_style", "action_type", "description",
-        "requires_target", "requires_destination", "range_requirement", "effect_tags",
+        "requires_target", "requires_destination", "range_requirement",
+        "consumes_act", "consumes_move", "consumes_oracle", "effect_tags",
     ]
     rows = []
     for p in sorted(actions_dir.glob("*.json")):
         data = json.loads(p.read_text())
-        rows.append({
+        row = {
             "action_id":            data.get("action_id", ""),
             "label":                data.get("label", ""),
             "button_style":         data.get("button_style", ""),
@@ -558,7 +609,13 @@ def _export_actions_csv(data_dir: Path, exports_dir: Path) -> None:
             "requires_destination": data.get("requires_destination", False),
             "range_requirement":    "" if data.get("range_requirement") is None else data["range_requirement"],
             "effect_tags":          json.dumps(data.get("effect_tags", [])),
-        })
+        }
+        for cons_field in ("consumes_act", "consumes_move", "consumes_oracle"):
+            if cons_field in data:
+                row[cons_field] = "TRUE" if data[cons_field] else "FALSE"
+            else:
+                row[cons_field] = ""
+        rows.append(row)
     out = exports_dir / "actions.csv"
     with out.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -633,22 +690,25 @@ def _export_skills_csv(data_dir: Path, exports_dir: Path) -> None:
     definitions = json.loads(skills_path.read_text()).get("definitions", {})
     fieldnames = [
         "skill_id", "name", "type", "desc", "dm_notes",
-        "action_id", "stat", "bonus", "rank", "uses", "check",
+        "action_id", "stat", "bonus", "rank", "uses", "uses_scaling",
+        "recharge_period", "check",
     ]
     rows = []
     for skill_id, skill in definitions.items():
         rows.append({
-            "skill_id":  skill_id,
-            "name":      skill.get("name", ""),
-            "type":      skill.get("type", ""),
-            "desc":      skill.get("desc", ""),
-            "dm_notes":  skill.get("dm_notes", ""),
-            "action_id": skill.get("action_id", ""),
-            "stat":      skill.get("stat", ""),
-            "bonus":     skill.get("bonus", ""),
-            "rank":      skill.get("rank", ""),
-            "uses":      skill.get("uses", ""),
-            "check":     json.dumps(skill["check"]) if skill.get("check") else "",
+            "skill_id":       skill_id,
+            "name":           skill.get("name", ""),
+            "type":           skill.get("type", ""),
+            "desc":           skill.get("desc", ""),
+            "dm_notes":       skill.get("dm_notes", ""),
+            "action_id":      skill.get("action_id", ""),
+            "stat":           skill.get("stat", ""),
+            "bonus":          skill.get("bonus", ""),
+            "rank":           skill.get("rank", ""),
+            "uses":           skill.get("uses", ""),
+            "uses_scaling":   json.dumps(skill["uses_scaling"]) if skill.get("uses_scaling") else "",
+            "recharge_period": skill.get("recharge_period", ""),
+            "check":          json.dumps(skill["check"]) if skill.get("check") else "",
         })
     out = exports_dir / "skills.csv"
     with out.open("w", newline="") as f:
