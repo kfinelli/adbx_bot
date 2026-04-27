@@ -480,7 +480,8 @@ def _npc_decide(
         if target_cs and _band_distance(cs.range_band, target_cs.range_band) <= npc_range:
             return CombatAction(action_id="attack", target_id=target_id)
 
-    destination = _step_toward(cs.range_band, RangeBand.ENGAGE)
+    move_target = target_cs.range_band if target_id and target_cs else RangeBand.ENGAGE
+    destination = _step_toward(cs.range_band, move_target)
     if destination != cs.range_band:
         return CombatAction(action_id="move", destination=destination)
     return None

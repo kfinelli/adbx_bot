@@ -329,6 +329,8 @@ def _hook_weapon_attack(
     elif actor_npc:
         str_mod      = 0
         attack_bonus = actor_npc.ability_scores.physique
+        if actor_npc.damage_dice:
+            dice = actor_npc.damage_dice
     else:
         return
 
