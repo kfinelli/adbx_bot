@@ -42,11 +42,7 @@
       "desc": "Declare a freeform action requiring DM input.",
       "action_id": "affect"
     },
-    "trapwise": {
-      "name": "Trapwise",
-      "type": 1,
-      "desc": "Locate traps using RSN or SVY."
-    },
+    "trapwise": {"name": "Trapwise", "type": 1, "desc": "Locate traps using RSN or SVY."},
     "martial_training_c": {
       "name": "Martial Training",
       "type": 6,
@@ -127,8 +123,8 @@
     "knight_protector": {
       "name": "Protector",
       "type": 2,
-      "action_id": "set_protector_target",
-      "desc": "Give +100 DEF to one other party member. Bonus scales to +200 at L3 and +300 at L5. Oracle action — usable once per round."
+      "desc": "Give +100 DEF to one other party member. Bonus scales to +200 at L3 and +300 at L5. Oracle action \u2014 usable once per round.",
+      "action_id": "set_protector_target"
     },
     "knight_rep": {
       "name": "Honorable Reputation",
@@ -155,8 +151,8 @@
     "thief_hide": {
       "name": "Hide",
       "type": 2,
-      "action_id": "hide",
-      "desc": "*(you must use your oracle and move actions to use this in combat)*\nYou may hide on your turn. Opponents cannot target you while you are hidden. If you successfully attack while hidden, the damage bypasses your opponent's DEF, but you are no longer hidden."
+      "desc": "*(you must use your oracle and move actions to use this in combat)*\nYou may hide on your turn. Opponents cannot target you while you are hidden. If you successfully attack while hidden, the damage bypasses your opponent's DEF, but you are no longer hidden.",
+      "action_id": "hide"
     },
     "thief_disarm": {
       "name": "Disarm",

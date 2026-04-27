@@ -7,7 +7,5 @@
   "requires_target": "none",
   "requires_destination": false,
   "range_requirement": null,
-  "effect_tags": [
-    "abscond_roll"
-  ]
+  "effect_tags": ["abscond_roll"]
 }

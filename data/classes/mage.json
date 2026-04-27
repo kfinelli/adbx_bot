@@ -6,72 +6,22 @@
   "primary_stat": "RSN",
   "max_level": 5,
   "description": "",
-  "stat_rolls": {
-    "RSN": "5d4",
-    "PHY": "2d4",
-    "FNS": "3d4",
-    "SVY": "4d4"
-  },
+  "stat_rolls": {"RSN": "5d4", "PHY": "2d4", "FNS": "3d4", "SVY": "4d4"},
   "skills": [
-    {
-      "id": "advance",
-      "level": 1
-    },
-    {
-      "id": "abdicate",
-      "level": 1
-    },
-    {
-      "id": "aggrieve",
-      "level": 1
-    },
-    {
-      "id": "assail",
-      "level": 1
-    },
-    {
-      "id": "abjure",
-      "level": 1
-    },
-    {
-      "id": "abscond",
-      "level": 1
-    },
-    {
-      "id": "affect",
-      "level": 1
-    },
-    {
-      "id": "arcane_basics",
-      "level": 1
-    },
-    {
-      "id": "martial_training_e",
-      "level": 1
-    },
-    {
-      "id": "spellcraft",
-      "level": 1
-    },
-    {
-      "id": "passive_rsn_bonus",
-      "level": 2
-    },
-    {
-      "id": "arcane_knowledge",
-      "level": 3
-    },
-    {
-      "id": "mage_rep",
-      "level": 4
-    },
-    {
-      "id": "passive_any_bonus",
-      "level": 4
-    },
-    {
-      "id": "arcane_secrets",
-      "level": 5
-    }
+    {"id": "advance", "level": 1},
+    {"id": "abdicate", "level": 1},
+    {"id": "aggrieve", "level": 1},
+    {"id": "assail", "level": 1},
+    {"id": "abjure", "level": 1},
+    {"id": "abscond", "level": 1},
+    {"id": "affect", "level": 1},
+    {"id": "arcane_basics", "level": 1},
+    {"id": "martial_training_e", "level": 1},
+    {"id": "spellcraft", "level": 1},
+    {"id": "passive_rsn_bonus", "level": 2},
+    {"id": "arcane_knowledge", "level": 3},
+    {"id": "mage_rep", "level": 4},
+    {"id": "passive_any_bonus", "level": 4},
+    {"id": "arcane_secrets", "level": 5}
   ]
 }

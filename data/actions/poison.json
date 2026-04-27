@@ -7,11 +7,5 @@
   "requires_target": "enemies",
   "requires_destination": false,
   "range_requirement": null,
-  "effect_tags": [
-    {
-      "tag": "apply_condition",
-      "condition": "poisoned",
-      "duration": 3
-    }
-  ]
+  "effect_tags": [{"tag": "apply_condition", "condition": "poisoned", "duration": 3}]
 }

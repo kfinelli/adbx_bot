@@ -4,8 +4,6 @@
   "duration_type": "rounds",
   "stackable": true,
   "hooks": {},
-  "stat_modifiers": {
-    "abscond_bonus": 100
-  },
+  "stat_modifiers": {"abscond_bonus": 100},
   "grants_actions": []
 }

@@ -6,76 +6,23 @@
   "primary_stat": "FNS",
   "max_level": 5,
   "description": "",
-  "stat_rolls": {
-    "FNS": "5d4",
-    "PHY": "3d4",
-    "RSN": "2d4",
-    "SVY": "4d4"
-  },
+  "stat_rolls": {"FNS": "5d4", "PHY": "3d4", "RSN": "2d4", "SVY": "4d4"},
   "skills": [
-    {
-      "id": "advance",
-      "level": 1
-    },
-    {
-      "id": "abdicate",
-      "level": 1
-    },
-    {
-      "id": "aggrieve",
-      "level": 1
-    },
-    {
-      "id": "assail",
-      "level": 1
-    },
-    {
-      "id": "abjure",
-      "level": 1
-    },
-    {
-      "id": "abscond",
-      "level": 1
-    },
-    {
-      "id": "affect",
-      "level": 1
-    },
-    {
-      "id": "martial_training_d",
-      "level": 1
-    },
-    {
-      "id": "thief_acquire",
-      "level": 1
-    },
-    {
-      "id": "trapwise",
-      "level": 1
-    },
-    {
-      "id": "passive_fns_bonus",
-      "level": 2
-    },
-    {
-      "id": "thief_hide",
-      "level": 2
-    },
-    {
-      "id": "thief_disarm",
-      "level": 3
-    },
-    {
-      "id": "thief_slip",
-      "level": 3
-    },
-    {
-      "id": "passive_any_bonus",
-      "level": 4
-    },
-    {
-      "id": "thief_disarmor",
-      "level": 5
-    }
+    {"id": "advance", "level": 1},
+    {"id": "abdicate", "level": 1},
+    {"id": "aggrieve", "level": 1},
+    {"id": "assail", "level": 1},
+    {"id": "abjure", "level": 1},
+    {"id": "abscond", "level": 1},
+    {"id": "affect", "level": 1},
+    {"id": "martial_training_d", "level": 1},
+    {"id": "thief_acquire", "level": 1},
+    {"id": "trapwise", "level": 1},
+    {"id": "passive_fns_bonus", "level": 2},
+    {"id": "thief_hide", "level": 2},
+    {"id": "thief_disarm", "level": 3},
+    {"id": "thief_slip", "level": 3},
+    {"id": "passive_any_bonus", "level": 4},
+    {"id": "thief_disarmor", "level": 5}
   ]
 }

@@ -4,8 +4,6 @@
   "duration_type": "rounds",
   "stackable": false,
   "hooks": {},
-  "stat_modifiers": {
-    "physique": 2
-  },
+  "stat_modifiers": {"physique": 2},
   "grants_actions": []
 }

@@ -8,11 +8,7 @@
   "requires_destination": false,
   "range_requirement": "weapon",
   "effect_tags": [
-    {
-      "tag": "melee_attack",
-      "dice": "1d6",
-      "add_stat_bonus": true
-    },
+    {"tag": "melee_attack", "dice": "1d6", "add_stat_bonus": true},
     "check_death",
     {
       "tag": "apply_condition",

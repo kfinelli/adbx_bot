@@ -3,9 +3,7 @@
   "label": "Stunned",
   "duration_type": "rounds",
   "stackable": false,
-  "hooks": {
-    "on_turn_start": "skip_action"
-  },
+  "hooks": {"on_turn_start": "skip_action"},
   "stat_modifiers": {},
   "grants_actions": []
 }

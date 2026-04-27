@@ -6,72 +6,22 @@
   "primary_stat": "PHY",
   "max_level": 5,
   "description": "Knights who behave dishonorably may lose access to some or all of their knightly abilities. Minor infractions may incur short penalties, however major infractions could require a knight to perform a quest of atonement to reacquire their abilities.",
-  "stat_rolls": {
-    "PHY": "5d4",
-    "FNS": "3d4",
-    "RSN": "2d4",
-    "SVY": "4d4"
-  },
+  "stat_rolls": {"PHY": "5d4", "FNS": "3d4", "RSN": "2d4", "SVY": "4d4"},
   "skills": [
-    {
-      "id": "advance",
-      "level": 1
-    },
-    {
-      "id": "abdicate",
-      "level": 1
-    },
-    {
-      "id": "aggrieve",
-      "level": 1
-    },
-    {
-      "id": "assail",
-      "level": 1
-    },
-    {
-      "id": "abjure",
-      "level": 1
-    },
-    {
-      "id": "abscond",
-      "level": 1
-    },
-    {
-      "id": "affect",
-      "level": 1
-    },
-    {
-      "id": "martial_training_c",
-      "level": 1
-    },
-    {
-      "id": "knight_protector",
-      "level": 1
-    },
-    {
-      "id": "passive_phy_bonus",
-      "level": 2
-    },
-    {
-      "id": "knight_rep",
-      "level": 4
-    },
-    {
-      "id": "passive_any_bonus",
-      "level": 4
-    },
-    {
-      "id": "martial_expertise_b",
-      "level": 5
-    },
-    {
-      "id": "knight_unburdened",
-      "level": 5
-    },
-    {
-      "id": "knight_resilience",
-      "level": 5
-    }
+    {"id": "advance", "level": 1},
+    {"id": "abdicate", "level": 1},
+    {"id": "aggrieve", "level": 1},
+    {"id": "assail", "level": 1},
+    {"id": "abjure", "level": 1},
+    {"id": "abscond", "level": 1},
+    {"id": "affect", "level": 1},
+    {"id": "martial_training_c", "level": 1},
+    {"id": "knight_protector", "level": 1},
+    {"id": "passive_phy_bonus", "level": 2},
+    {"id": "knight_rep", "level": 4},
+    {"id": "passive_any_bonus", "level": 4},
+    {"id": "martial_expertise_b", "level": 5},
+    {"id": "knight_unburdened", "level": 5},
+    {"id": "knight_resilience", "level": 5}
   ]
 }

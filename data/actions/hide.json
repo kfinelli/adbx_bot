@@ -11,6 +11,11 @@
   "consumes_move": true,
   "consumes_oracle": true,
   "effect_tags": [
-    {"tag": "apply_condition", "condition": "hidden", "duration": null, "target": "self"}
+    {
+      "tag": "apply_condition",
+      "condition": "hidden",
+      "duration": null,
+      "target": "self"
+    }
   ]
 }

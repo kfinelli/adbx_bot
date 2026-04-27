@@ -3,9 +3,7 @@
   "label": "Entangled",
   "duration_type": "rounds",
   "stackable": false,
-  "hooks": {
-    "on_move": "block_movement"
-  },
+  "hooks": {"on_move": "block_movement"},
   "stat_modifiers": {},
   "grants_actions": []
 }

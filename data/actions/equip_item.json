@@ -7,7 +7,5 @@
   "requires_target": "none",
   "requires_destination": false,
   "range_requirement": null,
-  "effect_tags": [
-    "resolve_equip"
-  ]
+  "effect_tags": ["resolve_equip"]
 }
