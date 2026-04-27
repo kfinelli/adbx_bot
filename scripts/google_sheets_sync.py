@@ -279,13 +279,19 @@ def _normalise_item(row: dict) -> dict:
     if item["item_type"] == "gear":
         raw_slot = str(row.get("slot", "")).strip().lower()
         item["slot"]       = _SLOT_MAP.get(raw_slot, raw_slot)
-        item["health"]     = _float_or_zero(row.get("health", 0))
-        item["defense"]    = _float_or_zero(row.get("defense", 0))
-        item["resistance"] = _float_or_zero(row.get("resistance", 0))
+        item["health"]     = _int_or_zero(row.get("health", 0))
+        item["defense"]    = _int_or_zero(row.get("defense", 0))
+        item["resistance"] = _int_or_zero(row.get("resistance", 0))
     if item["item_type"] == "container":
         raw_slot = str(row.get("slot", "")).strip().lower()
         if raw_slot:
             item["slot"] = _SLOT_MAP.get(raw_slot, raw_slot)
+    max_light_raw = str(row.get("max_light_turns", "")).strip()
+    if max_light_raw:
+        item["max_light_turns"] = _int_or_zero(max_light_raw)
+    fuel_item_raw = str(row.get("fuel_item_id", "")).strip()
+    if fuel_item_raw:
+        item["fuel_item_id"] = fuel_item_raw
     return item
 
 
@@ -589,6 +595,93 @@ def _hook_to_cell(hook) -> str:
     return json.dumps(hook)
 
 
+def _uses_to_str(max_charges: int, recharge_period: str) -> str:
+    """Reverse of _parse_uses: (max_charges, recharge_period) → shorthand string."""
+    if max_charges == -1 or recharge_period == "infinite":
+        return "-"
+    period_char = {"day": "d", "encounter": "e"}.get(recharge_period)
+    if period_char:
+        return f"{max_charges}/{period_char}"
+    return str(max_charges)
+
+
+def _tags_to_str(tags: list) -> str:
+    """Reverse of _parse_tags: ["Shabby", "Magic"] → "[Shabby][Magic]"."""
+    if not tags:
+        return ""
+    return "".join(f"[{t}]" for t in tags)
+
+
+def _contained_items_to_str(items: list) -> str:
+    """Reverse of _parse_contained_items: ["a", "b"] → "a,b"."""
+    return ",".join(items)
+
+
+# Preferred column order for item CSVs (fields absent from a sheet are omitted).
+_ITEM_FIELD_ORDER = [
+    "item_id", "item_type", "name", "description", "rank",
+    "is_light", "purchaseable", "price", "tags",
+    "type", "stat", "targets_stat", "damage", "range", "slot",
+    "uses", "destroy_on_empty",
+    "health", "defense", "resistance",
+    "contained_items",
+    "fuel_item_id", "max_light_turns",
+    "other_abilities", "held_status", "attack_status",
+]
+
+_ITEM_BOOL_FIELDS = {"is_light", "purchaseable", "destroy_on_empty"}
+_ITEM_INT_FIELDS = {"health", "defense", "resistance"}
+
+
+def _item_to_csv_row(item: dict) -> dict:
+    """Reverse-normalise a stored item dict to a spreadsheet row dict."""
+    row = {}
+    for key, value in item.items():
+        if key in ("max_charges", "charges", "recharge_period"):
+            continue  # folded into "uses"
+        if key == "tags":
+            row["tags"] = _tags_to_str(value)
+        elif key == "contained_items":
+            row["contained_items"] = _contained_items_to_str(value)
+        elif key in _ITEM_BOOL_FIELDS:
+            row[key] = "TRUE" if value else "FALSE"
+        elif key in _ITEM_INT_FIELDS:
+            row[key] = int(value) if isinstance(value, float) else value
+        else:
+            row[key] = value
+
+    if "max_charges" in item:
+        row["uses"] = _uses_to_str(item["max_charges"], item.get("recharge_period", "infinite"))
+
+    return row
+
+
+def _export_items_csv(data_dir: Path, exports_dir: Path) -> None:
+    items_path = data_dir / "items" / "items.json"
+    all_items: dict = json.loads(items_path.read_text())
+
+    for tab in ItemSheet:
+        items = all_items.get(tab.value, [])
+        if not items:
+            print(f"  items/{tab.value}: no items, skipping", file=sys.stderr)
+            continue
+
+        rows = [_item_to_csv_row(item) for item in items]
+
+        # Build ordered fieldnames: preferred order first, then any extras.
+        present = set().union(*(r.keys() for r in rows))
+        fieldnames = [f for f in _ITEM_FIELD_ORDER if f in present]
+        fieldnames += sorted(present - set(fieldnames))
+
+        safe_name = tab.value.lower().replace("/", "_").replace(" ", "_")
+        out = exports_dir / f"items_{safe_name}.csv"
+        with out.open("w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+        print(f"  Written: exports/items_{safe_name}.csv ({len(rows)} rows)", file=sys.stderr)
+
+
 def _export_actions_csv(data_dir: Path, exports_dir: Path) -> None:
     actions_dir = data_dir / "actions"
     fieldnames = [
@@ -721,6 +814,7 @@ def _export_skills_csv(data_dir: Path, exports_dir: Path) -> None:
 def export_csv(data_dir: Path, exports_dir: Path) -> None:
     exports_dir.mkdir(exist_ok=True)
     print("Exporting JSON → CSV files...", file=sys.stderr)
+    _export_items_csv(data_dir, exports_dir)
     _export_actions_csv(data_dir, exports_dir)
     _export_conditions_csv(data_dir, exports_dir)
     _export_jobs_csv(data_dir, exports_dir)
