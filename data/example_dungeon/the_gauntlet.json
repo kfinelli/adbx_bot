@@ -153,7 +153,7 @@
             "exit_id": "04ed425e-2e42-40f3-962d-695846da870b",
             "label": "Paper-like screen",
             "direction": null,
-            "destination_id": null,
+            "destination_id": "caba1f5f-8876-446c-80c0-cfba1db259a2",
             "door_state": "closed",
             "auto_move": false,
             "description": "A partition of unclear substance and origin",
@@ -459,7 +459,7 @@
             "exit_id": "8f9c6571-9150-427e-8401-7ac5e784c743",
             "label": "Wooden door (n)",
             "direction": null,
-            "destination_id": null,
+            "destination_id": "64bd649c-d929-4562-8591-09bbf4db8230",
             "door_state": "closed",
             "auto_move": false,
             "description": "Ordinary wooden door in an alcove on the western side of the room",
@@ -481,7 +481,7 @@
             "exit_id": "81bf8666-a7d6-46e4-bfbc-abc37dc8fad9",
             "label": "Reinforced wooden door (e)",
             "direction": null,
-            "destination_id": null,
+            "destination_id": "20ac1220-8be6-4dba-9419-989a9793bb70",
             "door_state": "closed",
             "auto_move": false,
             "description": "Second of two doors situated in an alcove on the eastern side of the room",
@@ -527,7 +527,7 @@
             "exit_id": "4ff32f3f-87b8-4712-ab6f-033b250d1523",
             "label": "Reinforced wooden door (S)",
             "direction": null,
-            "destination_id": null,
+            "destination_id": "4f1c3f56-89e5-43d4-ad6c-4ef9c1493d21",
             "door_state": "open",
             "auto_move": false,
             "description": "Wooden door with iron bands",
@@ -598,6 +598,106 @@
             "door_state": "open",
             "auto_move": false,
             "description": "Ordinary wooden door",
+            "notes": "",
+            "hidden": false
+          }
+        ],
+        "visited": false,
+        "authored": true,
+        "exploration_xp": 0,
+        "random_encounter_modifier": 1.0
+      },
+      "64bd649c-d929-4562-8591-09bbf4db8230": {
+        "room_id": "64bd649c-d929-4562-8591-09bbf4db8230",
+        "name": "Death Room",
+        "description": "This is a plain room, hewn from solid rock, with blackened walls and ceiling. There are many suspicious holes in the ceiling, each about an inch across. There are two doorways, each only five feet high and barred by stout metal gates.",
+        "notes": "Room 12",
+        "features": [
+          {
+            "feature_id": "4cc3f077-a992-4f6c-9fec-5123eabce9f1",
+            "name": "Northern gate",
+            "description": "Blocks the Stone Staircase exit. Appears to be capable of sliding vertically into slots in the stone.",
+            "state": "intact",
+            "notes": ""
+          },
+          {
+            "feature_id": "216f4f7c-3fbb-4788-ad5c-0f85dccf7921",
+            "name": "Southern gate",
+            "description": "Blocks the Reinforced Door exit. Appears to be capable of sliding vertically into slots in the stone.",
+            "state": "intact",
+            "notes": ""
+          }
+        ],
+        "exits": [
+          {
+            "exit_id": "562f3b97-146e-4c32-82a2-f74a5892635c",
+            "label": "Stone staircase",
+            "direction": null,
+            "destination_id": "4f1c3f56-89e5-43d4-ad6c-4ef9c1493d21",
+            "door_state": "open",
+            "auto_move": false,
+            "description": "Stairs lead upward to the second floor, terminating in a wooden door",
+            "notes": "",
+            "hidden": false
+          },
+          {
+            "exit_id": "9de11c21-744f-4c05-93e5-b1ed8af7033b",
+            "label": "Reinforced wooden door (S)",
+            "direction": null,
+            "destination_id": "64bd649c-d929-4562-8591-09bbf4db8230",
+            "door_state": "closed",
+            "auto_move": false,
+            "description": "An iron-barred wooden door leading south, positioned behind the southern gate of metal bars.",
+            "notes": "",
+            "hidden": false
+          }
+        ],
+        "visited": false,
+        "authored": true,
+        "exploration_xp": 0,
+        "random_encounter_modifier": 1.0
+      },
+      "9ccf9bf1-0040-4e1c-9d95-6c3455bccd50": {
+        "room_id": "9ccf9bf1-0040-4e1c-9d95-6c3455bccd50",
+        "name": "Guardroom",
+        "description": "Slumped on a bench or lurching around the room are several tall humanoid creatures with grey skins and dog-like faces. Some are swigging from flagons and all are apparently drunk. They have axes and are wearing leather armor with metal plates",
+        "notes": "Room 11- \nin a state of great intoxication. If attacked, they will fight to the\ndeath, making no attempt to raise the alarm. They will move\nout onto the battlemented platform (area 10) if the general\nalarm is raised. Otherwise, they will not notice attempts by the\nparty to enter the Keep unless they are actually attacked. The\npersonal treasures of the gnolls consist of 4d60gp each. In\naddition, one of them has a silver napkin ring (value - 500gp).\nother personal possessions, the only\nitems of value or interest in this room are 200 arrows in a locker\nand a bundle of 25 torches",
+        "features": [
+          {
+            "feature_id": "9c0442b3-e6f1-4583-9a70-0362f66b41d7",
+            "name": "Long table and bench",
+            "description": "Placed against the northern wall. Several flagons of ale rest atop.",
+            "state": "intact",
+            "notes": ""
+          },
+          {
+            "feature_id": "bd2e370d-f6ac-46d0-9d95-ddee3961e7d4",
+            "name": "The Gauntlet",
+            "description": "The treasure you seek, sitting on the Long Table",
+            "state": "awe-inspiring",
+            "notes": ""
+          }
+        ],
+        "exits": [
+          {
+            "exit_id": "a1de4ff4-1103-489b-aa17-f959dbd134c2",
+            "label": "Reinforced wooden door (n)",
+            "direction": null,
+            "destination_id": "64bd649c-d929-4562-8591-09bbf4db8230",
+            "door_state": "open",
+            "auto_move": false,
+            "description": "Wooden door reinforced with iron bars",
+            "notes": "",
+            "hidden": false
+          },
+          {
+            "exit_id": "d084c0f2-62d2-4926-bf91-c03c77fb1643",
+            "label": "Reinforced wooden door (s)",
+            "direction": null,
+            "destination_id": null,
+            "door_state": "locked",
+            "auto_move": false,
+            "description": "Wooden door reinforced with iron bars. The way out of this adventure for the victorious heroes!",
             "notes": "",
             "hidden": false
           }
@@ -1100,6 +1200,84 @@
             "notes": "",
             "active_conditions": [],
             "hidden": false
+          },
+          {
+            "npc_id": "78fb9076-febc-4b4b-b0a8-d8fd16d8546c",
+            "name": "Gnoll Archer B",
+            "description": "",
+            "hp_max": 400,
+            "hp_current": 400,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "2d300",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 2,
+            "weapon_range": 2,
+            "status": "active",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
+          },
+          {
+            "npc_id": "a23e0ecf-519a-4cdf-9941-2b984414ad2b",
+            "name": "Gnoll B",
+            "description": "",
+            "hp_max": 400,
+            "hp_current": 400,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "4d100",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 2,
+            "weapon_range": 0,
+            "status": "active",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
+          },
+          {
+            "npc_id": "aca6b1c7-7be7-4d1a-bf1a-c10be7c7267b",
+            "name": "Gnoll C",
+            "description": "",
+            "hp_max": 400,
+            "hp_current": 400,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "4d100",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 2,
+            "weapon_range": 0,
+            "status": "active",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
           }
         ],
         "possible_rooms": [],
@@ -1172,11 +1350,151 @@
             "notes": "",
             "active_conditions": [],
             "hidden": false
+          },
+          {
+            "npc_id": "18f9b095-729e-45fd-b4f0-6769571890da",
+            "name": "Warhorse B",
+            "description": "",
+            "hp_max": 425,
+            "hp_current": 425,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "3d100",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 2,
+            "weapon_range": 0,
+            "status": "active",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
+          },
+          {
+            "npc_id": "c02daa03-e6a0-415e-a796-f75ea3ff0a7d",
+            "name": "Warhorse C",
+            "description": "",
+            "hp_max": 425,
+            "hp_current": 425,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "3d100",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 2,
+            "weapon_range": 0,
+            "status": "active",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
           }
         ],
         "possible_rooms": [],
         "movement_logic": "stationary",
         "current_room_id": "20ac1220-8be6-4dba-9419-989a9793bb70",
+        "patrol_route": []
+      },
+      "435bbe2f-be05-4c9a-993d-e0912798e0d1": {
+        "group_id": "435bbe2f-be05-4c9a-993d-e0912798e0d1",
+        "name": null,
+        "npcs": [
+          {
+            "npc_id": "83daa3ac-27a4-48c7-b627-465cc013c9b2",
+            "name": "Gnoll A",
+            "description": "",
+            "hp_max": 400,
+            "hp_current": 400,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "4d100",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 2,
+            "weapon_range": 0,
+            "status": "active",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
+          },
+          {
+            "npc_id": "753f5b19-4fc3-42de-9b92-ebc5b96b9ec7",
+            "name": "Gnoll B",
+            "description": "",
+            "hp_max": 400,
+            "hp_current": 400,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "4d100",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 2,
+            "weapon_range": 0,
+            "status": "active",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
+          },
+          {
+            "npc_id": "a9782b1a-2b7b-44e7-92a9-b0ffebf7e843",
+            "name": "Gnoll C",
+            "description": "",
+            "hp_max": 400,
+            "hp_current": 400,
+            "defense": 0,
+            "resistance": 0,
+            "ability_scores": {
+              "physique": 0,
+              "finesse": 0,
+              "reason": 0,
+              "savvy": 0
+            },
+            "movement_speed": 90,
+            "attack_bonus": 0,
+            "damage_dice": "4d100",
+            "morale": 7,
+            "saving_throw": 15,
+            "hit_dice": 2,
+            "weapon_range": 0,
+            "status": "active",
+            "notes": "",
+            "active_conditions": [],
+            "hidden": false
+          }
+        ],
+        "possible_rooms": [],
+        "movement_logic": "stationary",
+        "current_room_id": "9ccf9bf1-0040-4e1c-9d95-6c3455bccd50",
         "patrol_route": []
       }
     }

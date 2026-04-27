@@ -234,8 +234,10 @@ class NPCManager:
 
             # Simple increment logic
             last = s[-1]
-            if last == 'Z': return s[:-1] + 'AA' # Example Z wrap
-            if last == 'z': return s[:-1] + 'aa'
+            if last == 'Z':
+                return s[:-1] + 'AA' # Example Z wrap
+            if last == 'z':
+                return s[:-1] + 'aa'
 
             return s[:-1] + chr(ord(last) + 1)
 
