@@ -159,7 +159,7 @@ def containers_table(items: list[dict]) -> str:
 
 
 def spells_table(items: list[dict]) -> str:
-    items = sorted(items, key=rank_sort_key)
+    items = sorted(items, key=lambda item: item["name"])
     headers = ["Name", "Type", "Rank", "Charges", "Recharge", "Mean Damage", "Variance", "Targets", "Range", "Tags"]
     rows = []
     for s in items:
