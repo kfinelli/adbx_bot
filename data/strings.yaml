@@ -157,6 +157,7 @@ combat:
     out_of_range: "{actor_name} cannot reach {target_name} {dist} band(s) away, weapon range is {weapon_range}."
     no_charges: "{actor_name} tries to use {weapon_name} but it has no charges left!"
     swings_at_nothing: "{actor_name} swings at nothing."
+    target_already_defeated: "{actor_name} swings at nothing. ({target_name} is already defeated.)"
     attack_miss: "{actor_name} attacks {target_name} and misses! (rolled {roll} vs AC {target_ac})"
     attack_hit: "{actor_name} attacks {target_name} and hits!{crit_tag}{magic_tag} (rolled {roll} vs Dodge {target_ac}) Deals {damage} damage. [{target_name}: {hp_str}]"
     fallen: "{target_name} has fallen!"

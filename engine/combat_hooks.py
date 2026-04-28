@@ -340,6 +340,12 @@ def _hook_weapon_attack(
         log.append(fmt_string("combat.log.swings_at_nothing", actor_name=actor_name))
         return
 
+    from engine.combat import _is_alive
+    if not _is_alive(state, target_id):
+        log.append(fmt_string("combat.log.target_already_defeated",
+                               actor_name=actor_name, target_name=target_name))
+        return
+
     target_ac = _effective_finesse(state, target_id)
 
     roll = random.randint(1, 10*POWER_LEVEL) + attack_bonus
@@ -401,7 +407,7 @@ def _hook_check_death(
     target_name = _combatant_name(state, target_id)
 
     target_char = state.characters.get(target_id)
-    if target_char and target_char.hp_current <= 0:
+    if target_char and target_char.hp_current <= 0 and target_char.status.value != "dead":
         from models import CharacterStatus
         target_char.status = CharacterStatus.DEAD
         log.append(fmt_string("combat.log.fallen", target_name=target_name))
@@ -409,7 +415,7 @@ def _hook_check_death(
         return
 
     target_npc = _find_npc(state, target_id)
-    if target_npc and target_npc.hp_current <= 0:
+    if target_npc and target_npc.hp_current <= 0 and target_npc.status != "dead":
         target_npc.status = "dead"
         log.append(fmt_string("combat.log.slain", target_name=target_name))
         state.battlefield.combatants.pop(target_id, None)

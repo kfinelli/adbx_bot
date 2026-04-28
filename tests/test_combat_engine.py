@@ -363,6 +363,61 @@ class TestAutoResolveRound:
         for cs in state.battlefield.combatants.values():
             assert cs.acted_this_round is False
 
+    def test_second_attack_on_already_defeated_npc_is_skipped(self):
+        """A lower-initiative player targeting an already-dead NPC gets the
+        'already defeated' message instead of a second kill / double XP."""
+        from engine import add_npc, register_room
+        from models import PlayerTurnSubmission, Room
+
+        state = GameState(platform_channel_id="ch", dm_user_id="dm")
+        state.party = Party(name="P")
+        create_character(state, "Alice", CharacterClass.KNIGHT, "Pack A", owner_id="u1")
+        create_character(state, "Bob",   CharacterClass.KNIGHT, "Pack A", owner_id="u2")
+        start_session(state)
+        room = Room(name="Hall", description="Hall.")
+        register_room(state, room)
+        state.current_room_id = room.room_id
+
+        npc = NPC(name="Ant", hp_current=1, hp_max=1, defense=0, damage_dice="1d2", hit_dice=1)
+        add_npc(state, npc)
+        enter_rounds(state)
+        open_turn(state)
+
+        char_ids = list(state.characters.keys())
+        alice_id, bob_id = char_ids[0], char_ids[1]
+
+        # Alice acts first, Bob second
+        state.battlefield.combatants[alice_id].initiative = 100
+        state.battlefield.combatants[bob_id].initiative   = 10
+        state.battlefield.combatants[alice_id].range_band = RangeBand.ENGAGE
+        state.battlefield.combatants[bob_id].range_band   = RangeBand.ENGAGE
+        state.battlefield.combatants[npc.npc_id].range_band = RangeBand.ENGAGE
+
+        # Both target the same 1-HP NPC
+        state.current_turn.submissions = [
+            PlayerTurnSubmission(
+                character_id=alice_id, action_text="Attack",
+                is_latest=True,
+                combat_action=CombatAction(action_id="attack", target_id=npc.npc_id).to_dict(),
+            ),
+            PlayerTurnSubmission(
+                character_id=bob_id, action_text="Attack",
+                is_latest=True,
+                combat_action=CombatAction(action_id="attack", target_id=npc.npc_id).to_dict(),
+            ),
+        ]
+
+        result = auto_resolve_round(state)
+        assert result.ok
+
+        log_text = "\n".join(state.battlefield.round_log)
+        # NPC should be defeated exactly once
+        assert log_text.count("has been defeated") == 1
+        # XP awarded exactly once
+        assert log_text.count("XP") == 1
+        # Bob's wasted attack logged
+        assert "already defeated" in log_text
+
 
 # ---------------------------------------------------------------------------
 # targets_stat routing (defense vs resistance)
