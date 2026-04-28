@@ -662,7 +662,11 @@ def _hook_apply_condition(
 
     duration = params.get("duration", 3)
     from engine.combat import apply_condition
-    apply_condition(state, target_id, condition_id, duration=duration, source_id=actor_id, stacks=stacks)
+    apply_condition(
+        state, target_id, condition_id,
+        duration=duration, source_id=actor_id, stacks=stacks,
+        applied_this_turn=(target_id == actor_id),
+    )
 
     cond_def = CONDITION_REGISTRY.get(condition_id)
     label    = cond_def.label if cond_def else condition_id
@@ -988,6 +992,18 @@ def _tick_actor_conditions(state: GameState, actor_id: UUID, log: list[str]) -> 
 
         if cond.duration_rounds is None:
             still_active.append(cond)
+        elif cond.applied_this_turn:
+            # Condition was self-applied during this actor's action — skip the
+            # immediate tick so duration=N means N future turns, not N-1.
+            # duration=0 is the exception: it signals "expire this turn only"
+            # (used for instant-protection effects like Abdicate's immunity).
+            cond.applied_this_turn = False
+            if cond.duration_rounds == 0:
+                cond_name = cond_def.label if cond_def else cond.condition_id
+                name = _combatant_name(state, actor_id)
+                log.append(fmt_string("combat.log.condition_expired", name=name, cond_name=cond_name))
+            else:
+                still_active.append(cond)
         elif cond.duration_rounds > 1:
             cond.duration_rounds -= 1
             still_active.append(cond)

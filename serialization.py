@@ -265,10 +265,11 @@ def serialize_party(p: Party) -> dict:
 
 def serialize_active_condition(c: ActiveCondition) -> dict:
     return {
-        "condition_id":    c.condition_id,
-        "duration_rounds": c.duration_rounds,
-        "source_id":       _uuid(c.source_id),
-        "stacks":          c.stacks,
+        "condition_id":      c.condition_id,
+        "duration_rounds":   c.duration_rounds,
+        "source_id":         _uuid(c.source_id),
+        "stacks":            c.stacks,
+        "applied_this_turn": c.applied_this_turn,
     }
 
 
@@ -565,6 +566,7 @@ def deserialize_active_condition(d: dict) -> ActiveCondition:
         duration_rounds=d.get("duration_rounds"),
         source_id=_load_uuid(d.get("source_id")),
         stacks=d.get("stacks", 1),
+        applied_this_turn=d.get("applied_this_turn", False),
     )
 
 

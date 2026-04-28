@@ -199,18 +199,24 @@ def initialize_battlefield(state: GameState) -> CombatBattlefield:
 # ---------------------------------------------------------------------------
 
 def apply_condition(
-    state:        GameState,
-    target_id:    UUID,
-    condition_id: str,
-    duration:     int | None = None,
-    source_id:    UUID | None = None,
-    stacks:       int = 1,
+    state:              GameState,
+    target_id:          UUID,
+    condition_id:       str,
+    duration:           int | None = None,
+    source_id:          UUID | None = None,
+    stacks:             int = 1,
+    applied_this_turn:  bool = False,
 ) -> object:  # EngineResult
     """
     Apply a status condition to a combatant by ID.
     duration=None means permanent (removed only by explicit dispel).
     Re-applying an existing condition refreshes its duration.
     stacks sets the initial stack count for stackable conditions.
+    applied_this_turn=True suppresses the immediate end-of-turn tick so
+    that duration=N means "N future turns" rather than "N-1 future turns"
+    for conditions applied during a combatant's own action.  Pass True only
+    when the target is the acting combatant and the call happens mid-turn.
+    duration=0 still expires at end of turn even with applied_this_turn=True.
     """
     if condition_id not in CONDITION_REGISTRY:
         return _err(state, f"Unknown condition '{condition_id}'.")
@@ -254,6 +260,7 @@ def apply_condition(
         duration_rounds=duration,
         source_id=source_id,
         stacks=stacks,
+        applied_this_turn=applied_this_turn,
     ))
     state.updated_at = _now()
     return _ok(state, fmt_string("combat.condition.applied", target_name=target_name, label=cond_def.label))

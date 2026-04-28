@@ -678,11 +678,19 @@ class ActiveCondition:
     engine/data_loader.py.  duration_rounds=None means permanent (lasts
     until explicitly removed).  source_id is the combatant that applied it,
     if any (used for some condition-removal rules).
+
+    applied_this_turn is set True when a combatant applies a condition to
+    themselves during their own action.  _tick_actor_conditions skips the
+    immediate end-of-turn tick for such conditions (duration=0 is the lone
+    exception: it still expires immediately, expressing "this turn only").
+    This makes duration=N mean "N future turns" consistently for self-applied
+    conditions, matching the intuition of game designers writing JSON.
     """
-    condition_id:    str         = ""
-    duration_rounds: int | None = None
-    source_id:       UUID | None = None
-    stacks:          int         = 1
+    condition_id:      str         = ""
+    duration_rounds:   int | None = None
+    source_id:         UUID | None = None
+    stacks:            int         = 1
+    applied_this_turn: bool        = False
 
 
 @dataclass

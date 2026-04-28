@@ -1941,6 +1941,22 @@ class TestAbscondRoll:
         cond = deserialize_active_condition(old_data)
         assert cond.stacks == 1
 
+    def test_applied_this_turn_round_trips(self):
+        """applied_this_turn survives serialize / deserialize."""
+        from serialization import deserialize_active_condition, serialize_active_condition
+        cond = ActiveCondition(condition_id="undefended", duration_rounds=1, applied_this_turn=True)
+        d = serialize_active_condition(cond)
+        assert d["applied_this_turn"] is True
+        reloaded = deserialize_active_condition(d)
+        assert reloaded.applied_this_turn is True
+
+    def test_applied_this_turn_defaults_false_on_old_saves(self):
+        """Old serialized dicts without 'applied_this_turn' deserialize to False."""
+        from serialization import deserialize_active_condition
+        old_data = {"condition_id": "undefended", "duration_rounds": 1, "source_id": None}
+        cond = deserialize_active_condition(old_data)
+        assert cond.applied_this_turn is False
+
 
 # ---------------------------------------------------------------------------
 # A-Actions
@@ -2027,16 +2043,17 @@ class TestAActions:
     # --- Abdicate ---
 
     def test_abdicate_moves_and_applies_immunity_condition(self):
-        """Abdicate applies abdication-immunity to actor and moves."""
+        """Abdicate applies abdication-immunity to actor and moves; immunity expires
+        this turn (duration=0), so it is not present after the round resolves."""
         state, char_id, npc_id = self._setup_combat()
         state.battlefield.combatants[char_id].range_band = RangeBand.FAR_MINUS
         self._submit(state, char_id, CombatAction(action_id="abdicate", destination=RangeBand.CLOSE_MINUS))
         auto_resolve_round(state)
-        # Movement happened
+        char = state.characters[char_id]
         assert state.battlefield.combatants[char_id].range_band == RangeBand.CLOSE_MINUS
-        # Condition was applied (duration=1, ticks off at end of round)
-        # Verify via round_log that it was applied
         assert any("abdication" in e.lower() for e in state.battlefield.round_log)
+        assert not any(c.condition_id == "abdication-immunity" for c in char.active_conditions), \
+            "abdication-immunity (duration=0) should expire at end of the application turn"
 
     # --- apply_condition target=self ---
 
@@ -2066,15 +2083,52 @@ class TestAActions:
     # --- Assail ---
 
     def test_assail_applies_undefended_to_actor(self):
-        """After Assail, undefended was applied to the actor (visible in round log).
-        The condition expires at end-of-round (duration=1), so we check the log.
+        """After Assail, undefended persists through the round (duration=1 self-applied
+        skips the immediate tick, so the condition survives until the actor's next turn).
         """
         state, char_id, npc_id = self._setup_combat(npc_hp=9999, npc_def=0)
         state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
         state.battlefield.combatants[npc_id].range_band  = RangeBand.ENGAGE
         self._submit(state, char_id, CombatAction(action_id="assail", target_id=npc_id))
         auto_resolve_round(state)
+        char = state.characters[char_id]
         assert any("undefended" in e.lower() for e in state.battlefield.round_log)
+        assert any(c.condition_id == "undefended" for c in char.active_conditions), \
+            "undefended should survive the round it was applied (expires next turn)"
+
+    def test_self_applied_duration1_expires_after_one_future_tick(self):
+        """A duration=1 condition with applied_this_turn=True survives the immediate tick
+        (flag suppresses it), then expires on the following tick — two ticks total."""
+        from engine.combat_hooks import _tick_actor_conditions
+        state, char_id, _ = self._setup_combat()
+        char = state.characters[char_id]
+        char.active_conditions = [
+            ActiveCondition(condition_id="undefended", duration_rounds=1, applied_this_turn=True)
+        ]
+        log: list[str] = []
+        # First tick: applied_this_turn flag is set → skip decrement, clear flag, survive.
+        _tick_actor_conditions(state, char_id, log)
+        assert any(c.condition_id == "undefended" for c in char.active_conditions), \
+            "condition should survive the turn it was applied"
+        assert not char.active_conditions[0].applied_this_turn, "flag should be cleared"
+        # Second tick: normal decrement path → duration_rounds==1 → expires.
+        _tick_actor_conditions(state, char_id, log)
+        assert not any(c.condition_id == "undefended" for c in char.active_conditions), \
+            "condition should expire at end of the next turn"
+
+    def test_self_applied_duration0_expires_immediately(self):
+        """A duration=0 condition with applied_this_turn=True expires on the immediate
+        tick — duration=0 means 'this turn only' even for self-applied conditions."""
+        from engine.combat_hooks import _tick_actor_conditions
+        state, char_id, _ = self._setup_combat()
+        char = state.characters[char_id]
+        char.active_conditions = [
+            ActiveCondition(condition_id="abdication-immunity", duration_rounds=0, applied_this_turn=True)
+        ]
+        log: list[str] = []
+        _tick_actor_conditions(state, char_id, log)
+        assert not any(c.condition_id == "abdication-immunity" for c in char.active_conditions), \
+            "duration=0 should expire even when applied_this_turn is set"
 
     def test_undefended_condition_floors_defense_to_zero(self):
         """undefended's -9999 defense modifier floors Character.defense to 0."""
