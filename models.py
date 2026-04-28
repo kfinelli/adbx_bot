@@ -136,7 +136,7 @@ class InventoryItem:
     notes:        str    = ""
     container_id: str | None = None   # instance_id of owning ContainerItem, if any
     instance_id:  str    = field(default_factory=lambda: __import__("uuid").uuid4().hex)
-    familiar:     bool   = False       # Dilettante Weapon Forte: use SVY instead of normal stat
+    familiar:     bool   = False       # Weapon Forte: use SVY instead of normal stat
 
     @property
     def definition(self):

@@ -855,10 +855,10 @@ class CharacterManager:
         dm_reset: bool = False,
     ):
         """
-        Set or clear the Weapon Forte familiar weapon for a Dilettante character.
+        Set or clear the Weapon Forte familiar weapon (for questants).
 
         - instance_id=None clears all familiar flags (DM reset; skips skill check).
-        - Otherwise, validates the character has dilettante_weapon_forte, that no
+        - Otherwise, validates the character has questant_weapon_forte, that no
           weapon is already familiar (one-use restriction), and sets familiar=True
           on the matching InventoryItem.
         """
@@ -878,7 +878,7 @@ class CharacterManager:
         # Skill gate
         if not dm_reset:
             skill_ids = {s.skill_id for s in self.get_active_skills(char)}
-            if "dilettante_weapon_forte" not in skill_ids:
+            if "questant_weapon_forte" not in skill_ids:
                 return _err(state, f"{char.name} does not have the Weapon Forte skill.")
 
         # One-use restriction

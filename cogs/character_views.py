@@ -426,7 +426,7 @@ class EquipMenuView(discord.ui.View):
     """
     Top-level equipment menu — Equip / Unequip / Done buttons.
     This is what the player sees immediately after the character sheet is sent.
-    Dilettante characters with Weapon Forte also get a skill-specific button.
+    Characters with skills like Weapon Forte also get a skill-specific button.
     """
 
     def __init__(self, char, state, channel_id: str):
@@ -435,9 +435,9 @@ class EquipMenuView(discord.ui.View):
         self.state = state
         self.channel_id = channel_id
 
-        # Conditionally add Weapon Forte button for Dilettantes with the skill
+        # Conditionally add Weapon Forte button for Questants with the skill
         skill_ids = {s.skill_id for s in CharacterManager.get_active_skills(char)}
-        if "dilettante_weapon_forte" in skill_ids:
+        if "questant_weapon_forte" in skill_ids:
             btn = discord.ui.Button(
                 label=get_string("character.weapon_forte.button_label"),
                 style=discord.ButtonStyle.primary,
@@ -475,7 +475,7 @@ class EquipMenuView(discord.ui.View):
 
 class FamiliarWeaponView(discord.ui.View):
     """
-    Shown when a Dilettante taps "Weapon Forte".
+    Shown when a selecting skills like "Weapon Forte".
     Lists all weapons in inventory; selecting one sets it as the Forte weapon.
     Also offers a Clear option if one is already selected.
     """
