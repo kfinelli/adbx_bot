@@ -64,14 +64,13 @@ def get_purchasable_items_by_slot() -> dict[str, list[tuple[str, str, int, str, 
             continue
 
         rank = getattr(item, 'rank', '') or ''
-        if isinstance(item, ChargeWeapon):
+        if isinstance(item, (ChargeWeapon, Weapon)):
             rank_type = "spell" if rank in _ARCANE_SET else "weapon"
             by_slot['weapon'].append((item_id, item.name, item.price, rank, rank_type))
-        elif isinstance(item, Weapon):
-            by_slot['weapon'].append((item_id, item.name, item.price, rank, "weapon"))
         elif isinstance(item, Gear):
             slot = getattr(item, 'slot', 'unknown')
-            by_slot[slot].append((item_id, item.name, item.price, rank, "armor"))
+            rank_type = "spell" if rank in _ARCANE_SET else "armor"
+            by_slot[slot].append((item_id, item.name, item.price, rank, rank_type))
         elif isinstance(item, Item):
             by_slot['other'].append((item_id, item.name, item.price, '', ''))
 

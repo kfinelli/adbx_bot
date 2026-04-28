@@ -1032,3 +1032,115 @@ class TestUtilitySpellPersistence:
             assert restored_inv is not None, f"Spell {spell_id} lost after round-trip"
             assert restored_inv.charges == orig.charges
             assert restored_inv.container_id == book_instance_id
+
+
+# ---------------------------------------------------------------------------
+# Mage rank / spellbook combat-access tests
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def weapon_spellbook_id():
+    """Return a ContainerItem whose contained items include at least one Weapon
+    (ChargeWeapon counts) — i.e., a true offensive spellbook."""
+    for item_id, defn in ITEM_REGISTRY.items():
+        if isinstance(defn, ContainerItem) and any(
+            isinstance(ITEM_REGISTRY.get(sid), Weapon)
+            for sid in defn.contained_item_ids
+        ):
+            return item_id
+    return None
+
+
+class TestMageArcaneRank:
+    """Regression tests: arcane_basics grants rank V at level 1, and the engine
+    correctly resolves arcane ranks for both equip-time checks and combat
+    weapon enumeration through an equipped spellbook."""
+
+    def test_mage_level_1_has_arcane_basics_rank_v(self, state_mage):
+        from engine.character import CharacterManager
+        char = _get_char(state_mage)
+        skills = {s.skill_id: s for s in CharacterManager.get_active_skills(char)}
+        assert "arcane_basics" in skills, "Level 1 mage should have arcane_basics"
+        assert skills["arcane_basics"].rank == "V"
+
+    def test_mage_allowed_spell_rank_includes_v(self, state_mage):
+        from engine.character import CharacterManager
+        char = _get_char(state_mage)
+        cm = CharacterManager()
+        assert "V" in cm._char_allowed_ranks(char, "spell")
+
+    def test_mage_can_equip_arcane_v_gear(self, state_mage):
+        """Arcane-rank Gear (e.g. casting_robes V) routes through spell rank,
+        not armor rank — the mage only has martial_training_e (E) for armor."""
+        char = _get_char(state_mage)
+        give_item(state_mage, char.character_id, "casting_robes")
+        result = equip_item(state_mage, char.character_id, "casting_robes")
+        assert result.ok, f"Mage should equip arcane-rank gear: {result.error}"
+        assert char.equipped_slots[ItemSlot.BODY.value] == "casting_robes"
+
+    def test_mage_can_equip_arcane_v_arms_gear(self, state_mage):
+        char = _get_char(state_mage)
+        give_item(state_mage, char.character_id, "casting_wraps")
+        result = equip_item(state_mage, char.character_id, "casting_wraps")
+        assert result.ok, f"Mage should equip arcane-rank wraps: {result.error}"
+
+
+class TestEquippedWeaponsThroughSpellbook:
+    """Regression: equipping a spellbook (ContainerItem) must surface every
+    contained Weapon spell as an equipped_weapons() entry. Previously the
+    matcher compared inv.container_id (the book's instance_id) against the
+    book's item_id and produced an empty list — collapsing combat to the
+    1d6 fallback and skipping the weapon-picker UI."""
+
+    def test_equipped_spellbook_yields_contained_weapons(
+        self, state_mage, weapon_spellbook_id,
+    ):
+        assert weapon_spellbook_id is not None, "No offensive spellbook in ITEM_REGISTRY"
+        char = _get_char(state_mage)
+        give_item(state_mage, char.character_id, weapon_spellbook_id)
+        equip_item(state_mage, char.character_id, weapon_spellbook_id)
+
+        weapons = char.equipped_weapons()
+        assert weapons, "Equipped spellbook should expose contained spell weapons"
+
+        book_def = ITEM_REGISTRY[weapon_spellbook_id]
+        expected_weapon_ids = {
+            sid for sid in book_def.contained_item_ids
+            if isinstance(ITEM_REGISTRY.get(sid), Weapon)
+        }
+        seen_ids = {inv.item_id for inv, _ in weapons}
+        assert seen_ids == expected_weapon_ids
+
+    def test_equipped_spellbook_weapons_share_book_instance_id(
+        self, state_mage, weapon_spellbook_id,
+    ):
+        """Each surfaced weapon must be the per-character InventoryItem whose
+        container_id matches the equipped book's instance_id — not a duplicate."""
+        assert weapon_spellbook_id is not None
+        char = _get_char(state_mage)
+        give_item(state_mage, char.character_id, weapon_spellbook_id)
+        equip_item(state_mage, char.character_id, weapon_spellbook_id)
+
+        book_inv = next(i for i in char.inventory if i.item_id == weapon_spellbook_id)
+        for inv, _defn in char.equipped_weapons():
+            assert inv.container_id == book_inv.instance_id
+
+    def test_two_spellbooks_only_equipped_one_surfaces_weapons(
+        self, state_mage, weapon_spellbook_id,
+    ):
+        """If a character carries two spellbook instances but equips only one,
+        equipped_weapons must return exactly that book's spells — not the other's."""
+        assert weapon_spellbook_id is not None
+        char = _get_char(state_mage)
+        give_item(state_mage, char.character_id, weapon_spellbook_id)
+        give_item(state_mage, char.character_id, weapon_spellbook_id)
+
+        books = [i for i in char.inventory if i.item_id == weapon_spellbook_id]
+        assert len(books) == 2
+        equip_item(state_mage, char.character_id, weapon_spellbook_id)
+
+        equipped_book = next(i for i in books if i.equipped)
+        weapons = char.equipped_weapons()
+        assert weapons
+        for inv, _defn in weapons:
+            assert inv.container_id == equipped_book.instance_id

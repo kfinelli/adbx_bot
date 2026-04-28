@@ -284,7 +284,7 @@ class Character:
         if definition is None:
             return []
         if isinstance(definition, ContainerItem):
-            container_item_id = inv_item.item_id
+            container_instance_id = inv_item.instance_id
             results = []
             for spell_id in definition.contained_item_ids:
                 spell_def = ITEM_REGISTRY.get(spell_id)
@@ -292,7 +292,7 @@ class Character:
                     continue
                 spell_inv = next(
                     (i for i in self.inventory
-                     if i.item_id == spell_id and i.container_id == container_item_id),
+                     if i.item_id == spell_id and i.container_id == container_instance_id),
                     None,
                 )
                 if spell_inv is not None:
