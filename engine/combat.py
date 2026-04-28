@@ -321,11 +321,19 @@ def auto_resolve_round(state: GameState) -> object:  # EngineResult
     log: list[str] = list(bf.round_log)  # carry forward instant_move entries from this round
 
     # --- 1. Player actions
+    # Oracle (consumes_act=False) submissions are executed first as a pre-pass so
+    # their effects (e.g. Set Protector applying a condition) land before the
+    # initiative-ordered act phase.  Act submissions are collected for the main loop.
     player_actions: dict[UUID, CombatAction] = {}
     for sub in state.current_turn.submissions:
         if not sub.is_latest or not sub.combat_action:
             continue
-        player_actions[sub.character_id] = CombatAction.from_dict(sub.combat_action)
+        action = CombatAction.from_dict(sub.combat_action)
+        action_def = ACTION_REGISTRY.get(action.action_id)
+        if action_def is not None and not action_def.consumes_act:
+            _execute_action(state, sub.character_id, action, log)
+        else:
+            player_actions[sub.character_id] = action
 
     # --- 2. NPC decisions
     npc_actions: dict[UUID, CombatAction] = {}

@@ -18,6 +18,14 @@ from .light import _tick_light
 from .strings import fmt_string, get_string
 
 
+def _sub_consumes_act(sub: "PlayerTurnSubmission") -> bool:
+    """Return True if this submission's action consumes the act resource."""
+    if sub.combat_action is None:
+        return True  # free-text / Affect submissions always count as the act
+    action_def = ACTION_REGISTRY.get(sub.combat_action.get("action_id", ""))
+    return action_def is None or action_def.consumes_act
+
+
 class TurnManager:
     """Manages game turns and rounds."""
 
@@ -80,9 +88,25 @@ class TurnManager:
         if char.status.value != "active":
             return _err(state, fmt_string("turn.errors.character_inactive", name=char.name))
 
-        # Supersede any prior submissions from this character
+        # Determine whether the incoming action consumes the act resource.
+        new_consumes_act = True
+        if combat_action is not None:
+            action_def = ACTION_REGISTRY.get(combat_action.get("action_id", ""))
+            if action_def is not None:
+                new_consumes_act = action_def.consumes_act
+
+        # Supersede prior submissions of the same type only.
+        # A consumes_act=False submission (oracle/move) keeps its is_latest slot
+        # so that auto_resolve_round can still process it alongside the act.
         for sub in state.current_turn.submissions:
-            if sub.character_id == character_id:
+            if sub.character_id != character_id:
+                continue
+            sub_consumes_act = True
+            if sub.combat_action is not None:
+                sub_def = ACTION_REGISTRY.get(sub.combat_action.get("action_id", ""))
+                if sub_def is not None:
+                    sub_consumes_act = sub_def.consumes_act
+            if sub_consumes_act == new_consumes_act:
                 sub.is_latest = False
 
         state.current_turn.submissions.append(PlayerTurnSubmission(
@@ -98,8 +122,11 @@ class TurnManager:
         if state.party is None:
             return _ok(state, fmt_string("turn.submitted_action", name=char.name, action_text=action_text))
 
+        # Only count players whose latest submission actually consumes the act.
+        # Oracle-only submissions (consumes_act=False) don't close a player's turn.
         submitted_ids = {
-            s.character_id for s in state.current_turn.submissions if s.is_latest
+            s.character_id for s in state.current_turn.submissions
+            if s.is_latest and _sub_consumes_act(s)
         }
         active_ids = {
             cid for cid in state.party.member_ids
