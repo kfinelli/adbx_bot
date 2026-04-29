@@ -904,7 +904,7 @@
             "damage_dice": "4d100",
             "morale": 7,
             "saving_throw": 15,
-            "hit_dice": 200,
+            "hit_dice": 2,
             "weapon_range": 0,
             "status": "active",
             "notes": "",

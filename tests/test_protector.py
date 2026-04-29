@@ -25,6 +25,7 @@ from engine import (
     exit_rounds,
     open_turn,
     start_session,
+    submit_turn,
 )
 from engine.combat import CombatAction, _execute_action
 from models import (
@@ -375,3 +376,84 @@ class TestProtectorCleanup:
         exit_rounds(state)
 
         assert any(c.condition_id == "strengthened" for c in ally.active_conditions)
+
+
+# ---------------------------------------------------------------------------
+# Oracle action does not prematurely close the round (issue #160)
+# ---------------------------------------------------------------------------
+
+class TestProtectorNoPreemptiveSubmit:
+
+    def test_protector_oracle_does_not_trigger_auto_resolve(self):
+        """Set Protector (consumes_act=False) must not auto-resolve the round.
+        The knight should still be able to submit their act action afterward."""
+        state = _make_two_knight_state()
+        enter_rounds(state)
+        open_turn(state)
+
+        knight = _knight(state)
+        ally   = _ally(state)
+
+        # Knight submits Set Protector — oracle action, consumes_act=False.
+        # The ally (Thief) has not submitted yet, so the round must NOT resolve.
+        from engine.combat import CombatAction
+        oracle_action = CombatAction(action_id="set_protector_target", target_id=ally.character_id)
+        result = submit_turn(
+            state, knight.character_id, "Set Protector",
+            combat_action=oracle_action.to_dict(),
+        )
+
+        assert result.ok
+        assert not result.auto_resolved, "Oracle-only submit must not auto-resolve the round"
+        assert state.current_turn is not None
+        from models import TurnStatus
+        assert state.current_turn.status == TurnStatus.OPEN, "Round should remain open"
+
+    def test_protector_then_attack_resolves_and_applies_both(self):
+        """Set Protector + Attack submitted by knight; ally submits Attack.
+        Round resolves; both the Protected condition and attack damage are applied."""
+        from engine import add_npc, register_room
+        from engine.combat import CombatAction
+
+        state = GameState(platform_channel_id="ch2", dm_user_id="dm")
+        state.party = Party(name="P")
+        create_character(state, "Aldric", CharacterClass.KNIGHT, "Pack A", owner_id="u1")
+        create_character(state, "Rynn",   CharacterClass.THIEF,  "Pack A", owner_id="u2")
+        start_session(state)
+
+        room = Room(name="Hall", description="")
+        register_room(state, room)
+        state.current_room_id = room.room_id
+        npc = NPC(name="Goblin", hp_current=30, hp_max=30, defense=0, damage_dice="1d4")
+        add_npc(state, npc)
+
+        enter_rounds(state)
+        open_turn(state)
+
+        knight = _knight(state)
+        ally   = _ally(state)
+        goblin = state.npcs_in_current_room[0]
+
+        # Pin initiatives so knight acts first
+        state.battlefield.combatants[knight.character_id].initiative = 20
+        state.battlefield.combatants[ally.character_id].initiative   = 10
+        state.battlefield.combatants[goblin.npc_id].initiative       = 5
+
+        # Knight submits oracle first, then act
+        oracle_action = CombatAction(action_id="set_protector_target", target_id=ally.character_id)
+        submit_turn(state, knight.character_id, "Set Protector", combat_action=oracle_action.to_dict())
+
+        assert not any(c.condition_id == "protected" for c in ally.active_conditions), \
+            "Protected condition must not apply before round resolves"
+
+        attack_action = CombatAction(action_id="attack", target_id=goblin.npc_id)
+        r1 = submit_turn(state, knight.character_id, "Attack", combat_action=attack_action.to_dict())
+        assert not r1.auto_resolved, "Ally has not submitted yet — round must not auto-resolve"
+
+        ally_attack = CombatAction(action_id="attack", target_id=goblin.npc_id)
+        r2 = submit_turn(state, ally.character_id, "Attack", combat_action=ally_attack.to_dict())
+        assert r2.auto_resolved, "All players submitted acts — round should auto-resolve"
+
+        # Protected condition must have been applied during round resolution
+        assert any(c.condition_id == "protected" for c in ally.active_conditions), \
+            "Protected condition must be applied after round resolves"

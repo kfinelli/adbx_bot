@@ -340,6 +340,12 @@ def _hook_weapon_attack(
         log.append(fmt_string("combat.log.swings_at_nothing", actor_name=actor_name))
         return
 
+    from engine.combat import _is_alive
+    if not _is_alive(state, target_id):
+        log.append(fmt_string("combat.log.target_already_defeated",
+                               actor_name=actor_name, target_name=target_name))
+        return
+
     target_ac = _effective_finesse(state, target_id)
 
     roll = random.randint(1, 10*POWER_LEVEL) + attack_bonus
@@ -401,7 +407,7 @@ def _hook_check_death(
     target_name = _combatant_name(state, target_id)
 
     target_char = state.characters.get(target_id)
-    if target_char and target_char.hp_current <= 0:
+    if target_char and target_char.hp_current <= 0 and target_char.status.value != "dead":
         from models import CharacterStatus
         target_char.status = CharacterStatus.DEAD
         log.append(fmt_string("combat.log.fallen", target_name=target_name))
@@ -409,7 +415,7 @@ def _hook_check_death(
         return
 
     target_npc = _find_npc(state, target_id)
-    if target_npc and target_npc.hp_current <= 0:
+    if target_npc and target_npc.hp_current <= 0 and target_npc.status != "dead":
         target_npc.status = "dead"
         log.append(fmt_string("combat.log.slain", target_name=target_name))
         state.battlefield.combatants.pop(target_id, None)
@@ -662,7 +668,11 @@ def _hook_apply_condition(
 
     duration = params.get("duration", 3)
     from engine.combat import apply_condition
-    apply_condition(state, target_id, condition_id, duration=duration, source_id=actor_id, stacks=stacks)
+    apply_condition(
+        state, target_id, condition_id,
+        duration=duration, source_id=actor_id, stacks=stacks,
+        applied_this_turn=(target_id == actor_id),
+    )
 
     cond_def = CONDITION_REGISTRY.get(condition_id)
     label    = cond_def.label if cond_def else condition_id
@@ -988,6 +998,18 @@ def _tick_actor_conditions(state: GameState, actor_id: UUID, log: list[str]) -> 
 
         if cond.duration_rounds is None:
             still_active.append(cond)
+        elif cond.applied_this_turn:
+            # Condition was self-applied during this actor's action — skip the
+            # immediate tick so duration=N means N future turns, not N-1.
+            # duration=0 is the exception: it signals "expire this turn only"
+            # (used for instant-protection effects like Abdicate's immunity).
+            cond.applied_this_turn = False
+            if cond.duration_rounds == 0:
+                cond_name = cond_def.label if cond_def else cond.condition_id
+                name = _combatant_name(state, actor_id)
+                log.append(fmt_string("combat.log.condition_expired", name=name, cond_name=cond_name))
+            else:
+                still_active.append(cond)
         elif cond.duration_rounds > 1:
             cond.duration_rounds -= 1
             still_active.append(cond)

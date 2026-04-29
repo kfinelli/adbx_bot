@@ -199,18 +199,24 @@ def initialize_battlefield(state: GameState) -> CombatBattlefield:
 # ---------------------------------------------------------------------------
 
 def apply_condition(
-    state:        GameState,
-    target_id:    UUID,
-    condition_id: str,
-    duration:     int | None = None,
-    source_id:    UUID | None = None,
-    stacks:       int = 1,
+    state:              GameState,
+    target_id:          UUID,
+    condition_id:       str,
+    duration:           int | None = None,
+    source_id:          UUID | None = None,
+    stacks:             int = 1,
+    applied_this_turn:  bool = False,
 ) -> object:  # EngineResult
     """
     Apply a status condition to a combatant by ID.
     duration=None means permanent (removed only by explicit dispel).
     Re-applying an existing condition refreshes its duration.
     stacks sets the initial stack count for stackable conditions.
+    applied_this_turn=True suppresses the immediate end-of-turn tick so
+    that duration=N means "N future turns" rather than "N-1 future turns"
+    for conditions applied during a combatant's own action.  Pass True only
+    when the target is the acting combatant and the call happens mid-turn.
+    duration=0 still expires at end of turn even with applied_this_turn=True.
     """
     if condition_id not in CONDITION_REGISTRY:
         return _err(state, f"Unknown condition '{condition_id}'.")
@@ -254,6 +260,7 @@ def apply_condition(
         duration_rounds=duration,
         source_id=source_id,
         stacks=stacks,
+        applied_this_turn=applied_this_turn,
     ))
     state.updated_at = _now()
     return _ok(state, fmt_string("combat.condition.applied", target_name=target_name, label=cond_def.label))
@@ -314,11 +321,19 @@ def auto_resolve_round(state: GameState) -> object:  # EngineResult
     log: list[str] = list(bf.round_log)  # carry forward instant_move entries from this round
 
     # --- 1. Player actions
+    # Oracle (consumes_act=False) submissions are executed first as a pre-pass so
+    # their effects (e.g. Set Protector applying a condition) land before the
+    # initiative-ordered act phase.  Act submissions are collected for the main loop.
     player_actions: dict[UUID, CombatAction] = {}
     for sub in state.current_turn.submissions:
         if not sub.is_latest or not sub.combat_action:
             continue
-        player_actions[sub.character_id] = CombatAction.from_dict(sub.combat_action)
+        action = CombatAction.from_dict(sub.combat_action)
+        action_def = ACTION_REGISTRY.get(action.action_id)
+        if action_def is not None and not action_def.consumes_act:
+            _execute_action(state, sub.character_id, action, log)
+        else:
+            player_actions[sub.character_id] = action
 
     # --- 2. NPC decisions
     npc_actions: dict[UUID, CombatAction] = {}

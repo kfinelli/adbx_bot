@@ -256,17 +256,17 @@ class TestSkillRegistry:
 # Skill uses tracking (Knack / limited-use skills)
 # ---------------------------------------------------------------------------
 
-def _make_dilettante(state, name="Dill"):
-    result = create_character(state, name, CharacterClass.DILETTANTE, "", owner_id="u_dill")
+def _make_questant(state, name="Dill"):
+    result = create_character(state, name, CharacterClass.QUESTANT, "", owner_id="u_dill")
     assert result.ok
     return next(iter(state.characters.values()))
 
 
 def _knack_def():
-    """Return the SkillDef for dilettante_knack."""
-    job_def = CLASS_DEFINITIONS.get("DILETTANTE")
+    """Return the SkillDef for questant_knack."""
+    job_def = CLASS_DEFINITIONS.get("QUESTANT")
     assert job_def is not None
-    skill = job_def.skills.get("dilettante_knack")
+    skill = job_def.skills.get("questant_knack")
     assert skill is not None
     return skill
 
@@ -301,55 +301,55 @@ class TestSkillUses:
 
     def test_adjust_skill_uses_decrements(self):
         state = _make_state()
-        char = _make_dilettante(state)
-        result = adjust_skill_uses(state, char.character_id, "dilettante_knack", -1)
+        char = _make_questant(state)
+        result = adjust_skill_uses(state, char.character_id, "questant_knack", -1)
         assert result.ok
-        assert char.skill_uses["dilettante_knack"] == 0
+        assert char.skill_uses["questant_knack"] == 0
 
     def test_adjust_skill_uses_clamps_at_zero(self):
         state = _make_state()
-        char = _make_dilettante(state)
-        result = adjust_skill_uses(state, char.character_id, "dilettante_knack", -9999)
+        char = _make_questant(state)
+        result = adjust_skill_uses(state, char.character_id, "questant_knack", -9999)
         assert result.ok
-        assert char.skill_uses["dilettante_knack"] == 0
+        assert char.skill_uses["questant_knack"] == 0
 
     def test_adjust_skill_uses_clamps_at_max(self):
         state = _make_state()
-        char = _make_dilettante(state)
+        char = _make_questant(state)
         # Start at 0, try to go over max
-        char.skill_uses["dilettante_knack"] = 0
-        result = adjust_skill_uses(state, char.character_id, "dilettante_knack", 9999)
+        char.skill_uses["questant_knack"] = 0
+        result = adjust_skill_uses(state, char.character_id, "questant_knack", 9999)
         assert result.ok
-        assert char.skill_uses["dilettante_knack"] == 1  # max at L1
+        assert char.skill_uses["questant_knack"] == 1  # max at L1
 
     def test_adjust_skill_uses_error_on_non_limited_skill(self):
         state = _make_state()
-        char = _make_dilettante(state)
-        result = adjust_skill_uses(state, char.character_id, "dilettante_weapon_forte", -1)
+        char = _make_questant(state)
+        result = adjust_skill_uses(state, char.character_id, "questant_weapon_forte", -1)
         assert not result.ok
 
     def test_exit_rounds_restores_encounter_skill_uses(self):
         state = _make_state()
-        char = _make_dilettante(state)
+        char = _make_questant(state)
         # Drain to 0
-        char.skill_uses["dilettante_knack"] = 0
+        char.skill_uses["questant_knack"] = 0
         enter_rounds(state)
         exit_rounds(state)
-        assert char.skill_uses["dilettante_knack"] == 1  # restored to max at L1
+        assert char.skill_uses["questant_knack"] == 1  # restored to max at L1
 
     def test_recharge_day_does_not_restore_encounter_skills(self):
         state = _make_state()
-        char = _make_dilettante(state)
-        char.skill_uses["dilettante_knack"] = 0
+        char = _make_questant(state)
+        char.skill_uses["questant_knack"] = 0
         recharge_day_spells(state, char.character_id)
         # encounter-period skill should still be at 0
-        assert char.skill_uses.get("dilettante_knack", 1) == 0
+        assert char.skill_uses.get("questant_knack", 1) == 0
 
     def test_skill_uses_survive_persistence_round_trip(self):
         from persistence import Database
         state = _make_state()
-        char = _make_dilettante(state)
-        char.skill_uses["dilettante_knack"] = 0
+        char = _make_questant(state)
+        char.skill_uses["questant_knack"] = 0
 
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = f.name
@@ -363,18 +363,18 @@ class TestSkillUses:
 
         assert loaded is not None
         loaded_char = next(iter(loaded.characters.values()))
-        assert loaded_char.skill_uses.get("dilettante_knack") == 0
+        assert loaded_char.skill_uses.get("questant_knack") == 0
 
     def test_missing_skill_uses_defaults_to_max(self):
         state = _make_state()
-        char = _make_dilettante(state)
+        char = _make_questant(state)
         # skill_uses empty → should read as at max
         char.skill_uses.clear()
         skill = _knack_def()
         job_exp = char.jobs.get(skill.source)
         job_level = job_exp.level if job_exp else char.level
         max_uses = CharacterManager.get_skill_max_uses(skill, job_level)
-        current = char.skill_uses.get("dilettante_knack", max_uses)
+        current = char.skill_uses.get("questant_knack", max_uses)
         assert current == max_uses
 
 

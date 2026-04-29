@@ -126,7 +126,7 @@ def unequip_item(state: GameState, character_id, slot):
 
 def set_familiar_weapon(state: GameState, character_id, instance_id: str | None):
     """
-    Set (or clear) the Weapon Forte familiar weapon for a Dilettante character.
+    Set (or clear) the Weapon Forte familiar weapon.
 
     instance_id=None clears the selection (DM reset).
     Returns EngineResult with ok=False if the character lacks the skill or already

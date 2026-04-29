@@ -11,7 +11,7 @@
     {
       "tag": "apply_condition",
       "condition": "abdication-immunity",
-      "duration": 1,
+      "duration": 0,
       "target": "self"
     },
     "move_to_band"

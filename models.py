@@ -136,7 +136,7 @@ class InventoryItem:
     notes:        str    = ""
     container_id: str | None = None   # instance_id of owning ContainerItem, if any
     instance_id:  str    = field(default_factory=lambda: __import__("uuid").uuid4().hex)
-    familiar:     bool   = False       # Dilettante Weapon Forte: use SVY instead of normal stat
+    familiar:     bool   = False       # Weapon Forte: use SVY instead of normal stat
 
     @property
     def definition(self):
@@ -284,7 +284,7 @@ class Character:
         if definition is None:
             return []
         if isinstance(definition, ContainerItem):
-            container_item_id = inv_item.item_id
+            container_instance_id = inv_item.instance_id
             results = []
             for spell_id in definition.contained_item_ids:
                 spell_def = ITEM_REGISTRY.get(spell_id)
@@ -292,7 +292,7 @@ class Character:
                     continue
                 spell_inv = next(
                     (i for i in self.inventory
-                     if i.item_id == spell_id and i.container_id == container_item_id),
+                     if i.item_id == spell_id and i.container_id == container_instance_id),
                     None,
                 )
                 if spell_inv is not None:
@@ -678,11 +678,19 @@ class ActiveCondition:
     engine/data_loader.py.  duration_rounds=None means permanent (lasts
     until explicitly removed).  source_id is the combatant that applied it,
     if any (used for some condition-removal rules).
+
+    applied_this_turn is set True when a combatant applies a condition to
+    themselves during their own action.  _tick_actor_conditions skips the
+    immediate end-of-turn tick for such conditions (duration=0 is the lone
+    exception: it still expires immediately, expressing "this turn only").
+    This makes duration=N mean "N future turns" consistently for self-applied
+    conditions, matching the intuition of game designers writing JSON.
     """
-    condition_id:    str         = ""
-    duration_rounds: int | None = None
-    source_id:       UUID | None = None
-    stacks:          int         = 1
+    condition_id:      str         = ""
+    duration_rounds:   int | None = None
+    source_id:         UUID | None = None
+    stacks:            int         = 1
+    applied_this_turn: bool        = False
 
 
 @dataclass

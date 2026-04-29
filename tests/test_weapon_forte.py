@@ -1,5 +1,5 @@
 """
-tests/test_weapon_forte.py — Dilettante Weapon Forte skill.
+tests/test_weapon_forte.py — Weapon Forte skill.
 
 Covers:
   - equipped_weapons() returns a [Forte] SVY variant when familiar=True
@@ -24,17 +24,17 @@ from models import CharacterClass, GameState, InventoryItem, Party
 # Helpers
 # ---------------------------------------------------------------------------
 
-_WEAPON_ID = "shortsword"   # rank D, stat physique — equippable by Dilettante
+_WEAPON_ID = "shortsword"   # rank D, stat physique — equippable by Questant
 
 
-def _make_state_with_dilettante():
-    """EXPLORATION state with one Dilettante (has dilettante_weapon_forte at L1)."""
+def _make_state_with_questant():
+    """EXPLORATION state with one Questant (has questant_weapon_forte at L1)."""
     from engine import register_room
     from models import Room
 
     state = GameState(platform_channel_id="ch", dm_user_id="dm")
     state.party = Party(name="P")
-    create_character(state, "Rhiannon", CharacterClass.DILETTANTE, "", owner_id="u1")
+    create_character(state, "Rhiannon", CharacterClass.QUESTANT, "", owner_id="u1")
     start_session(state)
     room = Room(name="Hall", description="Stone hall.")
     register_room(state, room)
@@ -82,7 +82,7 @@ def _add_unequipped(char, item_id, familiar=False):
 class TestForteEquippedWeapons:
     def test_familiar_flag_creates_forte_variant(self):
         """familiar=True on an equipped weapon yields a [Forte] SVY variant."""
-        state, char = _make_state_with_dilettante()
+        state, char = _make_state_with_questant()
         _add_equipped(char, _WEAPON_ID, familiar=True)
         weapons = char.equipped_weapons()
         forte_entries = [(inv, d) for inv, d in weapons if inv.item_id.endswith("__familiar")]
@@ -93,7 +93,7 @@ class TestForteEquippedWeapons:
     def test_forte_variant_name_suffix(self):
         """[Forte] variant has ' [Forte]' appended to the name."""
         from engine.data_loader import ITEM_REGISTRY
-        state, char = _make_state_with_dilettante()
+        state, char = _make_state_with_questant()
         _add_equipped(char, _WEAPON_ID, familiar=True)
         weapons = char.equipped_weapons()
         _, defn = next((inv, d) for inv, d in weapons if inv.item_id.endswith("__familiar"))
@@ -102,7 +102,7 @@ class TestForteEquippedWeapons:
 
     def test_forte_variant_item_id_format(self):
         """Synthetic InventoryItem has item_id '<id>__familiar'."""
-        state, char = _make_state_with_dilettante()
+        state, char = _make_state_with_questant()
         _add_equipped(char, _WEAPON_ID, familiar=True)
         weapons = char.equipped_weapons()
         inv, _ = next((i, d) for i, d in weapons if i.item_id.endswith("__familiar"))
@@ -110,14 +110,14 @@ class TestForteEquippedWeapons:
 
     def test_forte_variant_absent_without_familiar_flag(self):
         """No Forte variant when familiar=False."""
-        state, char = _make_state_with_dilettante()
+        state, char = _make_state_with_questant()
         _add_equipped(char, _WEAPON_ID, familiar=False)
         weapons = char.equipped_weapons()
         assert all(not inv.item_id.endswith("__familiar") for inv, _ in weapons)
 
     def test_forte_variant_absent_when_not_equipped(self):
         """familiar=True on an unequipped item does NOT create a Forte variant."""
-        state, char = _make_state_with_dilettante()
+        state, char = _make_state_with_questant()
         _add_unequipped(char, _WEAPON_ID, familiar=True)
         weapons = char.equipped_weapons()
         assert all(not inv.item_id.endswith("__familiar") for inv, _ in weapons)
@@ -127,7 +127,7 @@ class TestForteEquippedWeapons:
         from engine.data_loader import ITEM_REGISTRY
         original_stat = ITEM_REGISTRY[_WEAPON_ID].stat
         original_name = ITEM_REGISTRY[_WEAPON_ID].name
-        state, char = _make_state_with_dilettante()
+        state, char = _make_state_with_questant()
         _add_equipped(char, _WEAPON_ID, familiar=True)
         char.equipped_weapons()
         assert ITEM_REGISTRY[_WEAPON_ID].stat == original_stat
@@ -144,7 +144,7 @@ class TestForteEquippedWeapons:
         savvy_weapon.name = "SVY Sword"
         ITEM_REGISTRY["__test_svq_sword"] = savvy_weapon
 
-        state, char = _make_state_with_dilettante()
+        state, char = _make_state_with_questant()
         inv = InventoryItem(item_id="__test_svq_sword", equipped=True, familiar=True)
         char.inventory.append(inv)
         from engine.azure_constants import ItemSlot
@@ -164,7 +164,7 @@ class TestSetFamiliarWeapon:
     def test_sets_familiar_flag(self):
         """set_familiar_weapon sets familiar=True on the matching item."""
         from engine import set_familiar_weapon
-        state, char = _make_state_with_dilettante()
+        state, char = _make_state_with_questant()
         inv = _add_unequipped(char, _WEAPON_ID)
         result = set_familiar_weapon(state, char.character_id, inv.instance_id)
         assert result.ok
@@ -173,7 +173,7 @@ class TestSetFamiliarWeapon:
     def test_one_use_restriction(self):
         """A second call while a weapon is already familiar returns an error."""
         from engine import set_familiar_weapon
-        state, char = _make_state_with_dilettante()
+        state, char = _make_state_with_questant()
         inv1 = _add_unequipped(char, _WEAPON_ID)
         inv2 = _add_unequipped(char, _WEAPON_ID)
         set_familiar_weapon(state, char.character_id, inv1.instance_id)
@@ -184,7 +184,7 @@ class TestSetFamiliarWeapon:
     def test_reset_clears_all_flags(self):
         """set_familiar_weapon with instance_id=None clears all familiar flags."""
         from engine import set_familiar_weapon
-        state, char = _make_state_with_dilettante()
+        state, char = _make_state_with_questant()
         inv = _add_unequipped(char, _WEAPON_ID)
         set_familiar_weapon(state, char.character_id, inv.instance_id)
         assert inv.familiar is True
@@ -206,14 +206,14 @@ class TestSetFamiliarWeapon:
         from engine.data_loader import ITEM_REGISTRY
         from engine.item import Gear
         gear_id = next(k for k, v in ITEM_REGISTRY.items() if isinstance(v, Gear))
-        state, char = _make_state_with_dilettante()
+        state, char = _make_state_with_questant()
         inv = InventoryItem(item_id=gear_id)
         char.inventory.append(inv)
         result = set_familiar_weapon(state, char.character_id, inv.instance_id)
         assert not result.ok
 
     def test_reset_skips_skill_check(self):
-        """DM reset (instance_id=None) works even for a non-Dilettante."""
+        """DM reset (instance_id=None) works even for a non-Questant."""
         from engine import set_familiar_weapon
         state, char = _make_state_with_knight()
         # Manually set a familiar flag to simulate a DM-controlled state
@@ -238,7 +238,7 @@ class TestForteInCombat:
         from engine.combat import CombatAction, _hook_weapon_attack
         from models import NPC, RangeBand
 
-        state, char = _make_state_with_dilettante()
+        state, char = _make_state_with_questant()
         _add_equipped(char, _WEAPON_ID, familiar=True)
 
         npc = NPC(name="Target", hp_current=1000, hp_max=1000)
