@@ -23,6 +23,9 @@ from fastapi.responses import HTMLResponse, Response
 import store
 from discord_tasks import dispatch_oracle_answer, dispatch_turn_resolved, drain_level_ups
 from engine import (
+    add_encounter_entry as eng_add_encounter_entry,
+)
+from engine import (
     add_exit,
     adjust_light_charges,
     adjust_skill_uses,
@@ -66,12 +69,41 @@ from engine import (
     add_npc as eng_add_npc,
 )
 from engine import (
+    add_npc_to_encounter_group as eng_add_npc_to_encounter_group,
+)
+from engine import (
+    add_npc_to_group as eng_add_npc_to_group,
+)
+from engine import (
     copy_npc as eng_copy_npc,
+)
+from engine import (
+    promote_group_to_encounter as eng_promote_group,
+)
+from engine import (
+    remove_encounter_entry as eng_remove_encounter_entry,
+)
+from engine import (
+    remove_encounter_npc as eng_remove_encounter_npc,
+)
+from engine import (
+    remove_npc_group_by_id as eng_remove_npc_group,
+)
+from engine import (
+    update_encounter_entry_weight as eng_update_encounter_weight,
+)
+from engine import (
+    update_encounter_npc as eng_update_encounter_npc,
+)
+from engine import (
+    update_group as eng_update_group,
 )
 from models import (
     NPC,
     CharacterStatus,
     DoorState,
+    NPCGroup,
+    NPCMovementLogic,
     RangeBand,
     Room,
     RoomFeature,
@@ -82,6 +114,8 @@ from webui.templates import (
     archive_page,
     character_page,
     dashboard_fragment,
+    npc_roster_fragment,
+    npc_roster_page,
     session_list_page,
     session_page,
 )
@@ -161,6 +195,19 @@ def _respond(channel_id: str, flash: str = "", error: str = "", sync: bool = Tru
         tb = traceback.format_exc()
         print(f"[_respond] dashboard_fragment error: {exc}\n{tb}", file=sys.stderr)
         return HTMLResponse(f'<div id="dashboard"><div class="error">Render error: {exc}</div></div>')
+
+
+def _respond_npcs(channel_id: str, flash: str = "", error: str = "", edit_id: str = "") -> HTMLResponse:
+    import traceback
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse('<div class="error">Session not found.</div>')
+    try:
+        return HTMLResponse(npc_roster_fragment(state, flash=flash, error=error, edit_id=edit_id))
+    except Exception as exc:
+        tb = traceback.format_exc()
+        print(f"[_respond_npcs] npc_roster_fragment error: {exc}\n{tb}", file=sys.stderr)
+        return HTMLResponse(f'<div id="npc-roster"><div class="error">Render error: {exc}</div></div>')
 
 
 # ---------------------------------------------------------------------------
@@ -750,14 +797,19 @@ async def route_dungeon_update(
     random_encounter_interval: Annotated[int, Form()] = 6,
     random_encounter_roll: Annotated[str, Form()] = "1d6",
     view_room_id: Annotated[str, Form()] = "",
+    from_page: Annotated[str, Form()] = "",
 ):
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse("Session not found.", status_code=404)
     result = update_dungeon(state, name, description, random_encounter_interval, random_encounter_roll)
     if not result.ok:
+        if from_page == "npcs":
+            return _respond_npcs(channel_id, error=result.error)
         return _respond(channel_id, error=result.error, view_room_id=view_room_id)
     await save_session_async(state)
+    if from_page == "npcs":
+        return _respond_npcs(channel_id, flash=result.message)
     return _respond(channel_id, flash=result.message, view_room_id=view_room_id)
 
 
@@ -950,6 +1002,7 @@ async def route_npc_update(
     weapon_range: Annotated[int, Form()] = 0,
     damage_dice: Annotated[str, Form()] = "1d6",
     view_room_id: Annotated[str, Form()] = "",
+    from_page: Annotated[str, Form()] = "",
 ):
     import traceback
     state = store.get_session(channel_id)
@@ -961,12 +1014,18 @@ async def route_npc_update(
             notes, hit_dice, resistance, weapon_range, damage_dice,
         )
         if not result.ok:
+            if from_page == "npcs":
+                return _respond_npcs(channel_id, error=result.error)
             return _respond(channel_id, error=result.error, view_room_id=view_room_id)
         await save_session_async(state)
+        if from_page == "npcs":
+            return _respond_npcs(channel_id, flash=result.message)
         return _respond(channel_id, flash=result.message, view_room_id=view_room_id)
     except Exception as exc:
         tb = traceback.format_exc()
         print(f"[route_npc_update] ERROR for npc_id={npc_id}: {exc}\n{tb}", file=sys.stderr)
+        if from_page == "npcs":
+            return _respond_npcs(channel_id, error=f"Server error: {exc}")
         return _respond(channel_id, error=f"Server error: {exc}", view_room_id=view_room_id)
 
 
@@ -975,14 +1034,19 @@ async def route_npc_delete(
     channel_id: str,
     npc_id: str,
     view_room_id: Annotated[str, Form()] = "",
+    from_page: Annotated[str, Form()] = "",
 ):
     state = store.get_session(channel_id)
     if state is None:
         return HTMLResponse("Session not found.", status_code=404)
     result = remove_npc(state, UUID(npc_id))
     if not result.ok:
+        if from_page == "npcs":
+            return _respond_npcs(channel_id, error=result.error)
         return _respond(channel_id, error=result.error, view_room_id=view_room_id)
     await save_session_async(state)
+    if from_page == "npcs":
+        return _respond_npcs(channel_id)
     return _respond(channel_id, view_room_id=view_room_id)
 
 
@@ -991,6 +1055,7 @@ async def route_npc_copy(
     channel_id: str,
     npc_id: str,
     view_room_id: Annotated[str, Form()] = "",
+    from_page: Annotated[str, Form()] = "",
 ):
     state = store.get_session(channel_id)
     if state is None:
@@ -998,10 +1063,276 @@ async def route_npc_copy(
     rid = _parse_uuid(view_room_id)
     result = eng_copy_npc(state, UUID(npc_id), room_id=rid)
     if not result.ok:
+        if from_page == "npcs":
+            return _respond_npcs(channel_id, error=result.error)
         return _respond(channel_id, error=result.error, view_room_id=view_room_id)
     await save_session_async(state)
+    if from_page == "npcs":
+        return _respond_npcs(channel_id)
     return _respond(channel_id, view_room_id=view_room_id)
 
+
+# ---------------------------------------------------------------------------
+# NPC Roster page
+# ---------------------------------------------------------------------------
+
+@app.get("/session/{channel_id}/npcs", response_class=HTMLResponse)
+async def route_npc_roster_page(channel_id: str, edit: str = ""):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    sessions = _session_list()
+    return HTMLResponse(npc_roster_page(state, sessions, edit_id=edit))
+
+
+@app.post("/session/{channel_id}/addgroup", response_class=HTMLResponse)
+async def route_addgroup(
+    channel_id: str,
+    name: Annotated[str, Form()],
+    hp: Annotated[int, Form()],
+    group_name: Annotated[str, Form()] = "",
+    movement_logic: Annotated[str, Form()] = "stationary",
+    defense: Annotated[int, Form()] = 0,
+    resistance: Annotated[int, Form()] = 0,
+    damage_dice: Annotated[str, Form()] = "1d6",
+    hit_dice: Annotated[int, Form()] = 1,
+    weapon_range: Annotated[int, Form()] = 0,
+    description: Annotated[str, Form()] = "",
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    try:
+        logic = NPCMovementLogic(movement_logic)
+    except ValueError:
+        logic = NPCMovementLogic.STATIONARY
+    npc = NPC(
+        name=name, hp_max=hp, hp_current=hp,
+        defense=defense, damage_dice=damage_dice,
+        hit_dice=hit_dice, resistance=resistance,
+        weapon_range=weapon_range, description=description,
+    )
+    group = NPCGroup(
+        name=group_name or None,
+        npcs=[npc],
+        movement_logic=logic,
+    )
+    from engine import add_npc_group as eng_add_group
+    result = eng_add_group(state, group)
+    await save_session_async(state)
+    return _respond_npcs(channel_id, flash=result.message if result.ok else "", error="" if result.ok else result.error)
+
+
+@app.post("/session/{channel_id}/group/{group_id}/update", response_class=HTMLResponse)
+async def route_group_update(
+    request: Request,
+    channel_id: str,
+    group_id: str,
+    name: Annotated[str, Form()] = "",
+    movement_logic: Annotated[str, Form()] = "stationary",
+    current_room_id: Annotated[str, Form()] = "",
+):
+    form_data = await request.form()
+    possible_rooms = form_data.getlist("possible_rooms")
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    try:
+        logic = NPCMovementLogic(movement_logic)
+    except ValueError:
+        logic = NPCMovementLogic.STATIONARY
+    room_id = _parse_uuid(current_room_id)
+    possible = [UUID(r) for r in possible_rooms if r]
+    result = eng_update_group(state, UUID(group_id), name or None, logic, room_id, possible)
+    if not result.ok:
+        return _respond_npcs(channel_id, error=result.error)
+    await save_session_async(state)
+    return _respond_npcs(channel_id, flash=result.message)
+
+
+@app.post("/session/{channel_id}/group/{group_id}/delete", response_class=HTMLResponse)
+async def route_group_delete(channel_id: str, group_id: str):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    result = eng_remove_npc_group(state, UUID(group_id))
+    if not result.ok:
+        return _respond_npcs(channel_id, error=result.error)
+    await save_session_async(state)
+    return _respond_npcs(channel_id, flash=result.message)
+
+
+@app.post("/session/{channel_id}/group/{group_id}/addnpc", response_class=HTMLResponse)
+async def route_group_addnpc(
+    channel_id: str,
+    group_id: str,
+    name: Annotated[str, Form()],
+    hp: Annotated[int, Form()],
+    defense: Annotated[int, Form()] = 0,
+    resistance: Annotated[int, Form()] = 0,
+    damage_dice: Annotated[str, Form()] = "1d6",
+    hit_dice: Annotated[int, Form()] = 1,
+    weapon_range: Annotated[int, Form()] = 0,
+    description: Annotated[str, Form()] = "",
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    npc = NPC(
+        name=name, hp_max=hp, hp_current=hp,
+        defense=defense, damage_dice=damage_dice,
+        hit_dice=hit_dice, resistance=resistance,
+        weapon_range=weapon_range, description=description,
+    )
+    result = eng_add_npc_to_group(state, UUID(group_id), npc)
+    if not result.ok:
+        return _respond_npcs(channel_id, error=result.error)
+    await save_session_async(state)
+    return _respond_npcs(channel_id, flash=result.message)
+
+
+@app.post("/session/{channel_id}/group/{group_id}/promote_encounter", response_class=HTMLResponse)
+async def route_group_promote_encounter(
+    channel_id: str,
+    group_id: str,
+    weight: Annotated[int, Form()] = 1,
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    result = eng_promote_group(state, UUID(group_id), weight)
+    if not result.ok:
+        return _respond_npcs(channel_id, error=result.error)
+    await save_session_async(state)
+    return _respond_npcs(channel_id, flash=result.message)
+
+
+@app.post("/session/{channel_id}/encounter_roster/add", response_class=HTMLResponse)
+async def route_encounter_roster_add(
+    channel_id: str,
+    name: Annotated[str, Form()],
+    hp: Annotated[int, Form()],
+    group_name: Annotated[str, Form()] = "",
+    weight: Annotated[int, Form()] = 1,
+    defense: Annotated[int, Form()] = 0,
+    resistance: Annotated[int, Form()] = 0,
+    damage_dice: Annotated[str, Form()] = "1d6",
+    hit_dice: Annotated[int, Form()] = 1,
+    weapon_range: Annotated[int, Form()] = 0,
+    description: Annotated[str, Form()] = "",
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    npc = NPC(
+        name=name, hp_max=hp, hp_current=hp,
+        defense=defense, damage_dice=damage_dice,
+        hit_dice=hit_dice, resistance=resistance,
+        weapon_range=weapon_range, description=description,
+    )
+    template_group = NPCGroup(name=group_name or None, npcs=[npc])
+    result = eng_add_encounter_entry(state, template_group, weight)
+    if not result.ok:
+        return _respond_npcs(channel_id, error=result.error)
+    await save_session_async(state)
+    return _respond_npcs(channel_id, flash=result.message)
+
+
+@app.post("/session/{channel_id}/encounter_roster/{group_id}/update_weight", response_class=HTMLResponse)
+async def route_encounter_weight(
+    channel_id: str,
+    group_id: str,
+    weight: Annotated[int, Form()] = 1,
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    result = eng_update_encounter_weight(state, UUID(group_id), weight)
+    if not result.ok:
+        return _respond_npcs(channel_id, error=result.error)
+    await save_session_async(state)
+    return _respond_npcs(channel_id, flash=result.message)
+
+
+@app.post("/session/{channel_id}/encounter_roster/{group_id}/delete", response_class=HTMLResponse)
+async def route_encounter_delete(channel_id: str, group_id: str):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    result = eng_remove_encounter_entry(state, UUID(group_id))
+    if not result.ok:
+        return _respond_npcs(channel_id, error=result.error)
+    await save_session_async(state)
+    return _respond_npcs(channel_id, flash=result.message)
+
+
+@app.post("/session/{channel_id}/encounter_roster/{group_id}/addnpc", response_class=HTMLResponse)
+async def route_encounter_addnpc(
+    channel_id: str,
+    group_id: str,
+    name: Annotated[str, Form()],
+    hp: Annotated[int, Form()],
+    defense: Annotated[int, Form()] = 0,
+    resistance: Annotated[int, Form()] = 0,
+    damage_dice: Annotated[str, Form()] = "1d6",
+    hit_dice: Annotated[int, Form()] = 1,
+    weapon_range: Annotated[int, Form()] = 0,
+    description: Annotated[str, Form()] = "",
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    npc = NPC(
+        name=name, hp_max=hp, hp_current=hp,
+        defense=defense, damage_dice=damage_dice,
+        hit_dice=hit_dice, resistance=resistance,
+        weapon_range=weapon_range, description=description,
+    )
+    result = eng_add_npc_to_encounter_group(state, UUID(group_id), npc)
+    if not result.ok:
+        return _respond_npcs(channel_id, error=result.error)
+    await save_session_async(state)
+    return _respond_npcs(channel_id, flash=result.message)
+
+
+@app.post("/session/{channel_id}/encounter_roster/{group_id}/npc/{npc_id}/update", response_class=HTMLResponse)
+async def route_encounter_npc_update(
+    channel_id: str,
+    group_id: str,
+    npc_id: str,
+    name: Annotated[str, Form()],
+    hp_max: Annotated[int, Form()],
+    defense: Annotated[int, Form()] = 0,
+    resistance: Annotated[int, Form()] = 0,
+    damage_dice: Annotated[str, Form()] = "1d6",
+    hit_dice: Annotated[int, Form()] = 1,
+    weapon_range: Annotated[int, Form()] = 0,
+    description: Annotated[str, Form()] = "",
+    notes: Annotated[str, Form()] = "",
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    result = eng_update_encounter_npc(
+        state, UUID(group_id), UUID(npc_id), name, description, hp_max,
+        defense, notes, hit_dice, resistance, weapon_range, damage_dice,
+    )
+    if not result.ok:
+        return _respond_npcs(channel_id, error=result.error)
+    await save_session_async(state)
+    return _respond_npcs(channel_id, flash=result.message)
+
+
+@app.post("/session/{channel_id}/encounter_roster/{group_id}/npc/{npc_id}/delete", response_class=HTMLResponse)
+async def route_encounter_npc_delete(channel_id: str, group_id: str, npc_id: str):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    result = eng_remove_encounter_npc(state, UUID(group_id), UUID(npc_id))
+    if not result.ok:
+        return _respond_npcs(channel_id, error=result.error)
+    await save_session_async(state)
+    return _respond_npcs(channel_id, flash=result.message)
 
 
 # ---------------------------------------------------------------------------

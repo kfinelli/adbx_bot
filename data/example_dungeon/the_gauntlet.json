@@ -9,7 +9,7 @@
       "ba8d77a2-9b69-46cf-992a-5a4cd963e80a": {
         "room_id": "ba8d77a2-9b69-46cf-992a-5a4cd963e80a",
         "name": "Lower Gates of the Keep",
-        "description": "On the western side of the fortress, the wall which looms up from the track to the battlemented area has two large, tower-like buttresses.As you round the first of these, you find an impressive gateway occupying most of the width of the wall between them.",
+        "description": "On the western side of the fortress, the wall which looms up from the track to the battlemented area has two large, tower-like buttresses. As you round the first of these, you find an impressive gateway occupying most of the width of the wall between them.",
         "notes": "Adventurers can enter through the lower gates undetected.",
         "features": [
           {
@@ -711,7 +711,255 @@
     "entrance_id": "ba8d77a2-9b69-46cf-992a-5a4cd963e80a",
     "random_encounter_interval": 6,
     "random_encounter_roll": "1d6",
-    "random_encounter_roster": []
+    "random_encounter_roster": [
+      {
+        "npc_group": {
+          "group_id": "619a0496-41f6-4578-8607-4e8c42396ff8",
+          "name": "Gnoll Battlegroup",
+          "npcs": [
+            {
+              "npc_id": "c32ac895-17b9-46cd-9542-bc15354304bb",
+              "name": "Gnoll A",
+              "description": "",
+              "hp_max": 400,
+              "hp_current": 400,
+              "defense": 0,
+              "resistance": 0,
+              "ability_scores": {
+                "physique": 0,
+                "finesse": 0,
+                "reason": 0,
+                "savvy": 0
+              },
+              "movement_speed": 90,
+              "attack_bonus": 0,
+              "damage_dice": "4d100",
+              "morale": 7,
+              "saving_throw": 15,
+              "hit_dice": 2,
+              "weapon_range": 0,
+              "status": "active",
+              "notes": "",
+              "active_conditions": [],
+              "hidden": false
+            },
+            {
+              "npc_id": "06aa3ad3-df59-4d1c-a498-a4797d720e20",
+              "name": "Gnoll Archer A",
+              "description": "",
+              "hp_max": 400,
+              "hp_current": 400,
+              "defense": 0,
+              "resistance": 0,
+              "ability_scores": {
+                "physique": 0,
+                "finesse": 0,
+                "reason": 0,
+                "savvy": 0
+              },
+              "movement_speed": 90,
+              "attack_bonus": 0,
+              "damage_dice": "2d300",
+              "morale": 7,
+              "saving_throw": 15,
+              "hit_dice": 2,
+              "weapon_range": 2,
+              "status": "active",
+              "notes": "",
+              "active_conditions": [],
+              "hidden": false
+            },
+            {
+              "npc_id": "c00fe8d7-3e88-4683-b28c-a7827ebf25b3",
+              "name": "Gnoll Archer B",
+              "description": "",
+              "hp_max": 400,
+              "hp_current": 400,
+              "defense": 0,
+              "resistance": 0,
+              "ability_scores": {
+                "physique": 0,
+                "finesse": 0,
+                "reason": 0,
+                "savvy": 0
+              },
+              "movement_speed": 90,
+              "attack_bonus": 0,
+              "damage_dice": "2d300",
+              "morale": 7,
+              "saving_throw": 15,
+              "hit_dice": 2,
+              "weapon_range": 2,
+              "status": "active",
+              "notes": "",
+              "active_conditions": [],
+              "hidden": false
+            }
+          ],
+          "possible_rooms": [],
+          "movement_logic": "stationary",
+          "current_room_id": null,
+          "patrol_route": []
+        },
+        "weight": 1
+      },
+      {
+        "npc_group": {
+          "group_id": "6db12c90-2363-4d3e-a420-23e4cbae498a",
+          "name": "Worker Ants",
+          "npcs": [
+            {
+              "npc_id": "d88ec237-31fa-4b87-bbc7-5735e9315f70",
+              "name": "Worker Ant A",
+              "description": "",
+              "hp_max": 200,
+              "hp_current": 200,
+              "defense": 0,
+              "resistance": 0,
+              "ability_scores": {
+                "physique": 0,
+                "finesse": 0,
+                "reason": 0,
+                "savvy": 0
+              },
+              "movement_speed": 90,
+              "attack_bonus": 0,
+              "damage_dice": "4d100",
+              "morale": 7,
+              "saving_throw": 15,
+              "hit_dice": 2,
+              "weapon_range": 0,
+              "status": "active",
+              "notes": "",
+              "active_conditions": [],
+              "hidden": false
+            },
+            {
+              "npc_id": "7b8b56ef-8dfc-4fb0-86c8-f53e67255c28",
+              "name": "Worker Ant B",
+              "description": "",
+              "hp_max": 200,
+              "hp_current": 200,
+              "defense": 0,
+              "resistance": 0,
+              "ability_scores": {
+                "physique": 0,
+                "finesse": 0,
+                "reason": 0,
+                "savvy": 0
+              },
+              "movement_speed": 90,
+              "attack_bonus": 0,
+              "damage_dice": "4d100",
+              "morale": 7,
+              "saving_throw": 15,
+              "hit_dice": 2,
+              "weapon_range": 0,
+              "status": "active",
+              "notes": "",
+              "active_conditions": [],
+              "hidden": false
+            }
+          ],
+          "possible_rooms": [],
+          "movement_logic": "stationary",
+          "current_room_id": null,
+          "patrol_route": []
+        },
+        "weight": 1
+      },
+      {
+        "npc_group": {
+          "group_id": "fc477a50-4f36-49fc-988c-9111a8ffce24",
+          "name": "Gnoll Battlegroup",
+          "npcs": [
+            {
+              "npc_id": "cde06226-10b8-4e3e-8c32-dea229a4eabd",
+              "name": "Gnoll A",
+              "description": "",
+              "hp_max": 400,
+              "hp_current": 400,
+              "defense": 0,
+              "resistance": 0,
+              "ability_scores": {
+                "physique": 0,
+                "finesse": 0,
+                "reason": 0,
+                "savvy": 0
+              },
+              "movement_speed": 90,
+              "attack_bonus": 0,
+              "damage_dice": "4d100",
+              "morale": 7,
+              "saving_throw": 15,
+              "hit_dice": 2,
+              "weapon_range": 0,
+              "status": "active",
+              "notes": "",
+              "active_conditions": [],
+              "hidden": false
+            },
+            {
+              "npc_id": "6f6c42a5-23ab-4c49-a8b7-4503cbcbe8ca",
+              "name": "Gnoll B",
+              "description": "",
+              "hp_max": 400,
+              "hp_current": 400,
+              "defense": 0,
+              "resistance": 0,
+              "ability_scores": {
+                "physique": 0,
+                "finesse": 0,
+                "reason": 0,
+                "savvy": 0
+              },
+              "movement_speed": 90,
+              "attack_bonus": 0,
+              "damage_dice": "4d100",
+              "morale": 7,
+              "saving_throw": 15,
+              "hit_dice": 2,
+              "weapon_range": 0,
+              "status": "active",
+              "notes": "",
+              "active_conditions": [],
+              "hidden": false
+            },
+            {
+              "npc_id": "95a65d64-86a4-4937-996c-36c819f95f3a",
+              "name": "Gnoll C",
+              "description": "",
+              "hp_max": 400,
+              "hp_current": 400,
+              "defense": 0,
+              "resistance": 0,
+              "ability_scores": {
+                "physique": 0,
+                "finesse": 0,
+                "reason": 0,
+                "savvy": 0
+              },
+              "movement_speed": 90,
+              "attack_bonus": 0,
+              "damage_dice": "4d100",
+              "morale": 7,
+              "saving_throw": 15,
+              "hit_dice": 2,
+              "weapon_range": 0,
+              "status": "active",
+              "notes": "",
+              "active_conditions": [],
+              "hidden": false
+            }
+          ],
+          "possible_rooms": [],
+          "movement_logic": "stationary",
+          "current_room_id": null,
+          "patrol_route": []
+        },
+        "weight": 1
+      }
+    ]
   },
   "npc_roster": {
     "groups": {
@@ -1121,7 +1369,7 @@
       },
       "6a07285b-843d-4a76-b724-b2c9ccd80b66": {
         "group_id": "6a07285b-843d-4a76-b724-b2c9ccd80b66",
-        "name": null,
+        "name": "Gnoll Battlegroup",
         "npcs": [
           {
             "npc_id": "cf0977da-d858-4d35-99f8-81cfabf93443",

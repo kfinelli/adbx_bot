@@ -3,9 +3,9 @@ NPC management for the dungeon crawler engine.
 """
 
 import copy
-from uuid import uuid4
+from uuid import UUID, uuid4
 
-from models import NPC, GameState, NPCGroup, NPCMovementLogic
+from models import NPC, EncounterEntry, GameState, NPCGroup, NPCMovementLogic
 from validation import validate_hp_value, validate_non_empty_string
 
 from .helpers import _err, _find_npc_in_roster, _find_npcgroup_with_npc, _now, _ok
@@ -249,3 +249,147 @@ class NPCManager:
         new_npc.name = raw_name[:50]
 
         return self.add_npc_to_room(state, new_npc, room_id=target_room)
+
+    def add_npc_to_group(self, state: GameState, group_id: UUID, npc: NPC):
+        """Add an NPC directly to a specific existing group."""
+        group = state.npc_roster.get_group(group_id)
+        if group is None:
+            return _err(state, fmt_string("npc.errors.group_not_found", group_id=group_id))
+        group.npcs.append(npc)
+        state.updated_at = _now()
+        return _ok(state, fmt_string("npc.appears", name=npc.name))
+
+    def update_group(
+        self,
+        state: GameState,
+        group_id: UUID,
+        name: str | None,
+        movement_logic: NPCMovementLogic,
+        current_room_id: UUID | None,
+        possible_rooms: list[UUID],
+    ):
+        """Update group-level properties."""
+        group = state.npc_roster.get_group(group_id)
+        if group is None:
+            return _err(state, fmt_string("npc.errors.group_not_found", group_id=group_id))
+        group.name = name or None
+        group.movement_logic = movement_logic
+        group.current_room_id = current_room_id
+        group.possible_rooms = possible_rooms
+        state.updated_at = _now()
+        return _ok(state, "Group updated.")
+
+    def add_encounter_entry(self, state: GameState, npc_group_template: NPCGroup, weight: int):
+        """Append a new entry to the dungeon's random encounter roster."""
+        if state.dungeon is None:
+            return _err(state, "No dungeon loaded.")
+        weight = max(1, int(weight))
+        entry = EncounterEntry(npc_group=npc_group_template, weight=weight)
+        state.dungeon.random_encounter_roster.append(entry)
+        state.updated_at = _now()
+        group_name = npc_group_template.name or "Unnamed group"
+        return _ok(state, f"Added '{group_name}' to encounter roster.")
+
+    def remove_encounter_entry(self, state: GameState, group_id: UUID):
+        """Remove the encounter entry whose template group_id matches."""
+        if state.dungeon is None:
+            return _err(state, "No dungeon loaded.")
+        roster = state.dungeon.random_encounter_roster
+        for i, entry in enumerate(roster):
+            if entry.npc_group.group_id == group_id:
+                del roster[i]
+                state.updated_at = _now()
+                return _ok(state, "Encounter entry removed.")
+        return _err(state, "Encounter entry not found.")
+
+    def update_encounter_entry_weight(self, state: GameState, group_id: UUID, weight: int):
+        """Update the weight of an encounter entry identified by its template group_id."""
+        if state.dungeon is None:
+            return _err(state, "No dungeon loaded.")
+        for entry in state.dungeon.random_encounter_roster:
+            if entry.npc_group.group_id == group_id:
+                entry.weight = max(1, int(weight))
+                state.updated_at = _now()
+                return _ok(state, "Encounter weight updated.")
+        return _err(state, "Encounter entry not found.")
+
+    def promote_group_to_encounter(self, state: GameState, group_id: UUID, weight: int):
+        """Deep-copy a live group and add it as an encounter roster template."""
+        group = state.npc_roster.get_group(group_id)
+        if group is None:
+            return _err(state, fmt_string("npc.errors.group_not_found", group_id=group_id))
+        template = copy.deepcopy(group)
+        template.group_id = uuid4()
+        for npc in template.npcs:
+            npc.npc_id = uuid4()
+            npc.active_conditions = []
+        template.current_room_id = None
+        return self.add_encounter_entry(state, template, weight)
+
+    def update_encounter_npc(
+        self,
+        state: GameState,
+        encounter_group_id: UUID,
+        npc_id: UUID,
+        name: str,
+        description: str,
+        hp_max: int,
+        defense: int,
+        notes: str = "",
+        hit_dice: int = 1,
+        resistance: int = 0,
+        weapon_range: int = 0,
+        damage_dice: str = "1d6",
+    ):
+        """Update an NPC inside an encounter roster template group."""
+        if state.dungeon is None:
+            return _err(state, "No dungeon loaded.")
+        for entry in state.dungeon.random_encounter_roster:
+            if entry.npc_group.group_id == encounter_group_id:
+                for npc in entry.npc_group.npcs:
+                    if npc.npc_id == npc_id:
+                        name_result = validate_non_empty_string(name, "NPC name", max_length=50)
+                        if not name_result:
+                            return _err(state, name_result.error)
+                        hp_result = validate_hp_value(hp_max)
+                        if not hp_result:
+                            return _err(state, hp_result.error)
+                        npc.name = name_result.value
+                        npc.description = description[:500]
+                        npc.hp_max = hp_result.value
+                        npc.hp_current = hp_result.value
+                        npc.defense = max(0, int(defense))
+                        npc.notes = notes[:500]
+                        npc.hit_dice = max(1, int(hit_dice))
+                        npc.resistance = max(0, int(resistance))
+                        npc.weapon_range = max(0, int(weapon_range))
+                        if damage_dice and damage_dice.strip():
+                            npc.damage_dice = damage_dice.strip()
+                        state.updated_at = _now()
+                        return _ok(state, f"{npc.name} updated.")
+                return _err(state, "NPC not found in encounter group.")
+        return _err(state, "Encounter entry not found.")
+
+    def remove_encounter_npc(self, state: GameState, encounter_group_id: UUID, npc_id: UUID):
+        """Remove an NPC from an encounter roster template group."""
+        if state.dungeon is None:
+            return _err(state, "No dungeon loaded.")
+        for entry in state.dungeon.random_encounter_roster:
+            if entry.npc_group.group_id == encounter_group_id:
+                success = entry.npc_group.remove_npc(npc_id)
+                if not success:
+                    return _err(state, "NPC not found in encounter group.")
+                state.updated_at = _now()
+                return _ok(state, "NPC removed from encounter template.")
+        return _err(state, "Encounter entry not found.")
+
+    def add_npc_to_encounter_group(self, state: GameState, encounter_group_id: UUID, npc: NPC):
+        """Add an NPC to an encounter roster template group."""
+        if state.dungeon is None:
+            return _err(state, "No dungeon loaded.")
+        for entry in state.dungeon.random_encounter_roster:
+            if entry.npc_group.group_id == encounter_group_id:
+                entry.npc_group.npcs.append(npc)
+                state.updated_at = _now()
+                return _ok(state, fmt_string("npc.appears", name=npc.name))
+        return _err(state, "Encounter entry not found.")
