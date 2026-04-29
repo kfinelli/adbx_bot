@@ -383,7 +383,8 @@ def turn_panel(state: GameState, edit_id: str = "") -> str:
             if not char:
                 continue
             sub = state.latest_submission(cid)
-            sub_text = f'<em>"{sub.action_text}"</em>' if sub else '<span class="muted">—</span>'
+            active_subs = [s for s in turn.submissions if s.character_id == cid and s.is_latest]
+            sub_text = f'<em>"{"; ".join(s.action_text for s in active_subs)}"</em>' if active_subs else '<span class="muted">—</span>'
             unsubmit_btn = ""
             if sub and turn.status == TurnStatus.OPEN:
                 cid_str = str(cid)

@@ -41,7 +41,7 @@
       "b20a22a5-7ce4-4a29-8780-581e520036c1": {
         "room_id": "b20a22a5-7ce4-4a29-8780-581e520036c1",
         "name": "The Gateway of Berghof",
-        "description": "This is a large and impressive room. The walls and ceiling are of a deep red, lustrous stone, flecked with glittering white inclusions. The floor is of a smooth, pale grey stone and has a large coat of arms inlaid in its centre.\nIn an alcove in each corner of the room stands a large stone chair. Three of the chairs are occupied by strange, silent, unmoving figures which appear to be no more than suits of human-sized clothing, arranged as if worn by invisible, seated men. The chair in the south-eastern alcove is empty.",
+        "description": "This is a large and impressive room. The walls and ceiling are of a deep red, lustrous stone, flecked with glittering white inclusions. The floor is of a smooth, pale grey stone and has a large coat of arms inlaid in its center. In an alcove in each corner of the room stands a large stone chair. Three of the chairs are occupied by strange, silent, unmoving figures which appear to be no more than suits of human-sized clothing, arranged as if worn by invisible, seated men. The chair in the south-eastern alcove is empty.",
         "notes": "",
         "features": [
           {
@@ -134,7 +134,7 @@
       "e2e53dbb-80b8-435f-a255-6789265bc059": {
         "room_id": "e2e53dbb-80b8-435f-a255-6789265bc059",
         "name": "Guardian's Hall",
-        "description": "This long hall appears to beempty but you cannot see the far end since it is obscured by an uneven screen of a paper-like material. The floor consists of green, red\nand white hexagonal tiles, each about 6 inches across, laid out in a regular pattern. The walls are pale grey and plain, as is the ceiling.",
+        "description": "This long hall appears to be empty but you cannot see the far end since it is obscured by an uneven screen of a paper-like material. The floor consists of green, red and white hexagonal tiles, each about 6 inches across, laid out in a regular pattern. The walls are pale grey and plain, as is the ceiling.",
         "notes": "",
         "features": [],
         "exits": [
@@ -169,7 +169,7 @@
       "caba1f5f-8876-446c-80c0-cfba1db259a2": {
         "room_id": "caba1f5f-8876-446c-80c0-cfba1db259a2",
         "name": "Guardian's Hall (b)",
-        "description": "Beyond the screen you find another section of the room but the far end is still obscured since there is a second screen. This is similar to the first except that\nthere is a small hole in it near the floor.\nThere are five giant ants working here",
+        "description": "Beyond the screen you find another section of the room but the far end is still obscured since there is a second screen. This is similar to the first except that there is a small hole in it near the floor. There are five giant ants working here",
         "notes": "",
         "features": [
           {
@@ -337,7 +337,7 @@
       "8723bd17-4b1c-4b5d-9a99-bac407ca5d24": {
         "room_id": "8723bd17-4b1c-4b5d-9a99-bac407ca5d24",
         "name": "Release Chamber",
-        "description": "This room is circular and seems to be unoccupied. With the exception of a circular area in the center of the floor, the walls, floor and ceiling are of a smooth\npale grey stone. The circular area contains a stark spiral pattern in black and white",
+        "description": "This room is circular and seems to be unoccupied. With the exception of a circular area in the center of the floor, the walls, floor and ceiling are of a smooth pale grey stone. The circular area contains a stark spiral pattern in black and white",
         "notes": "Room 9",
         "features": [],
         "exits": [

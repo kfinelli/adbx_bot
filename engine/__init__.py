@@ -771,8 +771,11 @@ def render_status(state: GameState) -> str:
             elif char.status_notes:
                 status_tag = f", {char.status_notes}"
 
-            submission = state.latest_submission(cid)
-            sub_text = f" (\"{submission.action_text}\")" if submission else ""
+            active_subs = [
+                s for s in (state.current_turn.submissions if state.current_turn else [])
+                if s.character_id == cid and s.is_latest
+            ]
+            sub_text = f" (\"{'; '.join(s.action_text for s in active_subs)}\")" if active_subs else ""
 
             cls_name = char.character_class.value
             lines.append(
