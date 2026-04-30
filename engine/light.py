@@ -24,7 +24,11 @@ def _tick_light(state: GameState) -> None:
                 (i for i in char.inventory if i.item_id == item_id and i.equipped),
                 None,
             )
-            if inv_item is None or inv_item.charges is None or inv_item.charges <= 0:
+            if inv_item is None or inv_item.charges is None:
+                continue
+            if inv_item.charges <= 0:
+                # Dark lantern with fuel now available (e.g. equipped before oil was bought).
+                _handle_light_burnout(state, char, inv_item, defn)
                 continue
             inv_item.charges -= 1
             if inv_item.charges <= 0:
