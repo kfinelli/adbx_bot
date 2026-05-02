@@ -9,6 +9,7 @@ a `name` attribute matching what the server expects.
 from __future__ import annotations
 
 import html as _html
+from uuid import UUID as _UUID
 
 from engine.azure_constants import XP_THRESHOLDS, RechargePeriod
 from engine.character import CharacterManager
@@ -19,6 +20,7 @@ from models import (
     CharacterStatus,
     DoorState,
     GameState,
+    NPCMovementLogic,
     RangeBand,
     SessionMode,
     TurnStatus,
@@ -194,6 +196,21 @@ def page(title: str, body: str) -> str:
 </html>"""
 
 
+def _tab_bar(channel_id: str, active_tab: str) -> str:
+    """Dashboard / NPC Roster tab bar rendered at the top of each session view."""
+    tabs = [
+        ("dashboard", "Dashboard", f"/session/{channel_id}"),
+        ("npcs", "NPC Roster", f"/session/{channel_id}/npcs"),
+    ]
+    items = ""
+    for key, label, href in tabs:
+        if key == active_tab:
+            items += f'<a href="{href}" style="background:#0f3460;color:#fff;padding:0.4rem 1.1rem;border-radius:4px 4px 0 0;text-decoration:none;border:1px solid #1a4a8a;border-bottom:none">{label}</a>'
+        else:
+            items += f'<a href="{href}" style="padding:0.4rem 1.1rem;border-radius:4px 4px 0 0;text-decoration:none;color:#aaa">{label}</a>'
+    return f'<div style="display:flex;gap:2px;border-bottom:1px solid #0f3460;margin-bottom:1rem">{items}</div>'
+
+
 def _sidebar(channel_id: str | None, sessions: list[tuple[str, str]]) -> str:
     links = ""
     for cid, name in sessions:
@@ -283,6 +300,7 @@ def dashboard_fragment(
 
     return f"""
 <div id="dashboard">
+  {_tab_bar(channel_id, "dashboard")}
   {flash_html}{error_html}
   <div class="grid-2">
     <div>
@@ -365,7 +383,8 @@ def turn_panel(state: GameState, edit_id: str = "") -> str:
             if not char:
                 continue
             sub = state.latest_submission(cid)
-            sub_text = f'<em>"{sub.action_text}"</em>' if sub else '<span class="muted">—</span>'
+            active_subs = [s for s in turn.submissions if s.character_id == cid and s.is_latest]
+            sub_text = f'<em>"{"; ".join(s.action_text for s in active_subs)}"</em>' if active_subs else '<span class="muted">—</span>'
             unsubmit_btn = ""
             if sub and turn.status == TurnStatus.OPEN:
                 cid_str = str(cid)
@@ -1353,39 +1372,419 @@ def npc_panel(
   </td>
 </tr>"""
 
-    add_npc_html = f"""
-<hr class="divider">
-<div class="section-header"><h3>Add NPC</h3></div>
-<form hx-post="/session/{channel_id}/addnpc"
-      hx-target="#dashboard" hx-swap="outerHTML">
-  <input type="hidden" name="view_room_id" value="{view_room_id}">
-  <div class="row">
-    <div><label>Name</label><input type="text" name="name" placeholder="Goblin A"></div>
-    <div><label>HP</label><input type="number" name="hp" value="4" min="1"></div>
-    <div><label>DEF</label><input type="number" name="defense" value="0" min="0"></div>
-    <div><label>RES</label><input type="number" name="resistance" value="0" min="0" style="width:55px"></div>
-  </div>
-  <div class="row">
-    <div><label>Damage</label><input type="text" name="damage_dice" value="1d6" style="width:70px"></div>
-    <div><label>HD</label><input type="number" name="hit_dice" value="1" min="1" style="width:55px"></div>
-    <div><label>Range</label><input type="number" name="weapon_range" value="0" min="0" style="width:55px"></div>
-    <div><label>Description</label><input type="text" name="description" placeholder="Brief description"></div>
-  </div>
-  <label>DM Notes</label>
-  <input type="text" name="notes" placeholder="DM-facing notes">
-  <div class="row" style="margin-top:0.4rem">
-    <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer">
-      <input type="checkbox" name="hidden" value="true"> Start hidden
-    </label>
-  </div>
-  <button type="submit">Add NPC</button>
-</form>"""
+    roster_link = f'<a href="/session/{channel_id}/npcs" style="font-size:0.82rem;color:#888">Manage full NPC roster &rarr;</a>'
 
     return f"""
 <div class="card">
-  <div class="section-header"><h3>NPCs</h3></div>
+  <div class="section-header">
+    <h3>NPCs in Room</h3>
+    {roster_link}
+  </div>
   {'<table><tr><th>NPC</th><th>HP</th><th>Controls</th></tr>' + rows + '</table>' if rows else '<p class="muted">No NPCs in this room.</p>'}
-  {add_npc_html}
+</div>"""
+
+
+# ---------------------------------------------------------------------------
+# NPC Roster page
+# ---------------------------------------------------------------------------
+
+def npc_roster_page(
+    state: GameState,
+    sessions: list[tuple[str, str]],
+    flash: str = "",
+    error: str = "",
+    edit_id: str = "",
+) -> str:
+    channel_id = state.platform_channel_id
+    body = f"""
+<div class="layout">
+  {_sidebar(channel_id, sessions)}
+  <div class="main">
+    {npc_roster_fragment(state, flash, error, edit_id)}
+  </div>
+</div>"""
+    return page("NPC Roster — DM Panel", body)
+
+
+def npc_roster_fragment(
+    state: GameState,
+    flash: str = "",
+    error: str = "",
+    edit_id: str = "",
+) -> str:
+    channel_id = state.platform_channel_id
+    flash_html = f'<div class="flash">{flash}</div>' if flash else ""
+    error_html = f'<div class="error">{error}</div>' if error else ""
+    return f"""
+<div id="npc-roster">
+  {_tab_bar(channel_id, "npcs")}
+  {flash_html}{error_html}
+  {_npc_groups_section(state, channel_id, edit_id)}
+  {_encounter_settings_section(state, channel_id)}
+  {_encounter_roster_section(state, channel_id, edit_id)}
+</div>"""
+
+
+def _npc_groups_section(state: GameState, channel_id: str, edit_id: str) -> str:
+    groups = list(state.npc_roster.groups.values())
+
+    room_name_map: dict[str, str] = {}
+    if state.dungeon:
+        for rid, room in state.dungeon.rooms.items():
+            room_name_map[str(rid)] = room.name
+
+    cards = ""
+    for group in groups:
+        gid = str(group.group_id)
+        room_name = room_name_map.get(str(group.current_room_id), "—") if group.current_room_id else "—"
+        logic_label = group.movement_logic.value.capitalize() if group.movement_logic else "Stationary"
+        group_display_name = _html.escape(group.name or "(unnamed group)")
+        npc_count = len(group.npcs)
+
+        if edit_id == f"group:{gid}":
+            _e_gname = _html.escape(group.name or "", quote=True)
+            logic_options = "".join(
+                f'<option value="{m.value}" {"selected" if group.movement_logic == m else ""}>{m.value.capitalize()}</option>'
+                for m in NPCMovementLogic
+            )
+            room_options = '<option value="">— None —</option>' + "".join(
+                f'<option value="{rid}" {"selected" if str(group.current_room_id) == rid else ""}>{_html.escape(rname)}</option>'
+                for rid, rname in sorted(room_name_map.items(), key=lambda x: x[1])
+            )
+            possible_checkboxes = "".join(
+                f'<label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;margin-top:2px"><input type="checkbox" name="possible_rooms" value="{rid}" {"checked" if _UUID(rid) in group.possible_rooms else ""}> {_html.escape(rname)}</label>'
+                for rid, rname in sorted(room_name_map.items(), key=lambda x: x[1])
+            )
+            group_header = f"""
+<form hx-post="/session/{channel_id}/group/{gid}/update"
+      hx-target="#npc-roster" hx-swap="outerHTML">
+  <div class="row">
+    <div><label>Group Name</label><input type="text" name="name" value="{_e_gname}" placeholder="(optional)"></div>
+    <div style="flex:0;min-width:130px"><label>Movement</label>
+    <select name="movement_logic">{logic_options}</select></div>
+    <div style="flex:0;min-width:160px"><label>Current Room</label>
+    <select name="current_room_id">{room_options}</select></div>
+  </div>
+  <details style="margin-top:0.5rem"><summary style="cursor:pointer;font-size:0.82rem;color:#aaa">Possible rooms</summary>
+  <div style="margin-top:0.3rem">{possible_checkboxes or "<span class='muted'>No rooms in dungeon.</span>"}</div>
+  </details>
+  <div class="row" style="margin-top:0.5rem">
+    <button type="submit">Save Group</button>
+    <a href="/session/{channel_id}/npcs" style="align-self:center;font-size:0.85rem;color:#888">cancel</a>
+  </div>
+</form>"""
+        else:
+            group_header = f"""
+<div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+  <strong>{group_display_name}</strong>
+  <span class="muted" style="font-size:0.8rem">{logic_label} &bull; {room_name} &bull; {npc_count} NPC(s)</span>
+  <a href="/session/{channel_id}/npcs?edit=group:{gid}" class="btn-sm">Edit Group</a>
+  <form style="display:inline" hx-post="/session/{channel_id}/group/{gid}/delete"
+        hx-target="#npc-roster" hx-swap="outerHTML"
+        hx-confirm="Delete group '{group.name or 'unnamed'}' and all its NPCs?">
+    <button class="btn-sm btn-danger" type="submit">Delete Group</button>
+  </form>
+</div>"""
+
+        npc_rows = ""
+        for npc in group.npcs:
+            nid = str(npc.npc_id)
+            _e_nname = _html.escape(npc.name)
+            _e_ndesc = _html.escape(npc.description or "")
+            if edit_id == f"npc:{nid}":
+                _eq_name = _html.escape(npc.name, quote=True)
+                _eq_desc = _html.escape(npc.description or "", quote=True)
+                _eq_notes = _html.escape(npc.notes or "", quote=True)
+                _eq_dmg = _html.escape(npc.damage_dice or "1d6", quote=True)
+                npc_rows += f"""
+<tr>
+  <td colspan="8">
+    <form hx-post="/session/{channel_id}/npc/{nid}/update"
+          hx-target="#npc-roster" hx-swap="outerHTML">
+      <input type="hidden" name="from_page" value="npcs">
+      <div class="row">
+        <div><label>Name</label><input type="text" name="name" value="{_eq_name}" required></div>
+        <div><label>HP Max</label><input type="number" name="hp_max" value="{npc.hp_max}" min="1" style="width:60px"></div>
+        <div><label>HP Now</label><input type="number" name="hp_current" value="{npc.hp_current}" min="0" style="width:60px"></div>
+        <div><label>DEF</label><input type="number" name="defense" value="{npc.defense}" min="0" style="width:55px"></div>
+        <div><label>RES</label><input type="number" name="resistance" value="{npc.resistance}" min="0" style="width:55px"></div>
+        <div><label>HD</label><input type="number" name="hit_dice" value="{npc.hit_dice}" min="1" style="width:55px"></div>
+        <div><label>Range</label><input type="number" name="weapon_range" value="{npc.weapon_range}" min="0" style="width:55px"></div>
+        <div><label>Damage</label><input type="text" name="damage_dice" value="{_eq_dmg}" style="width:70px"></div>
+      </div>
+      <div class="row">
+        <div><label>Description</label><input type="text" name="description" value="{_eq_desc}"></div>
+        <div><label>Notes</label><input type="text" name="notes" value="{_eq_notes}"></div>
+      </div>
+      <div class="row" style="margin-top:0.5rem">
+        <button type="submit">Save NPC</button>
+        <a href="/session/{channel_id}/npcs" style="align-self:center;font-size:0.85rem;color:#888">cancel</a>
+      </div>
+    </form>
+  </td>
+</tr>"""
+            else:
+                npc_rows += f"""
+<tr>
+  <td><strong>{_e_nname}</strong><br><span class="muted">{_e_ndesc}</span></td>
+  <td class="hp-bar">{npc.hp_current}/{npc.hp_max}</td>
+  <td>{npc.defense}</td>
+  <td>{npc.resistance}</td>
+  <td>{npc.damage_dice}</td>
+  <td>{npc.hit_dice}</td>
+  <td>{npc.weapon_range}</td>
+  <td style="white-space:nowrap">
+    <a href="/session/{channel_id}/npcs?edit=npc:{nid}" class="btn-sm">Edit</a>
+    <form style="display:inline" hx-post="/session/{channel_id}/npc/{nid}/copy"
+          hx-target="#npc-roster" hx-swap="outerHTML">
+      <input type="hidden" name="from_page" value="npcs">
+      <button class="btn-sm" type="submit">Copy</button>
+    </form>
+    <form style="display:inline" hx-post="/session/{channel_id}/npc/{nid}/delete"
+          hx-target="#npc-roster" hx-swap="outerHTML"
+          hx-confirm="Remove {_html.escape(npc.name, quote=True)}?">
+      <input type="hidden" name="from_page" value="npcs">
+      <button class="btn-sm btn-danger" type="submit">Del</button>
+    </form>
+  </td>
+</tr>"""
+
+        npc_table = f"""
+<table style="margin-top:0.5rem;font-size:0.85rem">
+  <tr><th>NPC</th><th>HP</th><th>DEF</th><th>RES</th><th>DMG</th><th>HD</th><th>Rng</th><th>Actions</th></tr>
+  {npc_rows}
+</table>""" if npc_rows else '<p class="muted" style="font-size:0.85rem;margin-top:0.5rem">No NPCs in this group.</p>'
+
+        add_npc_form = f"""
+<details style="margin-top:0.5rem"><summary style="cursor:pointer;font-size:0.82rem;color:#aaa">+ Add NPC to group</summary>
+<form hx-post="/session/{channel_id}/group/{gid}/addnpc"
+      hx-target="#npc-roster" hx-swap="outerHTML" style="margin-top:0.5rem">
+  <div class="row">
+    <div><label>Name</label><input type="text" name="name" placeholder="Goblin A" required></div>
+    <div><label>HP</label><input type="number" name="hp" value="4" min="1" style="width:65px"></div>
+    <div><label>DEF</label><input type="number" name="defense" value="0" min="0" style="width:55px"></div>
+    <div><label>RES</label><input type="number" name="resistance" value="0" min="0" style="width:55px"></div>
+    <div><label>Damage</label><input type="text" name="damage_dice" value="1d6" style="width:70px"></div>
+    <div><label>HD</label><input type="number" name="hit_dice" value="1" min="1" style="width:55px"></div>
+    <div><label>Range</label><input type="number" name="weapon_range" value="0" min="0" style="width:55px"></div>
+  </div>
+  <div><label>Description</label><input type="text" name="description" placeholder="Brief description"></div>
+  <button type="submit" style="margin-top:0.4rem">Add NPC</button>
+</form>
+</details>"""
+
+        promote_form = f"""
+<form style="display:inline" hx-post="/session/{channel_id}/group/{gid}/promote_encounter"
+      hx-target="#npc-roster" hx-swap="outerHTML" style="margin-top:0.3rem">
+  <input type="number" name="weight" value="1" min="1" style="width:50px;display:inline;padding:2px 4px">
+  <button class="btn-sm" type="submit" title="Add a copy of this group to the random encounter roster">+ Encounter Roster</button>
+</form>"""
+
+        cards += f"""
+<div class="card" style="margin-bottom:0.75rem">
+  {group_header}
+  {npc_table}
+  {add_npc_form}
+  <div style="margin-top:0.5rem;padding-top:0.5rem;border-top:1px solid #0f3460;font-size:0.82rem;color:#888">
+    Add to encounter roster with weight: {promote_form}
+  </div>
+</div>"""
+
+    new_group_form = f"""
+<div class="card">
+  <div class="section-header"><h3 style="font-size:0.95rem">Create New Group</h3></div>
+  <form hx-post="/session/{channel_id}/addgroup"
+        hx-target="#npc-roster" hx-swap="outerHTML">
+    <div class="row">
+      <div><label>Group Name (optional)</label><input type="text" name="group_name" placeholder="e.g. Goblin Patrol"></div>
+      <div style="flex:0;min-width:130px"><label>Movement</label>
+      <select name="movement_logic">
+        {''.join(f'<option value="{m.value}">{m.value.capitalize()}</option>' for m in NPCMovementLogic)}
+      </select></div>
+    </div>
+    <hr class="divider" style="margin:0.5rem 0">
+    <p style="font-size:0.82rem;color:#aaa;margin:0 0 0.4rem">First NPC (required):</p>
+    <div class="row">
+      <div><label>Name</label><input type="text" name="name" placeholder="Goblin A" required></div>
+      <div><label>HP</label><input type="number" name="hp" value="4" min="1" style="width:65px"></div>
+      <div><label>DEF</label><input type="number" name="defense" value="0" min="0" style="width:55px"></div>
+      <div><label>RES</label><input type="number" name="resistance" value="0" min="0" style="width:55px"></div>
+      <div><label>Damage</label><input type="text" name="damage_dice" value="1d6" style="width:70px"></div>
+      <div><label>HD</label><input type="number" name="hit_dice" value="1" min="1" style="width:55px"></div>
+      <div><label>Range</label><input type="number" name="weapon_range" value="0" min="0" style="width:55px"></div>
+    </div>
+    <div><label>Description</label><input type="text" name="description" placeholder="Brief description"></div>
+    <button type="submit" style="margin-top:0.5rem">Create Group</button>
+  </form>
+</div>"""
+
+    no_groups_html = '<div class="card"><p class="muted">No NPC groups in the dungeon yet.</p></div>' if not cards else ""
+    return f"""
+<h3 style="color:#c9a84c;margin-bottom:0.5rem">NPC Groups</h3>
+{no_groups_html}
+{cards}
+{new_group_form}"""
+
+
+def _encounter_settings_section(state: GameState, channel_id: str) -> str:
+    if not state.dungeon:
+        return ""
+    dungeon = state.dungeon
+    _e_roll = _html.escape(dungeon.random_encounter_roll or "1d6", quote=True)
+    return f"""
+<div class="card">
+  <div class="section-header"><h3>Random Encounter Settings</h3></div>
+  <form hx-post="/session/{channel_id}/dungeon/update"
+        hx-target="#npc-roster" hx-swap="outerHTML">
+    <input type="hidden" name="name" value="{_html.escape(dungeon.name, quote=True)}">
+    <input type="hidden" name="description" value="{_html.escape(dungeon.description or '', quote=True)}">
+    <input type="hidden" name="from_page" value="npcs">
+    <div class="row">
+      <div><label>Check every N turns</label>
+      <input type="number" name="random_encounter_interval" value="{dungeon.random_encounter_interval}" min="1" style="width:80px"></div>
+      <div><label>Roll expression</label>
+      <input type="text" name="random_encounter_roll" value="{_e_roll}" style="width:80px"></div>
+    </div>
+    <p class="muted" style="margin:0.3rem 0 0.5rem">Encounter fires when roll &le; 1 (modified by room hazard). Roll checked after every N turns.</p>
+    <button type="submit">Save Settings</button>
+  </form>
+</div>"""
+
+
+def _encounter_roster_section(state: GameState, channel_id: str, edit_id: str) -> str:
+    if not state.dungeon:
+        return ""
+    roster = state.dungeon.random_encounter_roster
+
+    rows = ""
+    for entry in roster:
+        eg = entry.npc_group
+        egid = str(eg.group_id)
+        group_display = _html.escape(eg.name or "(unnamed)")
+        npc_count = len(eg.npcs)
+
+        npc_detail_rows = ""
+        for npc in eg.npcs:
+            nid = str(npc.npc_id)
+            _e_nname = _html.escape(npc.name)
+            if edit_id == f"enc_npc:{nid}":
+                _eq_name = _html.escape(npc.name, quote=True)
+                _eq_desc = _html.escape(npc.description or "", quote=True)
+                _eq_dmg = _html.escape(npc.damage_dice or "1d6", quote=True)
+                npc_detail_rows += f"""
+<tr>
+  <td colspan="7">
+    <form hx-post="/session/{channel_id}/encounter_roster/{egid}/npc/{nid}/update"
+          hx-target="#npc-roster" hx-swap="outerHTML">
+      <div class="row">
+        <div><label>Name</label><input type="text" name="name" value="{_eq_name}" required></div>
+        <div><label>HP</label><input type="number" name="hp_max" value="{npc.hp_max}" min="1" style="width:60px"></div>
+        <div><label>DEF</label><input type="number" name="defense" value="{npc.defense}" min="0" style="width:55px"></div>
+        <div><label>RES</label><input type="number" name="resistance" value="{npc.resistance}" min="0" style="width:55px"></div>
+        <div><label>HD</label><input type="number" name="hit_dice" value="{npc.hit_dice}" min="1" style="width:55px"></div>
+        <div><label>Range</label><input type="number" name="weapon_range" value="{npc.weapon_range}" min="0" style="width:55px"></div>
+        <div><label>Damage</label><input type="text" name="damage_dice" value="{_eq_dmg}" style="width:70px"></div>
+      </div>
+      <div><label>Description</label><input type="text" name="description" value="{_eq_desc}"></div>
+      <div class="row" style="margin-top:0.4rem">
+        <button type="submit">Save</button>
+        <a href="/session/{channel_id}/npcs" style="align-self:center;font-size:0.85rem;color:#888">cancel</a>
+      </div>
+    </form>
+  </td>
+</tr>"""
+            else:
+                npc_detail_rows += f"""
+<tr>
+  <td><strong>{_e_nname}</strong></td>
+  <td>{npc.hp_max}</td>
+  <td>{npc.defense}</td>
+  <td>{npc.resistance}</td>
+  <td>{npc.hit_dice}</td>
+  <td>{npc.weapon_range}</td>
+  <td style="white-space:nowrap">
+    <a href="/session/{channel_id}/npcs?edit=enc_npc:{nid}" class="btn-sm">Edit</a>
+    <form style="display:inline" hx-post="/session/{channel_id}/encounter_roster/{egid}/npc/{nid}/delete"
+          hx-target="#npc-roster" hx-swap="outerHTML"
+          hx-confirm="Remove {_html.escape(npc.name, quote=True)} from template?">
+      <button class="btn-sm btn-danger" type="submit">Del</button>
+    </form>
+  </td>
+</tr>"""
+
+        npc_subtable = f"""
+<table style="font-size:0.82rem;margin-left:1rem;margin-top:0.3rem">
+  <tr><th>NPC</th><th>HP</th><th>DEF</th><th>RES</th><th>HD</th><th>Rng</th><th>Actions</th></tr>
+  {npc_detail_rows}
+</table>"""
+
+        add_to_entry_form = f"""
+<details style="margin-left:1rem;margin-top:0.3rem"><summary style="cursor:pointer;font-size:0.8rem;color:#aaa">+ Add NPC to template</summary>
+<form hx-post="/session/{channel_id}/encounter_roster/{egid}/addnpc"
+      hx-target="#npc-roster" hx-swap="outerHTML" style="margin-top:0.4rem">
+  <div class="row">
+    <div><label>Name</label><input type="text" name="name" placeholder="Goblin A" required></div>
+    <div><label>HP</label><input type="number" name="hp" value="4" min="1" style="width:65px"></div>
+    <div><label>DEF</label><input type="number" name="defense" value="0" min="0" style="width:55px"></div>
+    <div><label>Damage</label><input type="text" name="damage_dice" value="1d6" style="width:70px"></div>
+    <div><label>HD</label><input type="number" name="hit_dice" value="1" min="1" style="width:55px"></div>
+  </div>
+  <button type="submit" style="margin-top:0.3rem">Add NPC</button>
+</form></details>"""
+
+        rows += f"""
+<div style="border:1px solid #0f3460;border-radius:6px;padding:0.75rem;margin-bottom:0.5rem">
+  <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+    <strong>{group_display}</strong>
+    <span class="muted" style="font-size:0.8rem">{npc_count} NPC(s)</span>
+    <form style="display:inline;display:flex;gap:0.3rem;align-items:center"
+          hx-post="/session/{channel_id}/encounter_roster/{egid}/update_weight"
+          hx-target="#npc-roster" hx-swap="outerHTML">
+      <label style="margin:0;font-size:0.8rem;color:#aaa">Weight:</label>
+      <input type="number" name="weight" value="{entry.weight}" min="1" style="width:55px;display:inline;padding:2px 4px">
+      <button class="btn-sm" type="submit">Set</button>
+    </form>
+    <form style="display:inline" hx-post="/session/{channel_id}/encounter_roster/{egid}/delete"
+          hx-target="#npc-roster" hx-swap="outerHTML"
+          hx-confirm="Remove '{_html.escape(eg.name or 'unnamed', quote=True)}' from encounter roster?">
+      <button class="btn-sm btn-danger" type="submit">Remove</button>
+    </form>
+  </div>
+  {npc_subtable}
+  {add_to_entry_form}
+</div>"""
+
+    add_entry_form = f"""
+<hr class="divider">
+<div class="section-header"><h3 style="font-size:0.95rem">Add New Encounter Entry</h3></div>
+<form hx-post="/session/{channel_id}/encounter_roster/add"
+      hx-target="#npc-roster" hx-swap="outerHTML">
+  <div class="row">
+    <div><label>Group Name (optional)</label><input type="text" name="group_name" placeholder="e.g. Goblin Patrol"></div>
+    <div style="flex:0;min-width:80px"><label>Weight</label><input type="number" name="weight" value="1" min="1" style="width:65px"></div>
+  </div>
+  <p style="font-size:0.82rem;color:#aaa;margin:0.4rem 0">First template NPC:</p>
+  <div class="row">
+    <div><label>Name</label><input type="text" name="name" placeholder="Goblin A" required></div>
+    <div><label>HP</label><input type="number" name="hp" value="4" min="1" style="width:65px"></div>
+    <div><label>DEF</label><input type="number" name="defense" value="0" min="0" style="width:55px"></div>
+    <div><label>RES</label><input type="number" name="resistance" value="0" min="0" style="width:55px"></div>
+    <div><label>Damage</label><input type="text" name="damage_dice" value="1d6" style="width:70px"></div>
+    <div><label>HD</label><input type="number" name="hit_dice" value="1" min="1" style="width:55px"></div>
+    <div><label>Range</label><input type="number" name="weapon_range" value="0" min="0" style="width:55px"></div>
+  </div>
+  <div><label>Description</label><input type="text" name="description" placeholder="Brief description"></div>
+  <button type="submit" style="margin-top:0.5rem">Add to Encounter Roster</button>
+</form>"""
+
+    entry_count = len(roster)
+    return f"""
+<div class="card">
+  <div class="section-header"><h3>Random Encounter Roster</h3>
+    <span class="muted" style="font-size:0.85rem">{entry_count} entr{'y' if entry_count == 1 else 'ies'}</span>
+  </div>
+  {rows or '<p class="muted">No encounter entries yet.</p>'}
+  {add_entry_form}
 </div>"""
 
 

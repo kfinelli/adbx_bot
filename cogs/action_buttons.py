@@ -597,13 +597,19 @@ class CombatActionView(discord.ui.View):
         if state is None:
             return
 
-        # Check if this character has already submitted this round
-        if state.latest_submission(char.character_id) is not None:
-            await interaction.response.send_message(
-                get_string("errors.already_submitted"),
-                ephemeral=True,
-            )
-            return
+        # Block only if the existing submission actually consumes the act.
+        # consumes_act=False submissions (e.g. Set Protector) must not prevent
+        # the player from also choosing an act action.
+        latest = state.latest_submission(char.character_id)
+        if latest is not None:
+            action_id = (latest.combat_action or {}).get("action_id", "")
+            action_def = ACTION_REGISTRY.get(action_id) if action_id else None
+            if action_def is None or action_def.consumes_act:
+                await interaction.response.send_message(
+                    get_string("errors.already_submitted"),
+                    ephemeral=True,
+                )
+                return
 
         view = _build_class_action_view(
             char=char,

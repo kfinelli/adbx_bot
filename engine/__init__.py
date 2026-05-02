@@ -281,6 +281,68 @@ def copy_npc(state: GameState, npc_id, room_id=None):
     return nm.copy_npc(state, npc_id, room_id=room_id)
 
 
+def add_npc_to_group(state: GameState, group_id, npc):
+    """Add an NPC directly to a specific group."""
+    nm = NPCManager()
+    return nm.add_npc_to_group(state, group_id, npc)
+
+
+def update_group(state: GameState, group_id, name, movement_logic, current_room_id, possible_rooms):
+    """Update group-level properties."""
+    nm = NPCManager()
+    return nm.update_group(state, group_id, name, movement_logic, current_room_id, possible_rooms)
+
+
+def remove_npc_group_by_id(state: GameState, group_id):
+    """Remove an NPC group by its group_id."""
+    nm = NPCManager()
+    return nm.remove_npc_group(state, group_id)
+
+
+def add_encounter_entry(state: GameState, npc_group_template, weight: int):
+    """Add an encounter entry to the dungeon's random encounter roster."""
+    nm = NPCManager()
+    return nm.add_encounter_entry(state, npc_group_template, weight)
+
+
+def remove_encounter_entry(state: GameState, group_id):
+    """Remove an encounter entry by its template group_id."""
+    nm = NPCManager()
+    return nm.remove_encounter_entry(state, group_id)
+
+
+def update_encounter_entry_weight(state: GameState, group_id, weight: int):
+    """Update an encounter entry's weight."""
+    nm = NPCManager()
+    return nm.update_encounter_entry_weight(state, group_id, weight)
+
+
+def promote_group_to_encounter(state: GameState, group_id, weight: int):
+    """Promote a live NPC group to the random encounter roster."""
+    nm = NPCManager()
+    return nm.promote_group_to_encounter(state, group_id, weight)
+
+
+def update_encounter_npc(state: GameState, encounter_group_id, npc_id, name, description, hp_max,
+                         defense, notes="", hit_dice=1, resistance=0, weapon_range=0, damage_dice="1d6"):
+    """Update an NPC in an encounter template group."""
+    nm = NPCManager()
+    return nm.update_encounter_npc(state, encounter_group_id, npc_id, name, description, hp_max,
+                                   defense, notes, hit_dice, resistance, weapon_range, damage_dice)
+
+
+def remove_encounter_npc(state: GameState, encounter_group_id, npc_id):
+    """Remove an NPC from an encounter template group."""
+    nm = NPCManager()
+    return nm.remove_encounter_npc(state, encounter_group_id, npc_id)
+
+
+def add_npc_to_encounter_group(state: GameState, encounter_group_id, npc):
+    """Add an NPC to an encounter template group."""
+    nm = NPCManager()
+    return nm.add_npc_to_encounter_group(state, encounter_group_id, npc)
+
+
 def open_turn(state: GameState, due_at=None):
     """Open a new turn."""
     tm = TurnManager()
@@ -709,8 +771,11 @@ def render_status(state: GameState) -> str:
             elif char.status_notes:
                 status_tag = f", {char.status_notes}"
 
-            submission = state.latest_submission(cid)
-            sub_text = f" (\"{submission.action_text}\")" if submission else ""
+            active_subs = [
+                s for s in (state.current_turn.submissions if state.current_turn else [])
+                if s.character_id == cid and s.is_latest
+            ]
+            sub_text = f" (\"{'; '.join(s.action_text for s in active_subs)}\")" if active_subs else ""
 
             cls_name = char.character_class.value
             lines.append(
@@ -863,6 +928,16 @@ __all__ = [
     "import_dungeon",
     "update_dungeon",
     "copy_npc",
+    "add_npc_to_group",
+    "update_group",
+    "remove_npc_group_by_id",
+    "add_encounter_entry",
+    "remove_encounter_entry",
+    "update_encounter_entry_weight",
+    "promote_group_to_encounter",
+    "update_encounter_npc",
+    "remove_encounter_npc",
+    "add_npc_to_encounter_group",
     "abscond",
     "render_status_header",
     "render_status",
