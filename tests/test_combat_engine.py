@@ -299,7 +299,9 @@ class TestAutoResolveRound:
         auto_resolve_round(state)
         npc = state.npcs_in_current_room[0]
         assert npc.status == "dead"
-        assert npc_id not in state.battlefield.combatants
+        # Victory auto-exits combat when the last NPC falls
+        assert state.battlefield is None
+        assert state.mode == SessionMode.EXPLORATION
 
     def test_move_action_changes_range_band(self):
         state, char_id, npc_id = self._setup_combat()
@@ -333,7 +335,7 @@ class TestAutoResolveRound:
         assert len(result.message) > 0
 
     def test_round_log_stored_on_battlefield(self):
-        state, char_id, npc_id = self._setup_combat(npc_def=0)
+        state, char_id, npc_id = self._setup_combat(npc_hp=100, npc_def=0)
         state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
         state.battlefield.combatants[npc_id].range_band  = RangeBand.ENGAGE
 
@@ -410,11 +412,14 @@ class TestAutoResolveRound:
         result = auto_resolve_round(state)
         assert result.ok
 
-        log_text = "\n".join(state.battlefield.round_log)
+        # After victory, battlefield is cleared; check the full narrative instead
+        log_text = result.message
         # NPC should be defeated exactly once
         assert log_text.count("has been defeated") == 1
-        # XP awarded exactly once
-        assert log_text.count("XP") == 1
+        # XP awarded exactly once (not doubled), verified via character state
+        alice = state.characters[alice_id]
+        bob   = state.characters[bob_id]
+        assert alice.experience + bob.experience == 100  # hit_dice=1 → 100 XP total
         # Bob's wasted attack logged
         assert "already defeated" in log_text
 
@@ -833,6 +838,9 @@ class TestCombatSerialization:
 
     def test_battlefield_survives_round_trip(self):
         state = _make_state_with_npc()
+        # Use high HP so the NPC won't die (victory would clear the battlefield)
+        state.npcs_in_current_room[0].hp_current = 100
+        state.npcs_in_current_room[0].hp_max = 100
         enter_rounds(state)
         open_turn(state)
 
@@ -2801,3 +2809,185 @@ class TestHeavyTag:
         char.ability_scores.finesse = POWER_LEVEL * 5
         char.equipped_slots[ItemSlot.MAIN_HAND.value] = _find_heavy_weapon_id()
         assert _effective_finesse(state, char.character_id) == POWER_LEVEL
+
+
+# ---------------------------------------------------------------------------
+# Post-battle victory screen (Issue #39)
+# ---------------------------------------------------------------------------
+
+class TestVictoryScreen:
+    """XP is deferred until the last NPC dies; victory screen auto-exits combat."""
+
+    def _make_combat_state_one_npc(self, npc_hp=1, npc_def=0, npc_hit_dice=1):
+        from engine import add_npc, register_room
+        from models import Room
+        state = GameState(platform_channel_id="ch", dm_user_id="dm")
+        state.party = Party(name="P")
+        create_character(state, "Hero", CharacterClass.KNIGHT, "Pack A", owner_id="u1")
+        start_session(state)
+        room = Room(name="Hall", description="Stone hall.")
+        register_room(state, room)
+        state.current_room_id = room.room_id
+        char = list(state.characters.values())[0]
+        char.hp_current = char.hp_max = 100
+        npc = NPC(name="Goblin", hp_current=npc_hp, hp_max=npc_hp,
+                  defense=npc_def, damage_dice="1d6", hit_dice=npc_hit_dice)
+        add_npc(state, npc)
+        enter_rounds(state)
+        open_turn(state)
+        char_id = list(state.characters.keys())[0]
+        return state, char_id, npc.npc_id
+
+    def _make_combat_state_two_npcs(self):
+        """One character, Kobold (1 HP, hit_dice=1) + Orc (100 HP, hit_dice=2)."""
+        from engine import add_npc, register_room
+        from models import Room
+        state = GameState(platform_channel_id="ch", dm_user_id="dm")
+        state.party = Party(name="P")
+        create_character(state, "Hero", CharacterClass.KNIGHT, "Pack A", owner_id="u1")
+        start_session(state)
+        room = Room(name="Hall", description="Stone hall.")
+        register_room(state, room)
+        state.current_room_id = room.room_id
+        char = list(state.characters.values())[0]
+        char.hp_current = char.hp_max = 100
+        kobold = NPC(name="Kobold", hp_current=1, hp_max=1, defense=0, damage_dice="1d4", hit_dice=1)
+        orc    = NPC(name="Orc",    hp_current=100, hp_max=100, defense=0, damage_dice="1d4", hit_dice=2)
+        add_npc(state, kobold)
+        add_npc(state, orc)
+        enter_rounds(state)
+        open_turn(state)
+        char_id = list(state.characters.keys())[0]
+        return state, char_id, kobold.npc_id, orc.npc_id
+
+    def _submit_attack(self, state, char_id, target_id):
+        from models import PlayerTurnSubmission
+        state.battlefield.combatants[char_id].range_band   = RangeBand.ENGAGE
+        state.battlefield.combatants[target_id].range_band = RangeBand.ENGAGE
+        action = CombatAction(action_id="attack", target_id=target_id)
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id, action_text="Attack",
+            is_latest=True, combat_action=action.to_dict(),
+        )]
+
+    def test_xp_not_distributed_mid_combat(self):
+        """Killing one NPC while another survives defers XP and stays in ROUNDS."""
+        state, char_id, kobold_id, orc_id = self._make_combat_state_two_npcs()
+        state.battlefield.combatants[char_id].initiative  = 100
+        self._submit_attack(state, char_id, kobold_id)
+
+        auto_resolve_round(state)
+
+        char = state.characters[char_id]
+        assert char.experience == 0
+        assert state.mode == SessionMode.ROUNDS
+        assert state.battlefield is not None
+        assert len(state.battlefield.defeated_npc_log) == 1
+        assert state.battlefield.defeated_npc_log[0] == ("Kobold", 100)
+
+    def test_xp_distributed_on_last_npc_death(self):
+        """When the last NPC dies, XP is awarded and combat exits to EXPLORATION."""
+        state, char_id, npc_id = self._make_combat_state_one_npc(npc_hp=1, npc_hit_dice=2)
+        self._submit_attack(state, char_id, npc_id)
+
+        auto_resolve_round(state)
+
+        assert state.mode == SessionMode.EXPLORATION
+        assert state.battlefield is None
+        char = state.characters[char_id]
+        assert char.experience == 200  # hit_dice=2 → 200 XP
+
+    def test_victory_narrative_contains_header_and_npc_row(self):
+        """Victory screen with NPC name and XP value appears in the narrative."""
+        state, char_id, npc_id = self._make_combat_state_one_npc(npc_hp=1, npc_hit_dice=1)
+        self._submit_attack(state, char_id, npc_id)
+
+        result = auto_resolve_round(state)
+
+        assert "Victory" in result.message
+        assert "Goblin" in result.message
+        assert "XP" in result.message
+
+    def test_victory_xp_split_among_active_party(self):
+        """With two characters, XP from one NPC is split evenly."""
+        from engine import add_npc, register_room
+        from models import Room
+        state = GameState(platform_channel_id="ch", dm_user_id="dm")
+        state.party = Party(name="P")
+        create_character(state, "Alice", CharacterClass.KNIGHT, "Pack A", owner_id="u1")
+        create_character(state, "Bob",   CharacterClass.KNIGHT, "Pack A", owner_id="u2")
+        start_session(state)
+        room = Room(name="Hall", description="Stone hall.")
+        register_room(state, room)
+        state.current_room_id = room.room_id
+        for char in state.characters.values():
+            char.hp_current = char.hp_max = 100
+        npc = NPC(name="Ogre", hp_current=1, hp_max=1, defense=0, damage_dice="1d4", hit_dice=2)
+        add_npc(state, npc)
+        enter_rounds(state)
+        open_turn(state)
+        char_ids = list(state.characters.keys())
+        alice_id, bob_id = char_ids[0], char_ids[1]
+        state.battlefield.combatants[alice_id].initiative   = 100
+        state.battlefield.combatants[alice_id].range_band   = RangeBand.ENGAGE
+        state.battlefield.combatants[bob_id].range_band     = RangeBand.ENGAGE
+        state.battlefield.combatants[npc.npc_id].range_band = RangeBand.ENGAGE
+        from models import PlayerTurnSubmission
+        state.current_turn.submissions = [
+            PlayerTurnSubmission(
+                character_id=alice_id, action_text="Attack", is_latest=True,
+                combat_action=CombatAction(action_id="attack", target_id=npc.npc_id).to_dict(),
+            ),
+            PlayerTurnSubmission(
+                character_id=bob_id, action_text="Attack", is_latest=True,
+                combat_action=CombatAction(action_id="attack", target_id=npc.npc_id).to_dict(),
+            ),
+        ]
+
+        auto_resolve_round(state)
+
+        # hit_dice=2 → 200 XP total; 100 each for two active characters
+        for char in state.characters.values():
+            assert char.experience == 100
+
+    def test_no_victory_while_npc_remains(self):
+        """Combat does not exit while any NPC combatant is still alive."""
+        state, char_id, kobold_id, orc_id = self._make_combat_state_two_npcs()
+        state.battlefield.combatants[char_id].initiative = 100
+        self._submit_attack(state, char_id, kobold_id)
+
+        auto_resolve_round(state)
+
+        assert state.mode == SessionMode.ROUNDS
+        assert state.battlefield is not None
+        assert state.characters[char_id].experience == 0
+
+    def test_battlefield_serialization_preserves_defeated_npc_log(self):
+        """defeated_npc_log survives a serialize/deserialize round-trip."""
+        state, char_id, npc_id = self._make_combat_state_one_npc()
+        state.battlefield.defeated_npc_log.append(("Goblin", 100))
+        state.battlefield.defeated_npc_log.append(("Orc", 200))
+
+        d = serialize_state(state)
+        restored = deserialize_state(d)
+
+        assert restored.battlefield.defeated_npc_log == [("Goblin", 100), ("Orc", 200)]
+
+    def test_abscond_does_not_trigger_victory_block(self):
+        """When abscond succeeds, the victory XP block is skipped."""
+        state, char_id, npc_id = self._make_combat_state_one_npc(npc_hp=100, npc_hit_dice=2)
+        # Simulate a prior kill recorded in the log
+        state.battlefield.defeated_npc_log.append(("Minion", 100))
+        state.battlefield.abscond_succeeded = True
+        from models import PlayerTurnSubmission
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=char_id, action_text="Move", is_latest=True,
+            combat_action=CombatAction(action_id="move",
+                                       destination=RangeBand.FAR_MINUS).to_dict(),
+        )]
+
+        auto_resolve_round(state)
+
+        assert state.mode == SessionMode.EXPLORATION
+        assert state.battlefield is None
+        assert state.characters[char_id].experience == 0

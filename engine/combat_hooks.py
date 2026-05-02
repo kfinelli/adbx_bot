@@ -421,15 +421,7 @@ def _hook_check_death(
         state.battlefield.combatants.pop(target_id, None)
         xp_total = target_npc.hit_dice * 100
         if xp_total > 0:
-            from engine.character import CharacterManager
-            from models import CharacterStatus
-            active = [c for c in state.characters.values()
-                      if c.status == CharacterStatus.ACTIVE]
-            if active:
-                cm = CharacterManager()
-                cm.distribute_xp(state, xp_total)
-                xp_each = xp_total // len(active)
-                log.append(fmt_string("combat.log.xp_gained", xp_total=xp_total, xp_each=xp_each))
+            state.battlefield.defeated_npc_log.append((target_name, xp_total))
 
 
 def _opportunity_attacks(

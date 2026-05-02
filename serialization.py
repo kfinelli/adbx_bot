@@ -290,6 +290,7 @@ def serialize_battlefield(bf: CombatBattlefield) -> dict:
             for cid, cs in bf.combatants.items()
         },
         "round_log": list(bf.round_log),
+        "defeated_npc_log": list(bf.defeated_npc_log),
     }
 
 
@@ -587,6 +588,7 @@ def deserialize_battlefield(d: dict) -> CombatBattlefield:
             for cid, cs in d.get("combatants", {}).items()
         },
         round_log=list(d.get("round_log", [])),
+        defeated_npc_log=[tuple(e) for e in d.get("defeated_npc_log", [])],
     )
 
 

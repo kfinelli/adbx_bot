@@ -398,6 +398,44 @@ def auto_resolve_round(state: GameState) -> object:  # EngineResult
     if bf.abscond_succeeded:
         from engine.session import SessionManager  # local import avoids circular dep
         SessionManager().exit_rounds(state)
+        return _ok(state, narrative)
+
+    # If all NPC combatants are gone, distribute deferred XP and exit combat.
+    remaining_npc_combatants = any(not cs.is_player for cs in bf.combatants.values())
+    if not remaining_npc_combatants and bf.defeated_npc_log:
+        from engine.character import CharacterManager
+        from engine.session import SessionManager
+        from models import CharacterStatus
+
+        total_xp = sum(xp for _, xp in bf.defeated_npc_log)
+        active = [c for c in state.characters.values()
+                  if c.status == CharacterStatus.ACTIVE]
+        if active and total_xp > 0:
+            level_ups = CharacterManager().distribute_xp(state, total_xp)
+            xp_each = total_xp // len(active)
+        else:
+            level_ups = []
+            xp_each = 0
+
+        victory_lines = [get_string("combat.victory.header")]
+        for npc_name, npc_xp in bf.defeated_npc_log:
+            victory_lines.append(
+                fmt_string("combat.victory.npc_row", npc_name=npc_name, xp=npc_xp)
+            )
+        if total_xp > 0:
+            victory_lines.append(
+                fmt_string("combat.victory.total_xp",
+                           xp_total=total_xp, xp_each=xp_each, party_size=len(active))
+            )
+        for lu in level_ups:
+            victory_lines.append(
+                fmt_string("combat.victory.level_up",
+                           name=lu.character_name, level=lu.new_level)
+            )
+        victory_lines.append(get_string("combat.victory.footer"))
+
+        SessionManager().exit_rounds(state)
+        narrative = narrative + "\n\n" + "\n".join(victory_lines)
 
     return _ok(state, narrative)
 
