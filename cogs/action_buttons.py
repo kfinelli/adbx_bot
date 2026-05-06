@@ -1178,7 +1178,7 @@ class DestinationSelectView(discord.ui.View):
                 return
             await save_session_async(state)
             await interaction.response.edit_message(
-                content=fmt_string("combat.log.moved_to", destination=destination.value.replace('_', ' ')), view=None
+                content=fmt_string("combat.victory.moved_to", destination=destination.value.replace('_', ' ')), view=None
             )
             await update_status(interaction.channel, state)
             return
