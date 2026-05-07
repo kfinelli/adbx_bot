@@ -1425,6 +1425,51 @@ def npc_roster_fragment(
 </div>"""
 
 
+def _npc_conditions_editor(npc, channel_id: str, nid: str) -> str:
+    from engine.data_loader import CONDITION_REGISTRY
+
+    chips = ""
+    for cond in npc.active_conditions:
+        cond_def = CONDITION_REGISTRY.get(cond.condition_id)
+        label = cond_def.label if cond_def else cond.condition_id
+        dur_label = f" ({cond.duration_rounds}r)" if cond.duration_rounds is not None else " (∞)"
+        chips += f"""<span class="tag tag-condition" style="margin-right:4px;margin-bottom:4px">
+  {_html.escape(label)}{dur_label}
+  <form style="display:inline"
+        hx-post="/session/{channel_id}/npc/{nid}/removecondition"
+        hx-target="#npc-roster" hx-swap="outerHTML">
+    <input type="hidden" name="condition_id" value="{_html.escape(cond.condition_id, quote=True)}">
+    <button type="submit" style="background:none;border:none;color:#64b5f6;cursor:pointer;padding:0 2px;margin:0;font-size:0.8rem;line-height:1" title="Remove condition">×</button>
+  </form>
+</span>"""
+
+    conditions_display = chips if chips else '<span class="muted" style="font-size:0.78rem">No starting conditions.</span>'
+
+    all_conditions = sorted(CONDITION_REGISTRY.keys())
+    cond_options = "".join(
+        f'<option value="{cid}">{_html.escape(CONDITION_REGISTRY[cid].label)}</option>'
+        for cid in all_conditions
+    )
+
+    return f"""<div style="margin-top:0.6rem;padding-top:0.5rem;border-top:1px solid #0f3460">
+  <label style="font-size:0.78rem;color:#aaa;display:block;margin-bottom:4px">Starting Conditions</label>
+  <div style="margin-bottom:6px">{conditions_display}</div>
+  <form hx-post="/session/{channel_id}/npc/{nid}/addcondition"
+        hx-target="#npc-roster" hx-swap="outerHTML"
+        style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap">
+    <div>
+      <label style="font-size:0.78rem">Condition</label>
+      <select name="condition_id" style="font-size:0.78rem">{cond_options}</select>
+    </div>
+    <div>
+      <label style="font-size:0.78rem">Rounds (0=∞)</label>
+      <input type="number" name="duration" value="3" min="0" style="font-size:0.78rem;padding:2px 4px;width:60px">
+    </div>
+    <button class="btn-sm" type="submit">Add</button>
+  </form>
+</div>"""
+
+
 def _npc_groups_section(state: GameState, channel_id: str, edit_id: str) -> str:
     groups = list(state.npc_roster.groups.values())
 
@@ -1521,12 +1566,17 @@ def _npc_groups_section(state: GameState, channel_id: str, edit_id: str) -> str:
         <a href="/session/{channel_id}/npcs" style="align-self:center;font-size:0.85rem;color:#888">cancel</a>
       </div>
     </form>
+    {_npc_conditions_editor(npc, channel_id, nid)}
   </td>
 </tr>"""
             else:
+                _cond_badge = (
+                    f' <span class="tag tag-condition" style="font-size:0.7rem">{len(npc.active_conditions)} cond.</span>'
+                    if npc.active_conditions else ""
+                )
                 npc_rows += f"""
 <tr>
-  <td><strong>{_e_nname}</strong><br><span class="muted">{_e_ndesc}</span></td>
+  <td><strong>{_e_nname}</strong>{_cond_badge}<br><span class="muted">{_e_ndesc}</span></td>
   <td class="hp-bar">{npc.hp_current}/{npc.hp_max}</td>
   <td>{npc.defense}</td>
   <td>{npc.resistance}</td>

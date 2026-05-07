@@ -165,7 +165,7 @@ def _character_sheet(char, state) -> str:
     svy = char.effective_stat("savvy")
     sheet_lines = [
         sep,
-        f"{char.name}  \u2014  {char.character_class.value} Level {char.level}{leader_note}",
+        f"{char.name}  -  {char.character_class.value} Level {char.level}{leader_note}",
         f"HP: {char.hp_current}/{char.hp_max}   DEF: {char.defense} RES: {char.resistance}  Move: {char.movement_speed}'",
         f"XP: {char.experience}   Gold: {char.gold} gp",
         sep,

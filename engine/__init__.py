@@ -235,6 +235,12 @@ def set_npc_visibility(state: GameState, npc_id, hidden: bool):
     return nm.set_npc_visibility(state, npc_id, hidden)
 
 
+def remove_npc_condition(state: GameState, npc_id, condition_id: str):
+    """Remove a named condition from an NPC in the roster."""
+    nm = NPCManager()
+    return nm.remove_npc_condition(state, npc_id, condition_id)
+
+
 def remove_npc_group(state: GameState, npc_id):
     """Remove an NPC by removing its group."""
     nm = NPCManager()
@@ -897,6 +903,7 @@ __all__ = [
     "set_npc_hp",
     "set_npc_status",
     "remove_npc",
+    "remove_npc_condition",
     "update_npc",
     "open_turn",
     "submit_turn",

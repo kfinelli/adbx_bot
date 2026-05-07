@@ -133,6 +133,18 @@ class NPCManager:
         label = "hidden" if hidden else "visible"
         return _ok(state, f"{npc.name} is now {label}.")
 
+    def remove_npc_condition(self, state: GameState, npc_id, condition_id: str):
+        """Remove all instances of a named condition from an NPC."""
+        npc = _find_npc_in_roster(state, npc_id)
+        if npc is None:
+            return _err(state, fmt_string("npc.errors.not_found", npc_id=npc_id))
+        before = len(npc.active_conditions)
+        npc.active_conditions = [c for c in npc.active_conditions if c.condition_id != condition_id]
+        if len(npc.active_conditions) == before:
+            return _err(state, f"Condition '{condition_id}' not active on {npc.name}.")
+        state.updated_at = _now()
+        return _ok(state, f"Removed '{condition_id}' from {npc.name}.")
+
     def remove_npc_group(self, state: GameState, group_id):
         """Remove an NPC group from the roster."""
         success = state.npc_roster.remove_group(group_id)

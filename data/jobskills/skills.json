@@ -123,7 +123,7 @@
     "knight_protector": {
       "name": "Protector",
       "type": 2,
-      "desc": "Give +100 DEF to one other party member. Bonus scales to +200 at L3 and +300 at L5. Oracle action \u2014 usable once per round.",
+      "desc": "Give +100 DEF to one other party member. Bonus scales to +200 at L3 and +300 at L5. Oracle action (usable once per round).",
       "action_id": "set_protector_target"
     },
     "knight_rep": {

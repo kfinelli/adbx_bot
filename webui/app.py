@@ -46,6 +46,7 @@ from engine import (
     register_room,
     remove_item,
     remove_npc,
+    remove_npc_condition,
     resolve_turn,
     resume_session,
     set_character_hp,
@@ -1070,6 +1071,52 @@ async def route_npc_copy(
     if from_page == "npcs":
         return _respond_npcs(channel_id)
     return _respond(channel_id, view_room_id=view_room_id)
+
+
+# ---------------------------------------------------------------------------
+# NPC condition management (roster editor — no battlefield required)
+# ---------------------------------------------------------------------------
+
+@app.post("/session/{channel_id}/npc/{npc_id}/addcondition", response_class=HTMLResponse)
+async def route_npc_addcondition(
+    channel_id:   str,
+    npc_id:       str,
+    condition_id: Annotated[str, Form()],
+    duration:     Annotated[int, Form()] = 3,
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    try:
+        cid = UUID(npc_id)
+    except ValueError as e:
+        return _respond_npcs(channel_id, error=str(e))
+    dur = None if duration <= 0 else max(1, duration)
+    result = apply_condition(state, cid, condition_id, duration=dur, applied_this_turn=False)
+    if not result.ok:
+        return _respond_npcs(channel_id, error=result.error)
+    await save_session_async(state)
+    return _respond_npcs(channel_id, flash=result.message)
+
+
+@app.post("/session/{channel_id}/npc/{npc_id}/removecondition", response_class=HTMLResponse)
+async def route_npc_removecondition(
+    channel_id:   str,
+    npc_id:       str,
+    condition_id: Annotated[str, Form()],
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    try:
+        cid = UUID(npc_id)
+    except ValueError as e:
+        return _respond_npcs(channel_id, error=str(e))
+    result = remove_npc_condition(state, cid, condition_id)
+    if not result.ok:
+        return _respond_npcs(channel_id, error=result.error)
+    await save_session_async(state)
+    return _respond_npcs(channel_id)
 
 
 # ---------------------------------------------------------------------------

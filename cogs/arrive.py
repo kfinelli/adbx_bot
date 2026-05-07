@@ -96,7 +96,7 @@ def format_items_list(slot: str) -> str:
 
     for _item_id, name, price, rank, _rank_type in items:
         rank_label = f" [Rank {rank}]" if rank else ""
-        lines.append(f"\u2022 **{name}**{rank_label} \u2014 {price} gp")
+        lines.append(f"\u2022 **{name}**{rank_label} - {price} gp")
 
     return "\n".join(lines)
 
@@ -137,7 +137,7 @@ def _get_char_ranks(char) -> dict[str, str]:
     ]:
         allowed = cm._char_allowed_ranks(char, rank_type)
         highest = next((r for r in reversed(ordered) if r in allowed), None)
-        result[rank_type] = highest if highest else "\u2014"
+        result[rank_type] = highest if highest else "-"
     return result
 
 
@@ -432,9 +432,9 @@ class ShopView(discord.ui.View):
                 if char is not None and rank:
                     eligible = _item_eligible(char, rank, rank_type)
                     marker = "\u2713" if eligible else "\u2717"
-                    preview_lines.append(f"{marker} **{name}**{rank_label} \u2014 {price} gp")
+                    preview_lines.append(f"{marker} **{name}**{rank_label} - {price} gp")
                 else:
-                    preview_lines.append(f"\u2022 **{name}**{rank_label} \u2014 {price} gp")
+                    preview_lines.append(f"\u2022 **{name}**{rank_label} - {price} gp")
             if len(items) > 10:
                 preview_lines.append(f"... and {len(items) - 10} more")
             items_preview = "\n".join(preview_lines)
