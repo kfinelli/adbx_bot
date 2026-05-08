@@ -644,7 +644,7 @@
             "exit_id": "9de11c21-744f-4c05-93e5-b1ed8af7033b",
             "label": "Reinforced wooden door (S)",
             "direction": null,
-            "destination_id": "64bd649c-d929-4562-8591-09bbf4db8230",
+            "destination_id": "9ccf9bf1-0040-4e1c-9d95-6c3455bccd50",
             "door_state": "closed",
             "auto_move": false,
             "description": "An iron-barred wooden door leading south, positioned behind the southern gate of metal bars.",
