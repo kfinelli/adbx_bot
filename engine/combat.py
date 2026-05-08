@@ -516,7 +516,7 @@ def _npc_decide(
     npc_id: UUID,
     cs:     CombatantState,
 ) -> CombatAction | None:
-    """Simple NPC AI: move toward players if far; attack lowest-HP player if in range."""
+    """NPC AI: move toward the nearest player; attack if in range. Ties broken by lowest HP."""
     living_players = [
         (cid, pcs) for cid, pcs in state.battlefield.combatants.items()
         if pcs.is_player and _is_alive(state, cid)
@@ -525,15 +525,16 @@ def _npc_decide(
     if not living_players:
         return None
 
-    npc_obj       = _find_npc(state, npc_id)
-    npc_range     = npc_obj.weapon_range if npc_obj else 0
-    target_id = _lowest_hp_player(state, living_players)
-    if target_id:
-        target_cs = state.battlefield.combatants.get(target_id)
-        if target_cs and _band_distance(cs.range_band, target_cs.range_band) <= npc_range:
-            return CombatAction(action_id="attack", target_id=target_id)
+    npc_obj   = _find_npc(state, npc_id)
+    npc_range = npc_obj.weapon_range if npc_obj else 0
 
-    move_target = target_cs.range_band if target_id and target_cs else RangeBand.ENGAGE
+    target_id = _nearest_player(state, cs.range_band, living_players)
+    target_cs = state.battlefield.combatants.get(target_id) if target_id else None
+
+    if target_id and target_cs and _band_distance(cs.range_band, target_cs.range_band) <= npc_range:
+        return CombatAction(action_id="attack", target_id=target_id)
+
+    move_target = target_cs.range_band if target_cs else RangeBand.ENGAGE
     destination = _step_toward(cs.range_band, move_target)
     if destination != cs.range_band:
         return CombatAction(action_id="move", destination=destination)
@@ -564,4 +565,20 @@ def _lowest_hp_player(
         if char and char.hp_current < best_hp:
             best_hp = char.hp_current
             best_id = cid
+    return best_id
+
+
+def _nearest_player(
+    state:          GameState,
+    from_band:      RangeBand,
+    living_players: list[tuple[UUID, CombatantState]],
+) -> UUID | None:
+    """Return the nearest player by band distance; break ties by lowest HP."""
+    best_id, best_dist, best_hp = None, float("inf"), float("inf")
+    for cid, pcs in living_players:
+        dist = _band_distance(from_band, pcs.range_band)
+        char = state.characters.get(cid)
+        hp   = char.hp_current if char else float("inf")
+        if dist < best_dist or (dist == best_dist and hp < best_hp):
+            best_id, best_dist, best_hp = cid, dist, hp
     return best_id

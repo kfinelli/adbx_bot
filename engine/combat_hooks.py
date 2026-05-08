@@ -267,7 +267,7 @@ def _hook_weapon_attack(
     actor_cs  = state.battlefield.combatants.get(actor_id)
     target_cs = state.battlefield.combatants.get(target_id)
     if actor_cs and target_cs:
-        weapon_range = 0  # default: melee (also used for NPCs without equipped weapons)
+        weapon_range = 0  # default: melee
         maybe_char = state.characters.get(actor_id)
         if maybe_char:
             weapons = maybe_char.equipped_weapons()
@@ -281,6 +281,10 @@ def _hook_weapon_attack(
                     if w_pair:
                         _, w_def = w_pair
                 weapon_range = getattr(w_def, "range", 0)
+        else:
+            maybe_npc = _find_npc(state, actor_id)
+            if maybe_npc:
+                weapon_range = maybe_npc.weapon_range
         from engine.combat import _band_distance
         dist = _band_distance(actor_cs.range_band, target_cs.range_band)
         if dist > weapon_range:
