@@ -2991,3 +2991,130 @@ class TestVictoryScreen:
         assert state.mode == SessionMode.EXPLORATION
         assert state.battlefield is None
         assert state.characters[char_id].experience == 0
+
+
+# ---------------------------------------------------------------------------
+# Asleep condition + remove_this_condition_on_roll hook
+# ---------------------------------------------------------------------------
+
+class TestAsleepCondition:
+    """
+    Tests for the asleep condition and the general-purpose
+    remove_this_condition_on_roll hook it uses at on_turn_end.
+    """
+
+    def _state_in_rounds(self):
+        state = _make_state_with_npc()
+        enter_rounds(state)
+        char_id = list(state.characters.keys())[0]
+        npc = state.npcs_in_current_room[0]
+        state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
+        state.battlefield.combatants[npc.npc_id].range_band = RangeBand.ENGAGE
+        state.characters[char_id].hp_current = 20
+        state.characters[char_id].hp_max = 20
+        npc.hp_current = 20
+        npc.hp_max = 20
+        return state, char_id, npc
+
+    def test_asleep_in_registry(self):
+        from engine import CONDITION_REGISTRY
+        assert "asleep" in CONDITION_REGISTRY
+        cond = CONDITION_REGISTRY["asleep"]
+        assert cond.hooks.get("on_turn_start") == "skip_action"
+        hook = cond.hooks.get("on_turn_end")
+        assert isinstance(hook, dict)
+        assert hook["tag"] == "remove_this_condition_on_roll"
+        assert hook["dice"] == "1d4"
+        assert hook["threshold"] == 4
+
+    def test_hook_is_registered(self):
+        from engine.combat_hooks import _HOOK_DISPATCH
+        assert "remove_this_condition_on_roll" in _HOOK_DISPATCH
+
+    def test_removed_on_threshold_roll(self):
+        from unittest.mock import patch
+
+        from engine.combat_hooks import _tick_actor_conditions
+        state, char_id, _ = self._state_in_rounds()
+        apply_condition(state, char_id, "asleep", duration=3)
+
+        log: list[str] = []
+        with patch("engine.combat_hooks.roll_dice_expr", return_value={"total": 4}):
+            _tick_actor_conditions(state, char_id, log)
+
+        char = state.characters[char_id]
+        assert not any(c.condition_id == "asleep" for c in char.active_conditions)
+        assert any("Asleep" in e or "asleep" in e for e in log)
+
+    def test_persists_on_low_roll(self):
+        from unittest.mock import patch
+
+        from engine.combat_hooks import _tick_actor_conditions
+        state, char_id, _ = self._state_in_rounds()
+        apply_condition(state, char_id, "asleep", duration=3)
+
+        log: list[str] = []
+        with patch("engine.combat_hooks.roll_dice_expr", return_value={"total": 3}):
+            _tick_actor_conditions(state, char_id, log)
+
+        char = state.characters[char_id]
+        assert any(c.condition_id == "asleep" for c in char.active_conditions)
+
+    def test_skip_action_fires_while_asleep(self):
+        from engine.combat import _fire_turn_start_hooks
+        state, char_id, _ = self._state_in_rounds()
+        apply_condition(state, char_id, "asleep", duration=2)
+
+        log: list[str] = []
+        _fire_turn_start_hooks(state, log)
+
+        cs = state.battlefield.combatants[char_id]
+        assert cs.skip_action is True
+
+    def test_expires_by_duration_when_rolls_always_fail(self):
+        from unittest.mock import patch
+
+        from engine.combat_hooks import _tick_actor_conditions
+        state, char_id, _ = self._state_in_rounds()
+        apply_condition(state, char_id, "asleep", duration=2)
+
+        with patch("engine.combat_hooks.roll_dice_expr", return_value={"total": 1}):
+            _tick_actor_conditions(state, char_id, [])  # duration 2→1
+            _tick_actor_conditions(state, char_id, [])  # duration 1 → expired
+
+        char = state.characters[char_id]
+        assert not any(c.condition_id == "asleep" for c in char.active_conditions)
+
+    def test_no_expiry_log_when_removed_by_roll(self):
+        from unittest.mock import patch
+
+        from engine.combat_hooks import _tick_actor_conditions
+        state, char_id, _ = self._state_in_rounds()
+        apply_condition(state, char_id, "asleep", duration=3)
+
+        log: list[str] = []
+        with patch("engine.combat_hooks.roll_dice_expr", return_value={"total": 4}):
+            _tick_actor_conditions(state, char_id, log)
+
+        assert not any("expired" in e.lower() for e in log)
+
+    def test_works_on_npc(self):
+        from unittest.mock import patch
+
+        from engine.combat_hooks import _tick_actor_conditions
+        state, _, npc = self._state_in_rounds()
+        apply_condition(state, npc.npc_id, "asleep", duration=3)
+
+        log: list[str] = []
+        with patch("engine.combat_hooks.roll_dice_expr", return_value={"total": 4}):
+            _tick_actor_conditions(state, npc.npc_id, log)
+
+        assert not any(c.condition_id == "asleep" for c in npc.active_conditions)
+
+    def test_missing_condition_id_logs_warning(self):
+        from engine.combat_hooks import _HOOK_DISPATCH
+        state, char_id, _ = self._state_in_rounds()
+        log: list[str] = []
+        handler = _HOOK_DISPATCH["remove_this_condition_on_roll"]
+        handler(state, char_id, None, log, {"dice": "1d4", "threshold": 4})
+        assert any("_condition_id" in e or "not injected" in e for e in log)

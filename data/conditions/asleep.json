@@ -1,0 +1,12 @@
+{
+  "condition_id": "asleep",
+  "label": "Asleep",
+  "duration_type": "rounds",
+  "stackable": false,
+  "hooks": {
+    "on_turn_start": "skip_action",
+    "on_turn_end": {"tag": "remove_this_condition_on_roll", "dice": "1d4", "threshold": 4}
+  },
+  "stat_modifiers": {},
+  "grants_actions": []
+}

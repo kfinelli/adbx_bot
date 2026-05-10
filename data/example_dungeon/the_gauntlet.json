@@ -1280,7 +1280,15 @@
             "weapon_range": 0,
             "status": "asleep",
             "notes": "",
-            "active_conditions": [],
+            "active_conditions": [
+              {
+                "condition_id": "asleep",
+                "duration_rounds": null,
+                "source_id": null,
+                "stacks": 1,
+                "applied_this_turn": false
+              }
+            ],
             "hidden": false
           },
           {
@@ -1306,7 +1314,15 @@
             "weapon_range": 0,
             "status": "asleep",
             "notes": "",
-            "active_conditions": [],
+            "active_conditions": [
+              {
+                "condition_id": "asleep",
+                "duration_rounds": null,
+                "source_id": null,
+                "stacks": 1,
+                "applied_this_turn": false
+              }
+            ],
             "hidden": false
           },
           {
@@ -1332,7 +1348,15 @@
             "weapon_range": 0,
             "status": "asleep",
             "notes": "",
-            "active_conditions": [],
+            "active_conditions": [
+              {
+                "condition_id": "asleep",
+                "duration_rounds": null,
+                "source_id": null,
+                "stacks": 1,
+                "applied_this_turn": false
+              }
+            ],
             "hidden": false
           },
           {
@@ -1659,7 +1683,7 @@
       },
       "435bbe2f-be05-4c9a-993d-e0912798e0d1": {
         "group_id": "435bbe2f-be05-4c9a-993d-e0912798e0d1",
-        "name": null,
+        "name": "Guardroom Gnolls",
         "npcs": [
           {
             "npc_id": "83daa3ac-27a4-48c7-b627-465cc013c9b2",
