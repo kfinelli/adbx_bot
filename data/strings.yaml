@@ -235,6 +235,7 @@ shop:
   insufficient_gold: "Not enough gold. You have {gold} gp, but need {price} gp."
   purchased_equip_prompt: "Purchased **{name}** for {price} gp.\nYou have {remaining_gold} gp remaining.\n\nWould you like to equip **{name}** now?"
   purchased_continue: "Purchased **{name}** for {price} gp.\nYou have {remaining_gold} gp remaining.\n\n**Item Shop** -  Select a category to continue shopping:"
+  purchased_bulk: "Purchased {qty}× **{name}** for {total_price} gp.\nYou have {remaining_gold} gp remaining.\n\n**Item Shop** \u00b7 Select a category to continue shopping:"
   browse_prompt: "**Item Shop**: {remaining_gold} gp remaining. Select a category:"
   slot_items_preview: "**{slot} Items**\n\n{char_ranks_line}\n{items_preview}\n\nSelect an item to purchase:"
   welcome: "**Item Shop**\n\nYou can browse and purchase starting equipment for **{name}**.\nSelect a category to see available items:"
