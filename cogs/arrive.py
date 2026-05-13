@@ -96,7 +96,7 @@ def format_items_list(slot: str) -> str:
 
     for _item_id, name, price, rank, _rank_type in items:
         rank_label = f" [Rank {rank}]" if rank else ""
-        lines.append(f"\u2022 **{name}**{rank_label} \u2014 {price} gp")
+        lines.append(f"\u2022 **{name}**{rank_label} - {price} gp")
 
     return "\n".join(lines)
 
@@ -137,7 +137,7 @@ def _get_char_ranks(char) -> dict[str, str]:
     ]:
         allowed = cm._char_allowed_ranks(char, rank_type)
         highest = next((r for r in reversed(ordered) if r in allowed), None)
-        result[rank_type] = highest if highest else "\u2014"
+        result[rank_type] = highest if highest else "-"
     return result
 
 
@@ -240,6 +240,25 @@ class ItemSelectView(discord.ui.View):
             await interaction.response.edit_message(
                 content="⚠ Item not found in registry.", view=self
             )
+            return
+
+        # Light items → collect quantity via modal before purchasing
+        if item.isLight:
+            state = get_session(self.channel_id)
+            current_gold = 0
+            if state is not None:
+                from uuid import UUID
+                with contextlib.suppress(ValueError, AttributeError):
+                    char = state.characters.get(UUID(self.character_id))
+                    current_gold = char.gold if char else 0
+            modal = LightItemQuantityModal(
+                self.channel_id, self.character_id, self.owner_id,
+                self.selected_item_id, item.name,
+                price_per=getattr(item, 'price', 0),
+                current_gold=current_gold,
+                message=interaction.message,
+            )
+            await interaction.response.send_modal(modal)
             return
 
         # Get the session and character
@@ -432,9 +451,9 @@ class ShopView(discord.ui.View):
                 if char is not None and rank:
                     eligible = _item_eligible(char, rank, rank_type)
                     marker = "\u2713" if eligible else "\u2717"
-                    preview_lines.append(f"{marker} **{name}**{rank_label} \u2014 {price} gp")
+                    preview_lines.append(f"{marker} **{name}**{rank_label} - {price} gp")
                 else:
-                    preview_lines.append(f"\u2022 **{name}**{rank_label} \u2014 {price} gp")
+                    preview_lines.append(f"\u2022 **{name}**{rank_label} - {price} gp")
             if len(items) > 10:
                 preview_lines.append(f"... and {len(items) - 10} more")
             items_preview = "\n".join(preview_lines)
@@ -710,6 +729,107 @@ class CharacterNameModal(discord.ui.Modal, title="Enter Character Name"):
                 f"Something went wrong: {error}", ephemeral=True
                 )
 
+
+# ---------------------------------------------------------------------------
+# Light-item quantity modal
+# ---------------------------------------------------------------------------
+
+class LightItemQuantityModal(discord.ui.Modal):
+    """Shown when purchasing a light item — lets the player choose how many to buy."""
+
+    def __init__(
+        self,
+        channel_id: str,
+        character_id: str,
+        owner_id: str,
+        item_id: str,
+        item_name: str,
+        price_per: int,
+        current_gold: int,
+        message: discord.Message,
+    ):
+        super().__init__(title=f"Buy {item_name}"[:45])
+        self.channel_id = channel_id
+        self.character_id = character_id
+        self.owner_id = owner_id
+        self.item_id = item_id
+        self.item_name = item_name
+        self.price_per = price_per
+        self.message = message
+
+        self.qty_input = discord.ui.TextInput(
+            label=f"Quantity ({price_per} gp each · {current_gold} gp available)",
+            placeholder="e.g. 5",
+            min_length=1,
+            max_length=3,
+        )
+        self.add_item(self.qty_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            qty = int(self.qty_input.value.strip())
+        except ValueError:
+            await interaction.response.send_message("⚠ Please enter a valid number.", ephemeral=True)
+            return
+        if qty < 1:
+            await interaction.response.send_message("⚠ Quantity must be at least 1.", ephemeral=True)
+            return
+
+        from uuid import UUID
+        state = get_session(self.channel_id)
+        if state is None:
+            await interaction.response.send_message("⚠ Session no longer exists.", ephemeral=True)
+            return
+        try:
+            char_uuid = UUID(self.character_id)
+        except (ValueError, AttributeError):
+            await interaction.response.send_message("⚠ Invalid character ID.", ephemeral=True)
+            return
+        character = state.characters.get(char_uuid)
+        if character is None:
+            await interaction.response.send_message("⚠ Character not found.", ephemeral=True)
+            return
+
+        total_cost = self.price_per * qty
+        if character.gold < total_cost:
+            await interaction.response.send_message(
+                f"⚠ Not enough gold. You have {character.gold} gp but need {total_cost} gp ({qty}× {self.price_per} gp).",
+                ephemeral=True,
+            )
+            return
+
+        result = give_item(state, char_uuid, self.item_id, quantity=qty)
+        if not result.ok:
+            await interaction.response.send_message(f"⚠ {result.error}", ephemeral=True)
+            return
+
+        character.gold -= total_cost
+        save_session(state)
+
+        await interaction.response.defer()
+        item_def = ITEM_REGISTRY.get(self.item_id)
+        if qty == 1 and isinstance(item_def, EquipItem) and getattr(item_def, 'slot', None):
+            equip_view = EquipNowView(
+                self.channel_id, self.character_id, self.owner_id,
+                self.item_id, self.item_name, character.gold,
+            )
+            await self.message.edit(
+                content=fmt_string(
+                    "shop.purchased_equip_prompt",
+                    name=self.item_name, price=total_cost, remaining_gold=character.gold,
+                ),
+                view=equip_view,
+            )
+        else:
+            shop_view = ShopView(self.channel_id, self.character_id, self.owner_id)
+            await self.message.edit(
+                content=fmt_string(
+                    "shop.purchased_bulk",
+                    qty=qty, name=self.item_name,
+                    total_price=total_cost, remaining_gold=character.gold,
+                ),
+                view=shop_view,
+            )
 
 
 # ---------------------------------------------------------------------------

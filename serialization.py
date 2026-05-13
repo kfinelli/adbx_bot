@@ -290,6 +290,7 @@ def serialize_battlefield(bf: CombatBattlefield) -> dict:
             for cid, cs in bf.combatants.items()
         },
         "round_log": list(bf.round_log),
+        "defeated_npc_log": list(bf.defeated_npc_log),
     }
 
 
@@ -410,8 +411,11 @@ def deserialize_character(d: dict) -> Character:
         jobs = {k: deserialize_job_experience(v) for k, v in d["jobs"].items()}
     else:
         # Migrate: reconstruct a single JobExperience from the old character_class field.
-        old_val  = d.get("character_class", "Knight")
-        job_key  = CharacterClass(old_val).name.lower()
+        old_val = d.get("character_class", "Knight")
+        try:
+            job_key = CharacterClass(old_val).name.lower()
+        except ValueError:
+            job_key = next(iter(CharacterClass)).name.lower()
         jobs = {job_key: JobExperience(job_id=job_key, level=d.get("level", 1))}
 
     return Character(
@@ -587,6 +591,7 @@ def deserialize_battlefield(d: dict) -> CombatBattlefield:
             for cid, cs in d.get("combatants", {}).items()
         },
         round_log=list(d.get("round_log", [])),
+        defeated_npc_log=[tuple(e) for e in d.get("defeated_npc_log", [])],
     )
 
 

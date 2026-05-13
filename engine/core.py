@@ -192,7 +192,10 @@ class TurnManager:
         state.current_turn  = None
         state.say_log       = []
         state.oracle_counter = 0
-        state.turn_number   += 1
+        # exit_rounds (called on victory or abscond) already set turn_number;
+        # only increment here when still in ROUNDS mode (combat continues).
+        if state.mode == SessionMode.ROUNDS:
+            state.turn_number += 1
         state.updated_at    = _now()
 
         # Open the next round immediately so the status message shows an open

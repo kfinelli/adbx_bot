@@ -731,6 +731,7 @@ class CombatBattlefield:
     combatants:        dict[UUID, CombatantState] = field(default_factory=dict)
     round_log:         list[str]                  = field(default_factory=list)
     abscond_succeeded: bool                       = False
+    defeated_npc_log:  list[tuple[str, int]]      = field(default_factory=list)
 
 
 @dataclass

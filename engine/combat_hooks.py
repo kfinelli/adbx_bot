@@ -267,7 +267,7 @@ def _hook_weapon_attack(
     actor_cs  = state.battlefield.combatants.get(actor_id)
     target_cs = state.battlefield.combatants.get(target_id)
     if actor_cs and target_cs:
-        weapon_range = 0  # default: melee (also used for NPCs without equipped weapons)
+        weapon_range = 0  # default: melee
         maybe_char = state.characters.get(actor_id)
         if maybe_char:
             weapons = maybe_char.equipped_weapons()
@@ -281,6 +281,10 @@ def _hook_weapon_attack(
                     if w_pair:
                         _, w_def = w_pair
                 weapon_range = getattr(w_def, "range", 0)
+        else:
+            maybe_npc = _find_npc(state, actor_id)
+            if maybe_npc:
+                weapon_range = maybe_npc.weapon_range
         from engine.combat import _band_distance
         dist = _band_distance(actor_cs.range_band, target_cs.range_band)
         if dist > weapon_range:
@@ -421,15 +425,7 @@ def _hook_check_death(
         state.battlefield.combatants.pop(target_id, None)
         xp_total = target_npc.hit_dice * 100
         if xp_total > 0:
-            from engine.character import CharacterManager
-            from models import CharacterStatus
-            active = [c for c in state.characters.values()
-                      if c.status == CharacterStatus.ACTIVE]
-            if active:
-                cm = CharacterManager()
-                cm.distribute_xp(state, xp_total)
-                xp_each = xp_total // len(active)
-                log.append(fmt_string("combat.log.xp_gained", xp_total=xp_total, xp_each=xp_each))
+            state.battlefield.defeated_npc_log.append((target_name, xp_total))
 
 
 def _opportunity_attacks(
@@ -710,6 +706,50 @@ def _hook_remove_condition(
         log.append(fmt_string("combat.log.condition_removed", name=_combatant_name(state, actor_id), cond_name=label))
 
 
+def _hook_remove_this_condition_on_roll(
+    state:    GameState,
+    actor_id: UUID,
+    action,              # CombatAction | None
+    log:      list[str],
+    params:   dict,
+) -> None:
+    """
+    Roll dice at on_turn_end; remove the parent condition if total >= threshold.
+
+    params (from JSON):
+      dice      (str, default "1d4") — dice expression to roll
+      threshold (int, default 4)    — minimum roll required to remove the condition
+    params (injected by _tick_actor_conditions, not from JSON):
+      _condition_id (str) — condition_id of the condition this hook belongs to
+    """
+    dice         = params.get("dice", "1d4")
+    threshold    = int(params.get("threshold", 4))
+    condition_id = params.get("_condition_id", "")
+
+    if not condition_id:
+        log.append("[remove_this_condition_on_roll: _condition_id not injected — skipped]")
+        return
+
+    roll     = roll_dice_expr(dice)["total"]
+    cond_def = CONDITION_REGISTRY.get(condition_id)
+    label    = cond_def.label if cond_def else condition_id
+    name     = _combatant_name(state, actor_id)
+
+    if roll >= threshold:
+        combatant = state.characters.get(actor_id) or _find_npc(state, actor_id)
+        if combatant is not None:
+            combatant.active_conditions = [
+                c for c in combatant.active_conditions
+                if c.condition_id != condition_id
+            ]
+        log.append(fmt_string("combat.log.condition_removed", name=name, cond_name=label))
+    else:
+        log.append(fmt_string(
+            "combat.log.wake_roll_failed",
+            name=name, cond_name=label, roll=roll, threshold=threshold,
+        ))
+
+
 def _hook_skip_action(
     state:    GameState,
     actor_id: UUID,
@@ -940,10 +980,11 @@ _HOOK_DISPATCH: dict[str, object] = {
     "move_to_band":    _hook_move_to_band,
     "block_movement":  _hook_block_movement,
     # Conditions
-    "apply_condition":  _hook_apply_condition,
-    "remove_condition": _hook_remove_condition,
-    "deal_damage":      _hook_deal_damage,
-    "skip_action":      _hook_skip_action,
+    "apply_condition":              _hook_apply_condition,
+    "remove_condition":             _hook_remove_condition,
+    "remove_this_condition_on_roll": _hook_remove_this_condition_on_roll,
+    "deal_damage":                  _hook_deal_damage,
+    "skip_action":                  _hook_skip_action,
     # Flee
     "abscond_roll":    _hook_abscond_roll,
     # General stat check
@@ -994,7 +1035,18 @@ def _tick_actor_conditions(state: GameState, actor_id: UUID, log: list[str]) -> 
         if cond_def:
             entry = cond_def.hooks.get("on_turn_end")
             if entry:
-                _dispatch_hook(entry, state, actor_id, None, log)
+                # Inject _condition_id so remove_this_condition_on_roll can identify
+                # which condition it belongs to without a redundant JSON param.
+                if isinstance(entry, dict):
+                    dispatched = {**entry, "_condition_id": cond.condition_id}
+                else:
+                    dispatched = {"tag": entry, "_condition_id": cond.condition_id}
+                _dispatch_hook(dispatched, state, actor_id, None, log)
+
+        # If the hook self-removed this condition, combatant.active_conditions is
+        # now a new filtered list. Skip duration tracking to avoid resurrecting it.
+        if not any(c is cond for c in combatant.active_conditions):
+            continue
 
         if cond.duration_rounds is None:
             still_active.append(cond)
