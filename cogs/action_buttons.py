@@ -90,6 +90,18 @@ def _find_character(state, owner_id: str):
     return None
 
 
+def _find_target_name(state, target_id) -> str | None:
+    if target_id is None:
+        return None
+    char = state.characters.get(target_id)
+    if char:
+        return char.name
+    for npc in state.npcs_in_current_room:
+        if npc.npc_id == target_id:
+            return npc.name
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Shared guard helpers
 # ---------------------------------------------------------------------------
@@ -1319,7 +1331,13 @@ async def _submit_combat_action(
 
     action_def  = ACTION_REGISTRY.get(action.action_id)
     label       = action_def.label if action_def else action.action_id
-    action_text = f"{label}: {action.free_text}" if action.free_text else label
+    target_name = _find_target_name(state, action.target_id)
+    if action.free_text:
+        action_text = f"{label}: {action.free_text}"
+    elif target_name:
+        action_text = f"{label} {target_name}"
+    else:
+        action_text = label
     turn_number = state.turn_number
 
     result = submit_turn(
