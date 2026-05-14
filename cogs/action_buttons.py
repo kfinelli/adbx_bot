@@ -1222,7 +1222,7 @@ class AffectModal(discord.ui.Modal):
 
     def __init__(self, char_id: UUID, channel_id: str, action_id: str = "affect") -> None:
         action_def = ACTION_REGISTRY.get(action_id)
-        title = f"{action_def.label} — Free Action" if action_def else "Affect — Free Action"
+        title = f"{action_def.label}: Free Action" if action_def else "Affect: Free Action"
         super().__init__(title=title, timeout=300)
         self.char_id    = char_id
         self.channel_id = channel_id
@@ -1729,7 +1729,7 @@ def render_battlefield_section(state) -> str:
 
     lines = []
     for band, label in band_names.items():
-        occupants = ", ".join(bands[band]) if bands[band] else "—"
+        occupants = ", ".join(bands[band]) if bands[band] else "-"
         lines.append(f"  {label:<8} {occupants}")
 
     return "\n".join(lines)

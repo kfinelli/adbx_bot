@@ -123,7 +123,7 @@ def _lookup_char(channel_id: str, character_id: str):
 def _get_char_ranks(char) -> dict[str, str]:
     """
     Return the highest allowed rank per category for display.
-    e.g. {'weapon': 'C', 'armor': 'C', 'spell': '—'}
+    e.g. {'weapon': 'C', 'armor': 'C', 'spell': '-'}
     """
     from engine.character import CharacterManager
     _PHYSICAL_ORDERED = ("E", "D", "C", "B", "A")
@@ -297,7 +297,7 @@ class ItemSelectView(discord.ui.View):
         price = getattr(item, 'price', 0)
         if character.gold < price:
             log.info(
-                "_buy_callback: insufficient gold — have %d, need %d", character.gold, price
+                "_buy_callback: insufficient gold: have %d, need %d", character.gold, price
             )
             await interaction.response.edit_message(
                 content=fmt_string("shop.insufficient_gold", gold=character.gold, price=price),
@@ -346,7 +346,7 @@ class ItemSelectView(discord.ui.View):
         # Return to slot selection
         shop_view = ShopView(self.channel_id, self.character_id, self.owner_id)
         await interaction.response.edit_message(
-            content="**Item Shop** — Select a category to browse items:",
+            content="**Item Shop** Select a category to browse items:",
             view=shop_view,
         )
 
