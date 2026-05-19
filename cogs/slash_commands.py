@@ -235,6 +235,9 @@ class SessionCog(commands.Cog):
         if not (is_dm or is_leader):
             await ack_err(interaction, get_string("errors.strife_permission"))
             return
+        if state.mode == SessionMode.ROUNDS and not is_dm:
+            await ack_err(interaction, get_string("errors.strife_dm_only_combat"))
+            return
         if state.mode == SessionMode.ROUNDS:
             result = exit_rounds(state)
             label = get_string("session.combat_ended")

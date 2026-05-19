@@ -42,6 +42,7 @@ errors:
   already_submitted: "Wait for resolution or ask the DM to un-submit your action."
   abscond_permission: "Only the party leader may use Abscond."
   strife_permission: "Only the DM or party leader can toggle combat rounds."
+  strife_dm_only_combat: "Only the DM can end combat. Combat ends automatically when all enemies are defeated."
   dm_only: "Only the DM can use this command."
   character_not_found: "Character not found."
   wrong_character_panel: "This panel doesn't belong to your character."
@@ -139,7 +140,7 @@ turn:
     no_submission: "{name} has not submitted a turn."
 
 status:
-  waiting: "Waiting for players. Session not yet started"
+  waiting: "Pre-start: waiting to Embark"
   turn_open: "Open. Accepting turn submissions"
   turn_closed: "Closed. Awaiting DM resolution"
 
@@ -175,11 +176,11 @@ combat:
     flee_blocked: "{actor_name} tries to flee but {blocker} is blocking the way!"
     flee_success: "{actor_name} rolls {roll} + {finesse} = **{total}** vs {threshold}; the party flees!"
     flee_failure: "{actor_name} rolls {roll} + {finesse} = {total} vs {threshold}; failed to abscond."
-    stat_check_success: "{actor_name} rolls {roll} + {stat_value} = **{total}** vs DC {dc} — success!"
-    stat_check_failure: "{actor_name} rolls {roll} + {stat_value} = {total} vs DC {dc} — failed."
+    stat_check_success: "{actor_name} rolls {roll} + {stat_value} = **{total}** vs DC {dc}: success!"
+    stat_check_failure: "{actor_name} rolls {roll} + {stat_value} = {total} vs DC {dc}: failed."
     condition_expired: "{name}'s {cond_name} condition has expired."
     condition_removed: "{name} is no longer {cond_name}."
-    wake_roll_failed: "{name} rolls {roll} (need {threshold}) — still {cond_name}."
+    wake_roll_failed: "{name} rolls {roll} (need {threshold}); still {cond_name}."
     no_action: "The round passes without incident."
     stunned: "{actor_name} is stunned and cannot act this round!"
     action_out_of_range: "{actor_name} cannot use {label} from {band}, target is {dist} band(s) away (max {max_range})."

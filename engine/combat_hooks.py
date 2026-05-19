@@ -205,12 +205,12 @@ def _dispatch_hook(
         params = {}
 
     if not tag:
-        log.append("[Warning: hook entry has empty tag — skipped]")
+        log.append("[Warning: hook entry has empty tag - skipped]")
         return
 
     handler = _HOOK_DISPATCH.get(tag)
     if handler is None:
-        log.append(f"[Warning: unknown hook tag '{tag}' — skipped]")
+        log.append(f"[Warning: unknown hook tag '{tag}' - skipped]")
         return
 
     handler(state, actor_id, action, log, params)
@@ -727,7 +727,7 @@ def _hook_remove_this_condition_on_roll(
     condition_id = params.get("_condition_id", "")
 
     if not condition_id:
-        log.append("[remove_this_condition_on_roll: _condition_id not injected — skipped]")
+        log.append("[remove_this_condition_on_roll: _condition_id not injected - skipped]")
         return
 
     roll     = roll_dice_expr(dice)["total"]
@@ -928,7 +928,7 @@ def _hook_resolve_equip(
         try:
             slot = ItemSlot(action.free_text)
         except ValueError:
-            log.append(f"[equip_item: unknown slot '{action.free_text}' — using auto]")
+            log.append(f"[equip_item: unknown slot '{action.free_text}' - using auto]")
     result = CharacterManager().equip_item(state, actor_id, action.weapon_id, slot=slot)
     log.append(result.message if result.ok else f"[equip failed: {result.error}]")
 

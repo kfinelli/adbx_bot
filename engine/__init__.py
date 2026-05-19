@@ -695,7 +695,7 @@ def render_status_header(state: GameState) -> str:
     in local time.
     """
     if state.mode == SessionMode.PRE_START:
-        return "**Awaiting players** — session not yet started"
+        return "**Awaiting players**: session not yet started"
     if state.mode == SessionMode.ROUNDS:
         turn_label = f"⚔ **Round {state.turn_number}** ⚔"
     else:
@@ -794,7 +794,7 @@ def render_status(state: GameState) -> str:
     # Room
     room = state.current_room
     if room:
-        lines.append(f"Room: {room.name} — {room.description}")
+        lines.append(f"✵{room.name}✵\n{room.description}")
         if room.features:
             lines.append("Features:")
             for feat in room.features:
@@ -824,7 +824,7 @@ def render_status(state: GameState) -> str:
         for npc in active_npcs:
             lines.append(
                 f"  {npc.name}: {npc.hp_current}/{npc.hp_max}"
-                + (f" — {npc.status}" if npc.status != "active" else "")
+                + (f" · {npc.status}" if npc.status != "active" else "")
                 + (f" ({npc.description})" if npc.description else "")
             )
     else:

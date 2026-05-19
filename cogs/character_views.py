@@ -138,7 +138,7 @@ def _character_sheet(char, state) -> str:
                     _charges = f" ({_child.charges}/{_cdefn.maxCharges})"
             else:
                 _charges = ""
-            _desc = f" — {_cdefn.description}" if isinstance(_cdefn, UtilitySpell) and _cdefn.description else ""
+            _desc = f" - {_cdefn.description}" if isinstance(_cdefn, UtilitySpell) and _cdefn.description else ""
             _inv_parts.append(f"    \u2514 {_cname}{_period_tag}{_charges}{_desc}")
     inv_lines = "\n".join(_inv_parts) if _inv_parts else "  (empty)"
 

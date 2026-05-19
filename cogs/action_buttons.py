@@ -90,6 +90,18 @@ def _find_character(state, owner_id: str):
     return None
 
 
+def _find_target_name(state, target_id) -> str | None:
+    if target_id is None:
+        return None
+    char = state.characters.get(target_id)
+    if char:
+        return char.name
+    for npc in state.npcs_in_current_room:
+        if npc.npc_id == target_id:
+            return npc.name
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Shared guard helpers
 # ---------------------------------------------------------------------------
@@ -506,6 +518,11 @@ class ExplorationActionView(discord.ui.View):
         if not (is_dm or is_leader):
             await interaction.response.send_message(
                 get_string("errors.strife_permission"), ephemeral=True
+            )
+            return
+        if state.mode == SessionMode.ROUNDS and not is_dm:
+            await interaction.response.send_message(
+                get_string("errors.strife_dm_only_combat"), ephemeral=True
             )
             return
         if state.mode == SessionMode.ROUNDS:
@@ -1210,7 +1227,7 @@ class AffectModal(discord.ui.Modal):
 
     def __init__(self, char_id: UUID, channel_id: str, action_id: str = "affect") -> None:
         action_def = ACTION_REGISTRY.get(action_id)
-        title = f"{action_def.label} — Free Action" if action_def else "Affect — Free Action"
+        title = f"{action_def.label}: Free Action" if action_def else "Affect: Free Action"
         super().__init__(title=title, timeout=300)
         self.char_id    = char_id
         self.channel_id = channel_id
@@ -1319,7 +1336,13 @@ async def _submit_combat_action(
 
     action_def  = ACTION_REGISTRY.get(action.action_id)
     label       = action_def.label if action_def else action.action_id
-    action_text = f"{label}: {action.free_text}" if action.free_text else label
+    target_name = _find_target_name(state, action.target_id)
+    if action.free_text:
+        action_text = f"{label}: {action.free_text}"
+    elif target_name:
+        action_text = f"{label} {target_name}"
+    else:
+        action_text = label
     turn_number = state.turn_number
 
     result = submit_turn(
@@ -1711,7 +1734,7 @@ def render_battlefield_section(state) -> str:
 
     lines = []
     for band, label in band_names.items():
-        occupants = ", ".join(bands[band]) if bands[band] else "—"
+        occupants = ", ".join(bands[band]) if bands[band] else "-"
         lines.append(f"  {label:<8} {occupants}")
 
     return "\n".join(lines)
