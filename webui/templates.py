@@ -13,7 +13,7 @@ from uuid import UUID as _UUID
 
 from engine.azure_constants import XP_THRESHOLDS, RechargePeriod
 from engine.character import CharacterManager
-from engine.data_loader import ITEM_REGISTRY
+from engine.data_loader import ACTION_REGISTRY, ITEM_REGISTRY
 from engine.item import ChargeWeapon
 from models import (
     Character,
@@ -396,16 +396,78 @@ def turn_panel(state: GameState, edit_id: str = "") -> str:
         if rows:
             subs_html = f'<table><tr><th>Character</th><th>Submitted Action</th></tr>{rows}</table>'
 
+    def _has_affect(t) -> bool:
+        for s in (t.submissions if t else []):
+            if not s.is_latest:
+                continue
+            if s.combat_action is None:
+                return True
+            adef = ACTION_REGISTRY.get(s.combat_action.get("action_id", ""))
+            if adef and adef.action_type == "affect":
+                return True
+        return False
+
+    # Partial auto-resolve button — ROUNDS + CLOSED + not yet run + has Affect submission(s)
+    partial_resolve_html = ""
+    if (state.mode == SessionMode.ROUNDS
+            and turn is not None
+            and turn.status == TurnStatus.CLOSED
+            and not turn.partial_resolved
+            and _has_affect(turn)):
+        partial_resolve_html = f"""
+<hr class="divider">
+<p class="muted" style="font-size:0.85rem;margin-bottom:0.5rem">
+  Auto-resolve NPC actions and all structured player actions now.
+  Affect actors will be listed below for manual adjudication.
+</p>
+<form hx-post="/session/{channel_id}/partial_resolve"
+      hx-target="#dashboard" hx-swap="outerHTML">
+  <button class="btn-success" type="submit">Auto-Resolve Structured Actions</button>
+</form>"""
+
     # Resolve form — only when there is a turn to resolve
     resolve_html = ""
     if turn and turn.status in (TurnStatus.OPEN, TurnStatus.CLOSED):
+        partial_log_section = ""
+        affect_actors_section = ""
+
+        if turn.partial_resolved and turn.partial_resolution_log:
+            esc_log = _html.escape(turn.partial_resolution_log)
+            partial_log_section = f"""
+<div class="card" style="background:#0f2a0f;border-color:#2a5a2a;margin-bottom:0.75rem">
+  <h3 style="font-size:0.85rem;color:#7fbf7f;margin-bottom:0.5rem">Auto-Resolved Actions</h3>
+  <pre style="white-space:pre-wrap;font-size:0.82rem;color:#aaffaa;margin:0">{esc_log}</pre>
+</div>"""
+            affect_names = []
+            for s in turn.submissions:
+                if not s.is_latest:
+                    continue
+                is_affect = s.combat_action is None or (
+                    ACTION_REGISTRY.get(s.combat_action.get("action_id", "")) is not None
+                    and ACTION_REGISTRY[s.combat_action["action_id"]].action_type == "affect"
+                )
+                if is_affect:
+                    char = state.characters.get(s.character_id)
+                    affect_names.append(_html.escape(char.name if char else str(s.character_id)))
+            if affect_names:
+                affect_actors_section = (
+                    f'<p class="muted" style="margin-bottom:0.5rem">Pending adjudication for: '
+                    f'<strong>{", ".join(affect_names)}</strong></p>'
+                )
+
+        label = "Affect outcome narrative" if turn.partial_resolved else "Resolution narrative"
+        placeholder = "Describe the Affect actor outcome..." if turn.partial_resolved else "Describe what happens..."
+        btn_label = "Finalize Round" if turn.partial_resolved else "Resolve Turn"
+
         resolve_html = f"""
 <hr class="divider">
+{partial_log_section}
+{affect_actors_section}
 <form hx-post="/session/{channel_id}/resolve"
       hx-target="#dashboard" hx-swap="outerHTML">
-  <label>Resolution narrative</label>
-  <textarea name="narrative" rows="3" placeholder="Describe what happens..."></textarea>
-  <button class="btn-success" type="submit">Resolve Turn</button>
+  <label>{label}</label>
+  <textarea name="narrative" rows="3" placeholder="{placeholder}"></textarea>
+  <button class="btn-success" type="submit">{btn_label}</button>
 </form>"""
 
     timer_html = f"""
@@ -463,6 +525,7 @@ def turn_panel(state: GameState, edit_id: str = "") -> str:
   {due_str}
   {encounter_bar_html}
   {subs_html}
+  {partial_resolve_html}
   {resolve_html}
   {timer_html}
   <hr class="divider">

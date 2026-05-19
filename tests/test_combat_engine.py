@@ -3118,3 +3118,198 @@ class TestAsleepCondition:
         handler = _HOOK_DISPATCH["remove_this_condition_on_roll"]
         handler(state, char_id, None, log, {"dice": "1d4", "threshold": 4})
         assert any("_condition_id" in e or "not injected" in e for e in log)
+
+
+# ---------------------------------------------------------------------------
+# partial_auto_resolve_round
+# ---------------------------------------------------------------------------
+
+class TestPartialAutoResolveRound:
+    """Tests for the hybrid partial auto-resolve path used when a round has
+    at least one Affect submission alongside structured actions."""
+
+    from engine import partial_auto_resolve_round
+
+    def _setup(self, npc_hp=20, npc_def=0):
+        """Two characters in ROUNDS with one room NPC. Returns (state, char_ids, npc)."""
+        from engine import add_npc, register_room
+        from models import Room
+
+        state = GameState(platform_channel_id="ch", dm_user_id="dm")
+        state.party = Party(name="P")
+        create_character(state, "Alice", CharacterClass.KNIGHT, "Pack A", owner_id="u1")
+        create_character(state, "Bob",   CharacterClass.KNIGHT, "Pack A", owner_id="u2")
+        start_session(state)
+        room = Room(name="Hall", description="Hall.")
+        register_room(state, room)
+        state.current_room_id = room.room_id
+        npc = NPC(name="Goblin", hp_current=npc_hp, hp_max=npc_hp,
+                  defense=npc_def, damage_dice="1d4")
+        add_npc(state, npc)
+        enter_rounds(state)
+        open_turn(state)
+        char_ids = list(state.characters.keys())
+        # Pin initiatives so Alice always acts before Bob
+        state.battlefield.combatants[char_ids[0]].initiative = 100
+        state.battlefield.combatants[char_ids[1]].initiative = 10
+        # Place everyone at ENGAGE
+        for cid in state.battlefield.combatants:
+            state.battlefield.combatants[cid].range_band = RangeBand.ENGAGE
+        return state, char_ids, npc
+
+    def _make_submissions(self, state, alice_id, bob_id, npc_id, *,
+                          alice_structured=True, bob_structured=False):
+        from models import PlayerTurnSubmission
+        subs = []
+        if alice_structured:
+            subs.append(PlayerTurnSubmission(
+                character_id=alice_id, action_text="Attack",
+                is_latest=True,
+                combat_action=CombatAction(action_id="attack", target_id=npc_id).to_dict(),
+            ))
+        else:
+            subs.append(PlayerTurnSubmission(
+                character_id=alice_id, action_text="I try to intimidate the Goblin.",
+                is_latest=True, combat_action=None,
+            ))
+        if bob_structured:
+            subs.append(PlayerTurnSubmission(
+                character_id=bob_id, action_text="Attack",
+                is_latest=True,
+                combat_action=CombatAction(action_id="attack", target_id=npc_id).to_dict(),
+            ))
+        else:
+            subs.append(PlayerTurnSubmission(
+                character_id=bob_id, action_text="I try to intimidate the Goblin.",
+                is_latest=True, combat_action=None,
+            ))
+        state.current_turn.submissions = subs
+
+    def test_skips_affect_action_resolves_structured(self):
+        """Structured attacker's action resolves (NPC loses HP); Affect actor's
+        action_text appears in the log as pending."""
+        from engine import partial_auto_resolve_round
+        state, (alice_id, bob_id), npc = self._setup(npc_hp=100, npc_def=0)
+        # Alice attacks (structured); Bob submits Affect
+        self._make_submissions(state, alice_id, bob_id, npc.npc_id,
+                               alice_structured=True, bob_structured=False)
+
+        result = partial_auto_resolve_round(state)
+
+        assert result.ok
+        assert npc.hp_current < 100, "Alice's structured attack should have resolved"
+        assert "pending DM adjudication" in result.message
+        assert state.current_turn.partial_resolved is True
+
+    def test_ticks_affect_actor_conditions(self):
+        """Even though the Affect actor's action is skipped, their conditions are
+        ticked in initiative order."""
+        from engine import partial_auto_resolve_round
+        state, (alice_id, bob_id), npc = self._setup()
+        # Bob submits Affect; give Bob a poisoned condition with duration 2
+        apply_condition(state, bob_id, "poisoned", duration=2)
+        bob_conditions_before = [
+            c for c in state.characters[bob_id].active_conditions
+            if c.condition_id == "poisoned"
+        ]
+        assert len(bob_conditions_before) == 1
+
+        self._make_submissions(state, alice_id, bob_id, npc.npc_id,
+                               alice_structured=True, bob_structured=False)
+        partial_auto_resolve_round(state)
+
+        bob_conditions_after = [
+            c for c in state.characters[bob_id].active_conditions
+            if c.condition_id == "poisoned"
+        ]
+        # Duration should have decremented (2 → 1) rather than staying at 2
+        assert len(bob_conditions_after) == 1
+        assert bob_conditions_after[0].duration_rounds == 1
+
+    def test_all_affect_still_runs_npc_actions(self):
+        """When all player submissions are Affect, NPC actions still execute."""
+        from engine import partial_auto_resolve_round
+        state, (alice_id, bob_id), npc = self._setup(npc_hp=100, npc_def=0)
+        # Both players submit Affect
+        self._make_submissions(state, alice_id, bob_id, npc.npc_id,
+                               alice_structured=False, bob_structured=False)
+
+        result = partial_auto_resolve_round(state)
+
+        assert result.ok
+        assert state.current_turn.partial_resolved is True
+        # NPC should have attacked at least one player (may miss, but should have acted)
+        assert len(result.message) > 0
+
+    def test_idempotent_second_call_returns_error(self):
+        """Calling partial_auto_resolve_round twice on the same turn returns an error
+        on the second call without mutating state further."""
+        from engine import partial_auto_resolve_round
+        state, (alice_id, bob_id), npc = self._setup(npc_hp=100, npc_def=0)
+        self._make_submissions(state, alice_id, bob_id, npc.npc_id,
+                               alice_structured=True, bob_structured=False)
+
+        result1 = partial_auto_resolve_round(state)
+        assert result1.ok
+
+        hp_after_first = npc.hp_current
+        result2 = partial_auto_resolve_round(state)
+        assert not result2.ok
+        assert "already applied" in result2.error
+        assert npc.hp_current == hp_after_first, "Second call should not mutate state"
+
+    def test_resets_single_round_flags(self):
+        """All per-round combatant flags are False after partial_auto_resolve_round."""
+        from engine import partial_auto_resolve_round
+        state, (alice_id, bob_id), npc = self._setup()
+        self._make_submissions(state, alice_id, bob_id, npc.npc_id,
+                               alice_structured=True, bob_structured=False)
+        # Manually set a flag that should be cleared
+        state.battlefield.combatants[alice_id].skip_action = True
+
+        partial_auto_resolve_round(state)
+
+        for cs in state.battlefield.combatants.values():
+            assert cs.acted_this_round is False
+            assert cs.skip_action is False
+            assert cs.movement_blocked is False
+            assert cs.used_move is False
+            assert cs.used_oracle is False
+
+    def test_log_stored_on_turn_record(self):
+        """After partial_auto_resolve_round, the log is stored on the TurnRecord."""
+        from engine import partial_auto_resolve_round
+        state, (alice_id, bob_id), npc = self._setup(npc_hp=100)
+        self._make_submissions(state, alice_id, bob_id, npc.npc_id,
+                               alice_structured=True, bob_structured=False)
+
+        partial_auto_resolve_round(state)
+
+        assert state.current_turn.partial_resolution_log != ""
+        # The log should reference at least one combatant name
+        names = {c.name for c in state.characters.values()}
+        assert any(name in state.current_turn.partial_resolution_log for name in names)
+
+    def test_partial_fields_survive_serialization(self):
+        """partial_resolved and partial_resolution_log survive a serialize/deserialize round-trip."""
+        from engine import partial_auto_resolve_round
+        state, (alice_id, bob_id), npc = self._setup(npc_hp=100)
+        self._make_submissions(state, alice_id, bob_id, npc.npc_id,
+                               alice_structured=True, bob_structured=False)
+
+        partial_auto_resolve_round(state)
+        original_log = state.current_turn.partial_resolution_log
+
+        json_str  = serialize_state(state)
+        state2    = deserialize_state(json_str)
+
+        assert state2.current_turn.partial_resolved is True
+        assert state2.current_turn.partial_resolution_log == original_log
+
+    def test_errors_outside_rounds_mode(self):
+        """partial_auto_resolve_round returns an error if not called in ROUNDS mode."""
+        from engine import partial_auto_resolve_round
+        state = _make_state_with_npc()
+        # State is in EXPLORATION mode — no battlefield
+        result = partial_auto_resolve_round(state)
+        assert not result.ok

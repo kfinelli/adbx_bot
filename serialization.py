@@ -315,8 +315,10 @@ def serialize_turn_record(t: TurnRecord) -> dict:
         "closed_at":      _dt(t.closed_at),
         "resolved_at":    _dt(t.resolved_at),
         "submissions":    [serialize_submission(s) for s in t.submissions],
-        "resolution":     t.resolution,
-        "state_snapshot": t.state_snapshot,  # already a plain dict
+        "resolution":            t.resolution,
+        "state_snapshot":        t.state_snapshot,  # already a plain dict
+        "partial_resolved":      t.partial_resolved,
+        "partial_resolution_log": t.partial_resolution_log,
     }
 
 
@@ -618,6 +620,8 @@ def deserialize_turn_record(d: dict) -> TurnRecord:
         submissions=[deserialize_submission(s) for s in d["submissions"]],
         resolution=d["resolution"],
         state_snapshot=d["state_snapshot"],
+        partial_resolved=d.get("partial_resolved", False),
+        partial_resolution_log=d.get("partial_resolution_log", ""),
     )
 
 

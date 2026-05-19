@@ -27,6 +27,7 @@ from .combat import (
     auto_resolve_round,
     initialize_battlefield,
     instant_move,
+    partial_auto_resolve_round,
 )
 from .core import TurnManager
 from .data_loader import (
@@ -857,6 +858,7 @@ __all__ = [
     "CombatAction",
     "initialize_battlefield",
     "auto_resolve_round",
+    "partial_auto_resolve_round",
     "apply_condition",
     "instant_move",
     # Data registries (read-only, loaded from data/ at startup)

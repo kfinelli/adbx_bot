@@ -629,6 +629,10 @@ class TurnRecord:
     # Snapshot of game state at resolution time for the history log
     state_snapshot: dict | None                = None  # serialized GameState
 
+    # Set after partial_auto_resolve_round() runs; guards against double-resolution
+    partial_resolved:       bool = False
+    partial_resolution_log: str  = ""
+
 
 # ---------------------------------------------------------------------------
 # Party and session

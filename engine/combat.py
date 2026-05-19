@@ -440,6 +440,116 @@ def auto_resolve_round(state: GameState) -> object:  # EngineResult
     return _ok(state, narrative)
 
 
+def partial_auto_resolve_round(state: GameState) -> object:  # EngineResult
+    """
+    Resolve all structured player actions and NPC actions without advancing the turn.
+    Affect submissions are skipped — the DM adjudicates those separately via resolve_turn.
+    """
+    if state.battlefield is None:
+        return _err(state, "No active battlefield.")
+    if state.current_turn is None:
+        return _err(state, "No current turn to resolve.")
+    if state.current_turn.partial_resolved:
+        return _err(state, "Partial resolution already applied to this round.")
+
+    bf  = state.battlefield
+    log: list[str] = list(bf.round_log)
+
+    # Identify Affect actors (combat_action is None OR action_type == "affect")
+    affect_ids: set[UUID] = set()
+    for sub in state.current_turn.submissions:
+        if not sub.is_latest:
+            continue
+        if sub.combat_action is None:
+            affect_ids.add(sub.character_id)
+            continue
+        action = CombatAction.from_dict(sub.combat_action)
+        if action.is_affect:
+            affect_ids.add(sub.character_id)
+
+    # --- 1. Player actions (non-Affect only)
+    # Pre-pass for oracle/non-consumes_act actions; Affect actors excluded entirely.
+    player_actions: dict[UUID, CombatAction] = {}
+    for sub in state.current_turn.submissions:
+        if not sub.is_latest or not sub.combat_action:
+            continue
+        if sub.character_id in affect_ids:
+            continue
+        action = CombatAction.from_dict(sub.combat_action)
+        action_def = ACTION_REGISTRY.get(action.action_id)
+        if action_def is not None and not action_def.consumes_act:
+            _execute_action(state, sub.character_id, action, log)
+        else:
+            player_actions[sub.character_id] = action
+
+    # --- 2. NPC decisions
+    npc_actions: dict[UUID, CombatAction] = {}
+    for npc in state.npcs_in_current_room:
+        if npc.status == "dead":
+            continue
+        cs = bf.combatants.get(npc.npc_id)
+        if cs is None:
+            continue
+        action = _npc_decide(state, npc.npc_id, cs)
+        if action:
+            npc_actions[npc.npc_id] = action
+
+    # --- 2b. on_turn_start hooks
+    _fire_turn_start_hooks(state, log)
+
+    # --- 3. Sort ALL combatants by initiative (descending)
+    all_combatant_ids: list[UUID] = sorted(
+        bf.combatants.keys(),
+        key=lambda cid: bf.combatants[cid].initiative,
+        reverse=True,
+    )
+    action_map: dict[UUID, CombatAction] = {**player_actions, **npc_actions}
+
+    # --- 4. Execute actions + per-actor condition tick
+    # Affect actors: skip _execute_action but tick conditions in initiative order.
+    for actor_id in all_combatant_ids:
+        cs = bf.combatants.get(actor_id)
+        if cs is None or not _is_alive(state, actor_id):
+            continue
+        if actor_id in affect_ids:
+            affect_sub = next(
+                (s for s in state.current_turn.submissions
+                 if s.character_id == actor_id and s.is_latest),
+                None,
+            )
+            actor_name = _combatant_name(state, actor_id)
+            affect_text = affect_sub.action_text if affect_sub else "Affect action"
+            log.append(f"[{actor_name}: {affect_text!r} — pending DM adjudication]")
+            _tick_actor_conditions(state, actor_id, log)
+            continue
+        action = action_map.get(actor_id)
+        if action is not None:
+            if cs.skip_action:
+                log.append(fmt_string("combat.log.stunned", actor_name=_combatant_name(state, actor_id)))
+            else:
+                _execute_action(state, actor_id, action, log)
+                cs.acted_this_round = True
+        _tick_actor_conditions(state, actor_id, log)
+
+    # --- 6. Reset single-round flags (round is mechanically complete)
+    for cs in bf.combatants.values():
+        cs.acted_this_round = False
+        cs.skip_action      = False
+        cs.movement_blocked = False
+        cs.used_move        = False
+        cs.used_oracle      = False
+
+    # --- 7. Store log; do NOT advance turn or check combat-exit conditions
+    narrative = "\n".join(log) if log else get_string("combat.log.no_action")
+    bf.round_log = log[:]
+
+    state.current_turn.partial_resolved       = True
+    state.current_turn.partial_resolution_log = narrative
+    state.updated_at = _now()
+
+    return _ok(state, narrative)
+
+
 # ---------------------------------------------------------------------------
 # _execute_action
 # ---------------------------------------------------------------------------

@@ -42,6 +42,7 @@ from engine import (
     import_dungeon,
     move_party_to_room,
     open_turn,
+    partial_auto_resolve_round,
     recharge_day_spells,
     register_room,
     remove_item,
@@ -108,6 +109,8 @@ from models import (
     RangeBand,
     Room,
     RoomFeature,
+    SessionMode,
+    TurnStatus,
 )
 from serialization import deserialize_dungeon_file, serialize_dungeon_file
 from store import archive_session, repost_status, save_session_async, sync_character_to_sessions
@@ -257,6 +260,22 @@ async def session_view(channel_id: str, view_room: str = "", edit: str = ""):
 # Turn routes
 # ---------------------------------------------------------------------------
 
+@app.post("/session/{channel_id}/partial_resolve", response_class=HTMLResponse)
+async def route_partial_resolve(channel_id: str):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    if (state.mode != SessionMode.ROUNDS
+            or state.current_turn is None
+            or state.current_turn.status != TurnStatus.CLOSED):
+        return _respond(channel_id, error="Partial resolve only applies to a closed combat round.", sync=False)
+    result = partial_auto_resolve_round(state)
+    if not result.ok:
+        return _respond(channel_id, error=result.error, sync=False)
+    await save_session_async(state)
+    return _respond(channel_id, flash="Structured actions resolved. Adjudicate Affect below.", sync=False)
+
+
 @app.post("/session/{channel_id}/resolve", response_class=HTMLResponse)
 async def route_resolve(channel_id: str, narrative: Annotated[str, Form()]):
     state = store.get_session(channel_id)
@@ -264,7 +283,11 @@ async def route_resolve(channel_id: str, narrative: Annotated[str, Form()]):
         return HTMLResponse("Session not found.", status_code=404)
     if state.current_turn is not None:
         close_turn(state)
-    result = resolve_turn(state, narrative)
+    # Prepend the partial resolution log if partial auto-resolve already ran
+    full_narrative = narrative
+    if state.current_turn is not None and state.current_turn.partial_resolution_log:
+        full_narrative = state.current_turn.partial_resolution_log + "\n\n" + narrative
+    result = resolve_turn(state, full_narrative)
     if not result.ok:
         return _respond(channel_id, error=result.error, sync=False)
     open_turn(state)
@@ -272,7 +295,7 @@ async def route_resolve(channel_id: str, narrative: Annotated[str, Form()]):
     if _bot:
         channel = _bot.get_channel(int(channel_id))
         if channel:
-            asyncio.create_task(dispatch_turn_resolved(channel, state, narrative, bot=_bot))
+            asyncio.create_task(dispatch_turn_resolved(channel, state, full_narrative, bot=_bot))
     return _respond(channel_id, flash="Turn resolved.", sync=False)
 
 
