@@ -520,6 +520,11 @@ class ExplorationActionView(discord.ui.View):
                 get_string("errors.strife_permission"), ephemeral=True
             )
             return
+        if state.mode == SessionMode.ROUNDS and not is_dm:
+            await interaction.response.send_message(
+                get_string("errors.strife_dm_only_combat"), ephemeral=True
+            )
+            return
         if state.mode == SessionMode.ROUNDS:
             result = exit_rounds(state)
             narrative = get_string("session.combat_ended")

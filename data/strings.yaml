@@ -42,6 +42,7 @@ errors:
   already_submitted: "Wait for resolution or ask the DM to un-submit your action."
   abscond_permission: "Only the party leader may use Abscond."
   strife_permission: "Only the DM or party leader can toggle combat rounds."
+  strife_dm_only_combat: "Only the DM can end combat. Combat ends automatically when all enemies are defeated."
   dm_only: "Only the DM can use this command."
   character_not_found: "Character not found."
   wrong_character_panel: "This panel doesn't belong to your character."
