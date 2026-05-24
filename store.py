@@ -126,7 +126,16 @@ async def save_session_async(state: GameState) -> None:
 def _build_content(state: GameState) -> str:
     header = render_status_header(state)
     body = render_status(state)
-    return header + "\n```\n" + body + "\n```"
+    content = header + "\n```\n" + body + "\n```"
+    if len(content) <= 2000:
+        return content
+    import logging
+    logging.getLogger(__name__).warning(
+        "Status message exceeded 2000 chars (%d); truncating.", len(content)
+    )
+    tail = "\n[status truncated — room content exceeds Discord message limit]\n```"
+    max_body = 2000 - len(header) - len("\n```\n") - len(tail)
+    return header + "\n```\n" + body[:max_body] + tail
 
 
 def _build_view(state: GameState):
