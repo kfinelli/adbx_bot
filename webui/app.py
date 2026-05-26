@@ -47,6 +47,7 @@ from engine import (
     remove_item,
     remove_npc,
     remove_npc_condition,
+    reopen_turn,
     resolve_turn,
     resume_session,
     set_character_hp,
@@ -274,6 +275,18 @@ async def route_resolve(channel_id: str, narrative: Annotated[str, Form()]):
         if channel:
             asyncio.create_task(dispatch_turn_resolved(channel, state, narrative, bot=_bot))
     return _respond(channel_id, flash="Turn resolved.", sync=False)
+
+
+@app.post("/session/{channel_id}/reopen", response_class=HTMLResponse)
+async def route_reopen(channel_id: str, hours: Annotated[float, Form()]):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    result = reopen_turn(state, hours)
+    if not result.ok:
+        return _respond(channel_id, error=result.error)
+    await save_session_async(state)
+    return _respond(channel_id, flash=f"Turn reopened ({hours}h deadline).")
 
 
 @app.post("/session/{channel_id}/settimer", response_class=HTMLResponse)

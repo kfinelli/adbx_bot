@@ -124,6 +124,7 @@ session:
 turn:
   opened: "Turn {turn_number} is now open."
   closed: "Turn {turn_number} closed. Waiting for DM resolution."
+  reopened: "Turn {turn_number} reopened for submissions."
   submitted_action: "{name}: \"{action_text}\""
   number_set: "Turn number set to {turn_number}."
   unsubmitted: "{name}'s turn submission has been sent back for revision."
@@ -133,6 +134,7 @@ turn:
     character_inactive: "{name} is not active and cannot submit a turn."
     no_current_turn: "No current turn to close."
     not_open: "Current turn is not open."
+    not_closed: "Current turn is not closed; cannot reopen."
     no_current_to_resolve: "No current turn to resolve."
     already_resolved: "Current turn is already resolved."
     no_current: "No current turn."

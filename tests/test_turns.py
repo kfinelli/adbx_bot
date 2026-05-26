@@ -5,6 +5,7 @@ test_turns.py — Turn lifecycle tests: open, submit, close, resolve, auto-close
 from engine import (
     close_turn,
     open_turn,
+    reopen_turn,
     resolve_turn,
     set_character_status,
     submit_turn,
@@ -123,6 +124,41 @@ class TestCloseTurn:
 
     def test_close_with_no_turn_fails(self, bare_state):
         result = close_turn(bare_state)
+        assert not result.ok
+
+
+class TestReopenTurn:
+    def test_reopen_closed_turn_succeeds(self, active_state):
+        close_turn(active_state)
+        assert active_state.current_turn.status == TurnStatus.CLOSED
+        assert active_state.current_turn.closed_at is not None
+
+        result = reopen_turn(active_state, hours=24.0)
+        assert result.ok
+        assert active_state.current_turn.status == TurnStatus.OPEN
+        assert active_state.current_turn.closed_at is None
+        assert active_state.current_turn.due_at is not None
+
+    def test_reopen_preserves_submissions(self, active_party_state):
+        char_ids = list(active_party_state.party.member_ids)
+        for cid in char_ids:
+            submit_turn(active_party_state, cid, "Pre-close action.")
+        # All submitted -> auto-closed
+        assert active_party_state.current_turn.status == TurnStatus.CLOSED
+        sub_count = len(active_party_state.current_turn.submissions)
+
+        result = reopen_turn(active_party_state, hours=12.0)
+        assert result.ok
+        assert active_party_state.current_turn.status == TurnStatus.OPEN
+        assert len(active_party_state.current_turn.submissions) == sub_count
+
+    def test_reopen_open_turn_fails(self, active_state):
+        # current_turn is OPEN out of the gate
+        result = reopen_turn(active_state, hours=24.0)
+        assert not result.ok
+
+    def test_reopen_with_no_turn_fails(self, bare_state):
+        result = reopen_turn(bare_state, hours=24.0)
         assert not result.ok
 
 
