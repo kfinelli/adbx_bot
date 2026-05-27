@@ -913,6 +913,15 @@ class ClassActionView(discord.ui.View):
 # Combat: target dispatch helper
 # ---------------------------------------------------------------------------
 
+def _action_uses_weapon(action_def) -> bool:
+    """True if the action dispatches a weapon-consuming hook (currently melee_attack)."""
+    for entry in action_def.effect_tags:
+        tag = entry if isinstance(entry, str) else entry.get("tag")
+        if tag == "melee_attack":
+            return True
+    return False
+
+
 async def _dispatch_with_target(
     interaction:      discord.Interaction,
     char_id:          UUID,
@@ -926,8 +935,10 @@ async def _dispatch_with_target(
     """After a target is known, route to weapon picker → destination → submit."""
     owner_char_obj = state.characters.get(char_id)
     weapons = owner_char_obj.equipped_weapons() if owner_char_obj else []
+    action_def = ACTION_REGISTRY.get(partial.action_id)
+    needs_weapon = action_def is not None and _action_uses_weapon(action_def)
 
-    if len(weapons) > 1:
+    if needs_weapon and len(weapons) > 1:
         view = WeaponPickerView(
             char_id=char_id,
             channel_id=channel_id,
