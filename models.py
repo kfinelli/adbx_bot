@@ -258,7 +258,13 @@ class Character:
         item_id = self.equipped_slots.get("main_hand")
         if item_id is None:
             return None
-        return next((i for i in self.inventory if i.item_id == item_id), None)
+        # Filter by `equipped` — if duplicate stacks of the same item_id exist
+        # (e.g. one javelin equipped, one spare in inventory), we must return
+        # the equipped instance, not just the first one in insertion order.
+        return next(
+            (i for i in self.inventory if i.item_id == item_id and i.equipped),
+            None,
+        )
 
     def equipped_weapons(self) -> list[tuple[InventoryItem, Weapon]]:
         """
@@ -335,7 +341,7 @@ class Character:
         item_id = self.equipped_slots.get(slot_key)
         if item_id is None:
             return []
-        return [i for i in self.inventory if i.item_id == item_id]
+        return [i for i in self.inventory if i.item_id == item_id and i.equipped]
 
     @property
     def inventory_size(self) -> int:

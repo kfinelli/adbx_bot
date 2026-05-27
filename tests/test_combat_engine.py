@@ -463,7 +463,7 @@ class TestTargetsStatRouting:
         char = list(state.characters.values())[0]
         weapon = Weapon("test_weapon", "Test Weapon", "C", "Sword", "physique", "1d4",
                         targetsStat=targets_stat)
-        inv_item = InventoryItem(item_id="test_weapon")
+        inv_item = InventoryItem(item_id="test_weapon", equipped=True)
         char.inventory.append(inv_item)
         char.equipped_slots["main_hand"] = "test_weapon"
 
@@ -2303,7 +2303,7 @@ class TestAActions:
         # Equip a melee weapon (range=0)
         char = state.characters[char_id]
         weapon = Weapon("melee_w", "Sword", "C", "Sword", "physique", "1d6", range=0)
-        char.inventory.append(InventoryItem(item_id="melee_w"))
+        char.inventory.append(InventoryItem(item_id="melee_w", equipped=True))
         char.equipped_slots["main_hand"] = "melee_w"
         from engine.data_loader import ITEM_REGISTRY
         ITEM_REGISTRY["melee_w"] = weapon
@@ -2327,7 +2327,7 @@ class TestAActions:
         # Equip a reach weapon (range=1)
         char = state.characters[char_id]
         weapon = Weapon("reach_w", "Greatspear", "C", "Polearm", "physique", "1d8", range=1)
-        char.inventory.append(InventoryItem(item_id="reach_w"))
+        char.inventory.append(InventoryItem(item_id="reach_w", equipped=True))
         char.equipped_slots["main_hand"] = "reach_w"
         from engine.data_loader import ITEM_REGISTRY
         ITEM_REGISTRY["reach_w"] = weapon
@@ -2349,7 +2349,7 @@ class TestAActions:
         state, char_id, npc_id = self._setup_combat(npc_hp=100, npc_def=0)
         char = state.characters[char_id]
         weapon = Weapon("reach_w2", "Greatspear", "C", "Polearm", "physique", "1d8", range=1)
-        char.inventory.append(InventoryItem(item_id="reach_w2"))
+        char.inventory.append(InventoryItem(item_id="reach_w2", equipped=True))
         char.equipped_slots["main_hand"] = "reach_w2"
         from engine.data_loader import ITEM_REGISTRY
         ITEM_REGISTRY["reach_w2"] = weapon

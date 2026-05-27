@@ -323,10 +323,18 @@ def _hook_weapon_attack(
                 if current > 0:
                     weapon_inv.charges = current - 1
             # Consume the weapon on a throwable attack (thrown regardless of hit/miss).
+            # Only remove the specific equipped instance — other stacks of the same
+            # item_id (e.g. spare javelins in inventory) must survive.
             if action and action.weapon_id and action.weapon_id.endswith("__throwable"):
                 real_id = action.weapon_id.removesuffix("__throwable")
-                actor_char.inventory = [i for i in actor_char.inventory if i.item_id != real_id]
-                if actor_char.equipped_slots.get("main_hand") == real_id:
+                thrown_instance_id = weapon_inv.instance_id
+                actor_char.inventory = [
+                    i for i in actor_char.inventory if i.instance_id != thrown_instance_id
+                ]
+                if (
+                    actor_char.equipped_slots.get("main_hand") == real_id
+                    and not any(i.item_id == real_id for i in actor_char.inventory)
+                ):
                     actor_char.equipped_slots["main_hand"] = None
         str_mod      = _effective_stat_mod(state, actor_id, stat_name)
         attack_bonus = 0

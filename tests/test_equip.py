@@ -1144,3 +1144,95 @@ class TestEquippedWeaponsThroughSpellbook:
         assert weapons
         for inv, _defn in weapons:
             assert inv.container_id == equipped_book.instance_id
+
+
+# ---------------------------------------------------------------------------
+# Duplicate-stack invariants: when two copies of the same item_id exist
+# (one equipped, one spare), engine lookups must target the equipped instance,
+# not just the first inventory match.
+# ---------------------------------------------------------------------------
+
+class TestDuplicateStackLookups:
+    """Regression suite for the 'spare javelin disappears' family of bugs.
+
+    Each test puts an unequipped duplicate ahead of the equipped instance
+    in the inventory list — that way a naive `next(by item_id)` lookup
+    returns the wrong instance and the bug surfaces.
+    """
+
+    def _equip_with_spare_first(self, state_char, item_id):
+        """Append an unequipped duplicate, then an equipped instance, and wire the slot."""
+        char = _get_char(state_char)
+        spare = InventoryItem(item_id=item_id, equipped=False)
+        equipped = InventoryItem(item_id=item_id, equipped=True)
+        char.inventory.append(spare)
+        char.inventory.append(equipped)
+        char.equipped_slots["main_hand"] = item_id
+        return char, spare, equipped
+
+    def test_equipped_weapon_returns_equipped_instance(self, state_char, weapon_id):
+        """Character.equipped_weapon() must return the equipped instance, even
+        when an unequipped duplicate appears earlier in the inventory list."""
+        char, spare, equipped = self._equip_with_spare_first(state_char, weapon_id)
+        result = char.equipped_weapon()
+        assert result is not None
+        assert result.instance_id == equipped.instance_id
+
+    def test_items_in_slot_returns_only_equipped(self, state_char, weapon_id):
+        """items_in_slot promises 0 or 1 items — it must not return a spare."""
+        char, spare, equipped = self._equip_with_spare_first(state_char, weapon_id)
+        items = char.items_in_slot("main_hand")
+        assert len(items) == 1
+        assert items[0].instance_id == equipped.instance_id
+
+    def test_unequip_clears_equipped_instance(self, state_char, weapon_id):
+        """unequip_item must clear the equipped flag on the equipped instance,
+        not on the spare."""
+        char, spare, equipped = self._equip_with_spare_first(state_char, weapon_id)
+        result = unequip_item(state_char, char.character_id, ItemSlot.MAIN_HAND)
+        assert result.ok, result.error
+        assert not equipped.equipped, "equipped instance should now be unequipped"
+        # Spare was already unequipped — its state must be unchanged.
+        assert not spare.equipped
+
+    def test_equip_displaces_equipped_instance(self, state_char, weapon_id, head_gear_id):
+        """Equipping a head gear must not touch the equipped weapon's stack.
+        (We change slots, but more importantly we make sure the
+        equip-flow does not pick the wrong instance when displacing.)"""
+        # Set up: spare weapon first, then equipped weapon in MAIN_HAND.
+        char, _, equipped_weapon = self._equip_with_spare_first(state_char, weapon_id)
+        # Equip head gear into the (empty) HEAD slot — irrelevant displace path,
+        # but exercises the lookup logic. The main check: equipped weapon
+        # instance must remain equipped.
+        _add_item(char, head_gear_id)
+        result = equip_item(state_char, char.character_id, head_gear_id)
+        assert result.ok, result.error
+        assert equipped_weapon.equipped is True
+        assert char.equipped_slots["main_hand"] == weapon_id
+
+    def test_replace_main_hand_only_unequips_real_instance(self, state_char, weapon_id):
+        """When equipping a second weapon to MAIN_HAND, the previously equipped
+        instance — not the spare — must be the one that gets unequipped."""
+        # Find a second distinct weapon id (different from weapon_id).
+        second_id = next(
+            (iid for iid, defn in ITEM_REGISTRY.items()
+             if isinstance(defn, Weapon)
+             and not isinstance(defn, (ChargeWeapon, ContainerItem))
+             and iid != weapon_id
+             and defn.rank in {"D", "E"}),
+            None,
+        )
+        assert second_id is not None, "Could not find a second simple weapon"
+
+        char, spare, equipped_weapon = self._equip_with_spare_first(state_char, weapon_id)
+        _add_item(char, second_id)
+        result = equip_item(state_char, char.character_id, second_id)
+        assert result.ok, result.error
+        # The originally-equipped instance must now be unequipped, not the spare.
+        assert not equipped_weapon.equipped
+        # The spare must still be unequipped (untouched).
+        assert not spare.equipped
+        # And exactly one inventory item should now be flagged equipped (the second weapon).
+        equipped_items = [i for i in char.inventory if i.equipped]
+        assert len(equipped_items) == 1
+        assert equipped_items[0].item_id == second_id
