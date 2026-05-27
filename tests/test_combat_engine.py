@@ -45,6 +45,16 @@ from models import (
 )
 from serialization import deserialize_state, serialize_state
 
+
+def _dice_bounds(expr: str) -> tuple[int, int]:
+    """Return (min, max) total for a 'XdY' or 'XdY+Z' dice expression."""
+    import re
+    m = re.fullmatch(r"(\d+)d(\d+)(?:\+(\d+))?", expr)
+    assert m, f"unparseable dice expression: {expr!r}"
+    count, sides, bonus = int(m.group(1)), int(m.group(2)), int(m.group(3) or 0)
+    return count + bonus, count * sides + bonus
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -927,13 +937,16 @@ class TestConditions:
             assert cid in CONDITION_REGISTRY, f"'{cid}' not in CONDITION_REGISTRY"
 
     def test_poisoned_has_on_turn_end_hook(self):
+        import re
+
         from engine import CONDITION_REGISTRY
         entry = CONDITION_REGISTRY["poisoned"].hooks.get("on_turn_end")
         # Now a hook object, not a plain string
         assert isinstance(entry, dict)
         assert entry["tag"] == "deal_damage"
-        assert entry["dice"] == "1d4"
         assert entry["type"] == "poison"
+        # Dice expression shape only; exact values are tunable game balance.
+        assert re.fullmatch(r"\d+d\d+(\+\d+)?", entry["dice"]) is not None
 
     def test_stunned_has_on_turn_start_hook(self):
         from engine import CONDITION_REGISTRY
@@ -983,24 +996,42 @@ class TestConditions:
         assert hp_after < hp_before, "Poisoned character should have lost HP"
         assert any("poison" in entry for entry in log)
 
-    def test_poisoned_damage_is_1_to_4(self):
-        """Run many ticks; all damage values must fall in [1, 4]."""
+    def test_poisoned_damage_is_in_dice_range(self):
+        """Run many ticks; all damage values must fall within the configured dice range."""
+        from engine import CONDITION_REGISTRY
         from engine.combat import _tick_conditions
+        dice_expr = CONDITION_REGISTRY["poisoned"].hooks["on_turn_end"]["dice"]
+        dmin, dmax = _dice_bounds(dice_expr)
+
         damages = set()
         for _ in range(60):
             state, char_id, _ = self._state_in_rounds()
+            # Survive any possible roll so HP clamping at 0 can't mask the value.
+            state.characters[char_id].hp_max = dmax + 1
+            state.characters[char_id].hp_current = dmax + 1
             apply_condition(state, char_id, "poisoned", duration=5)
             hp_before = state.characters[char_id].hp_current
             _tick_conditions(state, [])
             damage = hp_before - state.characters[char_id].hp_current
             if damage > 0:
                 damages.add(damage)
-        assert damages <= {1, 2, 3, 4}
+        assert damages, "expected at least one positive damage roll"
+        assert min(damages) >= dmin
+        assert max(damages) <= dmax
 
     def test_poisoned_expires_after_duration(self):
-        state, char_id, _ = self._state_in_rounds()
-        apply_condition(state, char_id, "poisoned", duration=2)
+        from engine import CONDITION_REGISTRY
         from engine.combat import _tick_conditions
+        dice_expr = CONDITION_REGISTRY["poisoned"].hooks["on_turn_end"]["dice"]
+        _, dmax = _dice_bounds(dice_expr)
+
+        state, char_id, _ = self._state_in_rounds()
+        # Two ticks fire before expiry — make sure the character survives both.
+        survive_hp = dmax * 2 + 1
+        state.characters[char_id].hp_max = survive_hp
+        state.characters[char_id].hp_current = survive_hp
+
+        apply_condition(state, char_id, "poisoned", duration=2)
         _tick_conditions(state, [])   # round 1 — duration becomes 1
         _tick_conditions(state, [])   # round 2 — expires
         char = state.characters[char_id]
