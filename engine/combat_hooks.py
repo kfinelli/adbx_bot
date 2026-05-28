@@ -592,15 +592,7 @@ def _hook_deal_damage(
             log.append(fmt_string("combat.log.takes_damage_slain", actor_name=actor_name, damage=damage, damage_type=damage_type))
             xp_total = actor_npc.hit_dice * 100
             if xp_total > 0:
-                from engine.character import CharacterManager
-                from models import CharacterStatus
-                active = [c for c in state.characters.values()
-                          if c.status == CharacterStatus.ACTIVE]
-                if active:
-                    cm = CharacterManager()
-                    cm.distribute_xp(state, xp_total)
-                    xp_each = xp_total // len(active)
-                    log.append(fmt_string("combat.log.xp_gained", xp_total=xp_total, xp_each=xp_each))
+                state.battlefield.defeated_npc_log.append((actor_name, xp_total))
             return
     else:
         return
