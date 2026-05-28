@@ -457,3 +457,149 @@ class TestProtectorNoPreemptiveSubmit:
         # Protected condition must have been applied during round resolution
         assert any(c.condition_id == "protected" for c in ally.active_conditions), \
             "Protected condition must be applied after round resolves"
+
+
+# ---------------------------------------------------------------------------
+# Gate: oracle-only submission must not block subsequent gear changes
+# ---------------------------------------------------------------------------
+
+class TestProtectorDoesNotBlockEquip:
+    """A consumes_act=False submission (Set Protector) must not cause the
+    character_views equip/unequip gate to reject a follow-up gear action.
+
+    Replicates the gate logic in cogs/character_views._submit_gear_combat_action
+    inline (cogs cannot be imported in tests; discord.py is not installed in CI).
+    """
+
+    @staticmethod
+    def _gate_blocks(state, character_id) -> bool:
+        """Mirror of the consumes_act check in _submit_gear_combat_action."""
+        from engine.data_loader import ACTION_REGISTRY
+        latest = state.latest_submission(character_id)
+        if latest is None:
+            return False
+        prev_id = (latest.combat_action or {}).get("action_id", "")
+        prev_def = ACTION_REGISTRY.get(prev_id) if prev_id else None
+        return prev_def is None or prev_def.consumes_act
+
+    def test_no_submission_does_not_block(self):
+        state = _make_two_knight_state()
+        enter_rounds(state)
+        open_turn(state)
+        knight = _knight(state)
+        assert self._gate_blocks(state, knight.character_id) is False
+
+    def test_set_protector_does_not_block_equip(self):
+        """After Set Protector (consumes_act=False), gate must allow equip."""
+        state = _make_two_knight_state()
+        enter_rounds(state)
+        open_turn(state)
+        knight = _knight(state)
+        ally   = _ally(state)
+
+        oracle = CombatAction(action_id="set_protector_target", target_id=ally.character_id)
+        result = submit_turn(
+            state, knight.character_id, "Set Protector",
+            combat_action=oracle.to_dict(),
+        )
+        assert result.ok
+        # A latest submission now exists, but it's consumes_act=False.
+        assert state.latest_submission(knight.character_id) is not None
+        assert self._gate_blocks(state, knight.character_id) is False
+
+    def test_consuming_act_blocks_equip(self):
+        """Sanity: a consumes_act=True submission DOES block the gate."""
+        state = _make_two_knight_state()
+        enter_rounds(state)
+        open_turn(state)
+        knight = _knight(state)
+        goblin = state.npcs_in_current_room[0]
+
+        attack = CombatAction(action_id="attack", target_id=goblin.npc_id)
+        submit_turn(
+            state, knight.character_id, "Attack",
+            combat_action=attack.to_dict(),
+        )
+        assert self._gate_blocks(state, knight.character_id) is True
+
+
+# ---------------------------------------------------------------------------
+# Gate: Act-button flow must allow consumes_act=False actions after a
+# consumes_act=True submission
+# ---------------------------------------------------------------------------
+
+class TestActButtonAllowsFreeActionsAfterAct:
+    """A consumes_act=True submission (e.g. Attack) must not block the player
+    from later submitting a consumes_act=False action (Set Protector, Hide,
+    Slip) via the Act-button → ClassActionView menu.
+
+    Replicates the per-action gate added in cogs/action_buttons.ClassActionView
+    inline (cogs cannot be imported in tests).
+    """
+
+    @staticmethod
+    def _action_blocked(state, character_id, chosen_action_id: str) -> bool:
+        """Mirror of the per-action consumes_act check in ClassActionView._make_callback."""
+        from engine.data_loader import ACTION_REGISTRY
+        chosen = ACTION_REGISTRY.get(chosen_action_id)
+        if chosen is None or not chosen.consumes_act:
+            return False
+        latest = state.latest_submission(character_id)
+        if latest is None:
+            return False
+        prev_id = (latest.combat_action or {}).get("action_id", "")
+        prev_def = ACTION_REGISTRY.get(prev_id) if prev_id else None
+        return prev_def is None or prev_def.consumes_act
+
+    def test_attack_then_set_protector_not_blocked(self):
+        """After Attack (consumes_act=True), Set Protector must remain selectable."""
+        state = _make_two_knight_state()
+        enter_rounds(state)
+        open_turn(state)
+        knight = _knight(state)
+        goblin = state.npcs_in_current_room[0]
+
+        attack = CombatAction(action_id="attack", target_id=goblin.npc_id)
+        submit_turn(
+            state, knight.character_id, "Attack",
+            combat_action=attack.to_dict(),
+        )
+        assert self._action_blocked(state, knight.character_id, "set_protector_target") is False
+
+    def test_attack_then_attack_is_blocked(self):
+        """Sanity: a second consumes_act=True action after Attack IS blocked."""
+        state = _make_two_knight_state()
+        enter_rounds(state)
+        open_turn(state)
+        knight = _knight(state)
+        goblin = state.npcs_in_current_room[0]
+
+        attack = CombatAction(action_id="attack", target_id=goblin.npc_id)
+        submit_turn(
+            state, knight.character_id, "Attack",
+            combat_action=attack.to_dict(),
+        )
+        assert self._action_blocked(state, knight.character_id, "attack") is True
+
+    def test_set_protector_then_attack_not_blocked(self):
+        """After Set Protector (consumes_act=False), Attack must remain submittable."""
+        state = _make_two_knight_state()
+        enter_rounds(state)
+        open_turn(state)
+        knight = _knight(state)
+        ally   = _ally(state)
+
+        oracle = CombatAction(action_id="set_protector_target", target_id=ally.character_id)
+        submit_turn(
+            state, knight.character_id, "Set Protector",
+            combat_action=oracle.to_dict(),
+        )
+        assert self._action_blocked(state, knight.character_id, "attack") is False
+
+    def test_no_submission_allows_anything(self):
+        state = _make_two_knight_state()
+        enter_rounds(state)
+        open_turn(state)
+        knight = _knight(state)
+        assert self._action_blocked(state, knight.character_id, "attack") is False
+        assert self._action_blocked(state, knight.character_id, "set_protector_target") is False

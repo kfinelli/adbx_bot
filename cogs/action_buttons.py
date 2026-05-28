@@ -614,19 +614,10 @@ class CombatActionView(discord.ui.View):
         if state is None:
             return
 
-        # Block only if the existing submission actually consumes the act.
-        # consumes_act=False submissions (e.g. Set Protector) must not prevent
-        # the player from also choosing an act action.
-        latest = state.latest_submission(char.character_id)
-        if latest is not None:
-            action_id = (latest.combat_action or {}).get("action_id", "")
-            action_def = ACTION_REGISTRY.get(action_id) if action_id else None
-            if action_def is None or action_def.consumes_act:
-                await interaction.response.send_message(
-                    get_string("errors.already_submitted"),
-                    ephemeral=True,
-                )
-                return
+        # No gate here — the menu may contain consumes_act=False actions
+        # (Set Protector, Hide, Slip) which should remain available even
+        # after a consumes_act=True submission. The per-action callback
+        # in ClassActionView enforces the gate based on the chosen action.
 
         view = _build_class_action_view(
             char=char,
@@ -836,6 +827,21 @@ class ClassActionView(discord.ui.View):
                 )
                 return
 
+            # Gate: block a consumes_act action if the player already
+            # submitted one this round. consumes_act=False actions
+            # (Set Protector, Hide, Slip) are always allowed through.
+            if action_def.consumes_act:
+                latest = state.latest_submission(self.char_id)
+                if latest is not None:
+                    prev_id = (latest.combat_action or {}).get("action_id", "")
+                    prev_def = ACTION_REGISTRY.get(prev_id) if prev_id else None
+                    if prev_def is None or prev_def.consumes_act:
+                        await interaction.response.send_message(
+                            get_string("errors.already_submitted"),
+                            ephemeral=True,
+                        )
+                        return
+
             if action_def.action_type == "affect":
                 await interaction.response.send_modal(
                     AffectModal(char_id=self.char_id, channel_id=self.channel_id, action_id=action_id)
@@ -913,6 +919,15 @@ class ClassActionView(discord.ui.View):
 # Combat: target dispatch helper
 # ---------------------------------------------------------------------------
 
+def _action_uses_weapon(action_def) -> bool:
+    """True if the action dispatches a weapon-consuming hook (currently melee_attack)."""
+    for entry in action_def.effect_tags:
+        tag = entry if isinstance(entry, str) else entry.get("tag")
+        if tag == "melee_attack":
+            return True
+    return False
+
+
 async def _dispatch_with_target(
     interaction:      discord.Interaction,
     char_id:          UUID,
@@ -926,8 +941,10 @@ async def _dispatch_with_target(
     """After a target is known, route to weapon picker → destination → submit."""
     owner_char_obj = state.characters.get(char_id)
     weapons = owner_char_obj.equipped_weapons() if owner_char_obj else []
+    action_def = ACTION_REGISTRY.get(partial.action_id)
+    needs_weapon = action_def is not None and _action_uses_weapon(action_def)
 
-    if len(weapons) > 1:
+    if needs_weapon and len(weapons) > 1:
         view = WeaponPickerView(
             char_id=char_id,
             channel_id=channel_id,

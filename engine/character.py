@@ -68,10 +68,13 @@ def _projected_slots_used_after_equip(
     else:
         non_light -= equip_defn.slot_cost if equip_defn else 1
 
-    # Add each displaced item back to the unequipped pool
+    # Add each displaced item back to the unequipped pool. Filter by `equipped`
+    # so we don't read the quantity of a spare stack instead of the equipped one.
     for did in displace_item_ids:
         displace_defn = ITEM_REGISTRY.get(did)
-        displace_inv = next((i for i in char.inventory if i.item_id == did), None)
+        displace_inv = next(
+            (i for i in char.inventory if i.item_id == did and i.equipped), None
+        )
         if displace_defn is not None and displace_defn.isLight:
             L += displace_inv.quantity if displace_inv else 1
         else:
@@ -340,7 +343,15 @@ class CharacterManager:
         if char is None:
             return _err(state, f"Character {character_id} not found.")
 
-        inv_item = next((i for i in char.inventory if i.item_id == item_id), None)
+        # Prefer an unequipped instance: when the player has one of this item
+        # already equipped plus a spare, this picks the spare so the equip
+        # operation actually moves something rather than no-oping.
+        inv_item = next(
+            (i for i in char.inventory if i.item_id == item_id and not i.equipped),
+            None,
+        )
+        if inv_item is None:
+            inv_item = next((i for i in char.inventory if i.item_id == item_id), None)
         if inv_item is None:
             return _err(state, f"Item '{item_id}' not in {char.name}'s inventory.")
 
@@ -393,10 +404,14 @@ class CharacterManager:
                         f"the two-handed weapon {mh_name}.",
                     )
 
-        # Unequip whatever is currently in that slot
+        # Unequip whatever is currently in that slot. Filter by `equipped` so we
+        # find the instance actually in the slot, not a spare stack of the same id.
         existing_id = char.equipped_slots.get(target_slot.value)
         if existing_id is not None:
-            existing = next((i for i in char.inventory if i.item_id == existing_id), None)
+            existing = next(
+                (i for i in char.inventory if i.item_id == existing_id and i.equipped),
+                None,
+            )
             if existing:
                 existing.equipped = False
             char.equipped_slots[target_slot.value] = None
@@ -406,7 +421,10 @@ class CharacterManager:
         if "Two-Handed" in new_tags and target_slot == ItemSlot.MAIN_HAND:
             oh_id = char.equipped_slots.get(ItemSlot.OFF_HAND.value)
             if oh_id:
-                oh_item = next((i for i in char.inventory if i.item_id == oh_id), None)
+                oh_item = next(
+                    (i for i in char.inventory if i.item_id == oh_id and i.equipped),
+                    None,
+                )
                 if oh_item:
                     oh_item.equipped = False
                 oh_def = ITEM_REGISTRY.get(oh_id)
@@ -811,7 +829,12 @@ class CharacterManager:
         if item_id is None:
             return _err(state, f"{char.name} has nothing equipped in the {slot.value} slot.")
 
-        inv_item = next((i for i in char.inventory if i.item_id == item_id), None)
+        # Filter by `equipped` so we don't accidentally unset the flag on a
+        # spare stack while leaving the actually-equipped instance stuck.
+        inv_item = next(
+            (i for i in char.inventory if i.item_id == item_id and i.equipped),
+            None,
+        )
         definition = ITEM_REGISTRY.get(item_id)
         item_name = definition.name if definition else item_id
 

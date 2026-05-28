@@ -197,3 +197,23 @@ class TestThrowableConsumption:
 
         assert any(i.item_id == "hand_axe" for i in char.inventory)
         assert char.equipped_slots.get("main_hand") == "hand_axe"
+
+    def test_throw_with_spare_in_inventory_only_consumes_equipped(self):
+        """Throwing one javelin must not delete spare stacks of the same item_id."""
+        from engine.combat import CombatAction, _hook_weapon_attack
+        from models import InventoryItem
+
+        state, char, npc_id = self._setup_throw("javelin")
+        # Add a spare javelin (unequipped, distinct instance_id).
+        spare = InventoryItem(item_id="javelin", equipped=False)
+        char.inventory.append(spare)
+        assert sum(1 for i in char.inventory if i.item_id == "javelin") == 2
+
+        action = CombatAction(action_id="attack", target_id=npc_id, weapon_id="javelin__throwable")
+        _hook_weapon_attack(state, char.character_id, action, [], {})
+
+        remaining = [i for i in char.inventory if i.item_id == "javelin"]
+        assert len(remaining) == 1
+        assert remaining[0].instance_id == spare.instance_id
+        # Slot should still point to "javelin" since a stack remains.
+        assert char.equipped_slots.get("main_hand") == "javelin"

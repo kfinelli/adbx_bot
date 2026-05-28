@@ -372,6 +372,12 @@ def close_turn(state: GameState):
     return tm.close_turn(state)
 
 
+def reopen_turn(state: GameState, hours: float):
+    """Reopen a closed turn, extending the deadline by `hours` from now."""
+    tm = TurnManager()
+    return tm.reopen_turn(state, hours)
+
+
 def resolve_turn(state: GameState, resolution: str, free_move: bool = False):
     """Resolve a turn."""
     tm = TurnManager()
@@ -910,6 +916,7 @@ __all__ = [
     "open_turn",
     "submit_turn",
     "close_turn",
+    "reopen_turn",
     "resolve_turn",
     "set_turn_number",
     "unsubmit_turn",

@@ -1,0 +1,9 @@
+{
+  "condition_id": "burning",
+  "label": "Burning",
+  "duration_type": "rounds",
+  "stackable": false,
+  "hooks": {"on_turn_end": {"tag": "deal_damage", "dice": "2d200", "type": "fire"}},
+  "stat_modifiers": {},
+  "grants_actions": []
+}

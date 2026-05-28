@@ -470,6 +470,22 @@ def turn_panel(state: GameState, edit_id: str = "") -> str:
   <button class="btn-success" type="submit">{btn_label}</button>
 </form>"""
 
+    # Reopen — only when the turn is closed (e.g. deadline expired)
+    reopen_html = ""
+    if turn and turn.status == TurnStatus.CLOSED:
+        reopen_html = f"""
+<hr class="divider">
+<form hx-post="/session/{channel_id}/reopen"
+      hx-target="#dashboard" hx-swap="outerHTML">
+  <div class="row">
+    <div>
+      <label>Reopen turn (new deadline, hours from now)</label>
+      <input type="number" name="hours" value="{state.default_turn_hours}" min="0.5" step="0.5">
+    </div>
+    <button type="submit">Reopen Turn</button>
+  </div>
+</form>"""
+
     timer_html = f"""
 <hr class="divider">
 <form hx-post="/session/{channel_id}/settimer"
@@ -527,6 +543,7 @@ def turn_panel(state: GameState, edit_id: str = "") -> str:
   {subs_html}
   {partial_resolve_html}
   {resolve_html}
+  {reopen_html}
   {timer_html}
   <hr class="divider">
   {session_controls_html}

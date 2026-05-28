@@ -45,6 +45,16 @@ from models import (
 )
 from serialization import deserialize_state, serialize_state
 
+
+def _dice_bounds(expr: str) -> tuple[int, int]:
+    """Return (min, max) total for a 'XdY' or 'XdY+Z' dice expression."""
+    import re
+    m = re.fullmatch(r"(\d+)d(\d+)(?:\+(\d+))?", expr)
+    assert m, f"unparseable dice expression: {expr!r}"
+    count, sides, bonus = int(m.group(1)), int(m.group(2)), int(m.group(3) or 0)
+    return count + bonus, count * sides + bonus
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -453,7 +463,7 @@ class TestTargetsStatRouting:
         char = list(state.characters.values())[0]
         weapon = Weapon("test_weapon", "Test Weapon", "C", "Sword", "physique", "1d4",
                         targetsStat=targets_stat)
-        inv_item = InventoryItem(item_id="test_weapon")
+        inv_item = InventoryItem(item_id="test_weapon", equipped=True)
         char.inventory.append(inv_item)
         char.equipped_slots["main_hand"] = "test_weapon"
 
@@ -927,13 +937,16 @@ class TestConditions:
             assert cid in CONDITION_REGISTRY, f"'{cid}' not in CONDITION_REGISTRY"
 
     def test_poisoned_has_on_turn_end_hook(self):
+        import re
+
         from engine import CONDITION_REGISTRY
         entry = CONDITION_REGISTRY["poisoned"].hooks.get("on_turn_end")
         # Now a hook object, not a plain string
         assert isinstance(entry, dict)
         assert entry["tag"] == "deal_damage"
-        assert entry["dice"] == "1d4"
         assert entry["type"] == "poison"
+        # Dice expression shape only; exact values are tunable game balance.
+        assert re.fullmatch(r"\d+d\d+(\+\d+)?", entry["dice"]) is not None
 
     def test_stunned_has_on_turn_start_hook(self):
         from engine import CONDITION_REGISTRY
@@ -983,24 +996,42 @@ class TestConditions:
         assert hp_after < hp_before, "Poisoned character should have lost HP"
         assert any("poison" in entry for entry in log)
 
-    def test_poisoned_damage_is_1_to_4(self):
-        """Run many ticks; all damage values must fall in [1, 4]."""
+    def test_poisoned_damage_is_in_dice_range(self):
+        """Run many ticks; all damage values must fall within the configured dice range."""
+        from engine import CONDITION_REGISTRY
         from engine.combat import _tick_conditions
+        dice_expr = CONDITION_REGISTRY["poisoned"].hooks["on_turn_end"]["dice"]
+        dmin, dmax = _dice_bounds(dice_expr)
+
         damages = set()
         for _ in range(60):
             state, char_id, _ = self._state_in_rounds()
+            # Survive any possible roll so HP clamping at 0 can't mask the value.
+            state.characters[char_id].hp_max = dmax + 1
+            state.characters[char_id].hp_current = dmax + 1
             apply_condition(state, char_id, "poisoned", duration=5)
             hp_before = state.characters[char_id].hp_current
             _tick_conditions(state, [])
             damage = hp_before - state.characters[char_id].hp_current
             if damage > 0:
                 damages.add(damage)
-        assert damages <= {1, 2, 3, 4}
+        assert damages, "expected at least one positive damage roll"
+        assert min(damages) >= dmin
+        assert max(damages) <= dmax
 
     def test_poisoned_expires_after_duration(self):
-        state, char_id, _ = self._state_in_rounds()
-        apply_condition(state, char_id, "poisoned", duration=2)
+        from engine import CONDITION_REGISTRY
         from engine.combat import _tick_conditions
+        dice_expr = CONDITION_REGISTRY["poisoned"].hooks["on_turn_end"]["dice"]
+        _, dmax = _dice_bounds(dice_expr)
+
+        state, char_id, _ = self._state_in_rounds()
+        # Two ticks fire before expiry — make sure the character survives both.
+        survive_hp = dmax * 2 + 1
+        state.characters[char_id].hp_max = survive_hp
+        state.characters[char_id].hp_current = survive_hp
+
+        apply_condition(state, char_id, "poisoned", duration=2)
         _tick_conditions(state, [])   # round 1 — duration becomes 1
         _tick_conditions(state, [])   # round 2 — expires
         char = state.characters[char_id]
@@ -2272,7 +2303,7 @@ class TestAActions:
         # Equip a melee weapon (range=0)
         char = state.characters[char_id]
         weapon = Weapon("melee_w", "Sword", "C", "Sword", "physique", "1d6", range=0)
-        char.inventory.append(InventoryItem(item_id="melee_w"))
+        char.inventory.append(InventoryItem(item_id="melee_w", equipped=True))
         char.equipped_slots["main_hand"] = "melee_w"
         from engine.data_loader import ITEM_REGISTRY
         ITEM_REGISTRY["melee_w"] = weapon
@@ -2296,7 +2327,7 @@ class TestAActions:
         # Equip a reach weapon (range=1)
         char = state.characters[char_id]
         weapon = Weapon("reach_w", "Greatspear", "C", "Polearm", "physique", "1d8", range=1)
-        char.inventory.append(InventoryItem(item_id="reach_w"))
+        char.inventory.append(InventoryItem(item_id="reach_w", equipped=True))
         char.equipped_slots["main_hand"] = "reach_w"
         from engine.data_loader import ITEM_REGISTRY
         ITEM_REGISTRY["reach_w"] = weapon
@@ -2318,7 +2349,7 @@ class TestAActions:
         state, char_id, npc_id = self._setup_combat(npc_hp=100, npc_def=0)
         char = state.characters[char_id]
         weapon = Weapon("reach_w2", "Greatspear", "C", "Polearm", "physique", "1d8", range=1)
-        char.inventory.append(InventoryItem(item_id="reach_w2"))
+        char.inventory.append(InventoryItem(item_id="reach_w2", equipped=True))
         char.equipped_slots["main_hand"] = "reach_w2"
         from engine.data_loader import ITEM_REGISTRY
         ITEM_REGISTRY["reach_w2"] = weapon

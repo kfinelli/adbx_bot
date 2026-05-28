@@ -222,6 +222,23 @@ class TurnManager:
         state.updated_at = _now()
         return _ok(state, fmt_string("turn.closed", turn_number=state.turn_number))
 
+    def reopen_turn(self, state: GameState, hours: float):
+        """
+        Reopen a closed turn for further submissions, extending the deadline
+        to `hours` from now. Used when a deadline expired but the DM wants
+        players to keep submitting. Existing submissions are preserved.
+        """
+        if state.current_turn is None:
+            return _err(state, get_string("turn.errors.no_current_turn"))
+        if state.current_turn.status != TurnStatus.CLOSED:
+            return _err(state, get_string("turn.errors.not_closed"))
+
+        state.current_turn.status = TurnStatus.OPEN
+        state.current_turn.closed_at = None
+        state.current_turn.due_at = _now() + timedelta(hours=hours)
+        state.updated_at = _now()
+        return _ok(state, fmt_string("turn.reopened", turn_number=state.turn_number))
+
     def resolve_turn(
         self,
         state:      GameState,
@@ -332,6 +349,10 @@ def submit_turn(*args, **kwargs):
 
 def close_turn(*args, **kwargs):
     return TurnManager().close_turn(*args, **kwargs)
+
+
+def reopen_turn(*args, **kwargs):
+    return TurnManager().reopen_turn(*args, **kwargs)
 
 
 def resolve_turn(*args, **kwargs):

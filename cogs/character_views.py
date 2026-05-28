@@ -61,12 +61,20 @@ async def _submit_gear_combat_action(
     if state.mode != SessionMode.ROUNDS:
         return False
 
-    if state.latest_submission(char.character_id) is not None:
-        await interaction.response.edit_message(
-            content="You've already submitted an action this round.",
-            view=EquipMenuView(char, state, channel_id),
-        )
-        return True
+    # Block only if the existing submission actually consumes the act.
+    # consumes_act=False submissions (e.g. Set Protector) must not prevent
+    # the player from also submitting an equip/unequip on the same round.
+    latest = state.latest_submission(char.character_id)
+    if latest is not None:
+        from engine.data_loader import ACTION_REGISTRY
+        prev_id = (latest.combat_action or {}).get("action_id", "")
+        prev_def = ACTION_REGISTRY.get(prev_id) if prev_id else None
+        if prev_def is None or prev_def.consumes_act:
+            await interaction.response.edit_message(
+                content="You've already submitted an action this round.",
+                view=EquipMenuView(char, state, channel_id),
+            )
+            return True
 
     from engine import submit_turn
     from engine.combat import CombatAction
