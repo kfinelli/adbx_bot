@@ -127,7 +127,8 @@ def _character_sheet(char, state) -> str:
                 and getattr(defn, "max_light_turns", None) is not None
                 and i.charges is not None):
             _light_charges = f" ({i.charges}/{defn.max_light_turns})"
-        line = f"  {i.quantity}x {i.definition.name}{_light_charges}{'  [equipped]' if i.equipped else ''}"
+        _light_tag = " ▵" if (defn is not None and defn.isLight) else ""
+        line = f"  {i.quantity}x {i.definition.name}{_light_tag}{_light_charges}{'  [equipped]' if i.equipped else ''}"
         _inv_parts.append(line)
         for _child in _contained.get(i.instance_id, []):
             _cdefn = ITEM_REGISTRY.get(_child.item_id)
