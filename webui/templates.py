@@ -2199,6 +2199,8 @@ def character_sheet_panel(character: Character) -> str:
             continue  # rendered under its container below
         defn = ITEM_REGISTRY.get(inv_item.item_id)
         item_name = defn.name if defn else inv_item.item_id
+        if defn is not None and defn.isLight:
+            item_name = f"{item_name} ▵"
         qty_str = f'<span class="muted"> ×{inv_item.quantity}</span>' if inv_item.quantity > 1 else ""
         equip_str = ' <span class="tag tag-open" style="font-size:0.7rem;padding:1px 5px">equip</span>' if inv_item.equipped else ""
         # Show charge controls for standalone ChargeWeapons with finite charges.

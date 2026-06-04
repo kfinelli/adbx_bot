@@ -216,6 +216,70 @@ class TestNpcKillXp:
         assert state.characters[char_ids[0]].experience == 0
         assert state.characters[char_ids[1]].experience == 100
 
+    def test_status_damage_kill_defers_xp(self):
+        """An NPC killed by status-effect damage (e.g. burning) defers XP
+        to defeated_npc_log instead of paying out immediately. Regression
+        for a bug where periodic-damage kills bypassed end-of-combat
+        aggregation and players appeared to lose XP for status kills."""
+        from engine.combat import CombatantState
+        from engine.combat_hooks import _hook_deal_damage
+
+        state, char_ids, dying_npc_id = _make_combat_state(hit_dice=2, n_chars=2)
+        # Place a second NPC on the battlefield so combat does not end
+        # on the status kill.
+        survivor = NPC(
+            name="Goblin2", hp_current=50, hp_max=50,
+            defense=0, damage_dice="1d4", hit_dice=1,
+        )
+        add_npc(state, survivor)
+        state.battlefield.combatants[survivor.npc_id] = CombatantState(
+            combatant_id=survivor.npc_id, is_player=False,
+            range_band=RangeBand.ENGAGE, initiative=1,
+        )
+
+        log: list[str] = []
+        _hook_deal_damage(
+            state, dying_npc_id, None, log,
+            {"dice": "999d1", "type": "fire"},
+        )
+
+        # NPC removed from battlefield and marked dead.
+        assert dying_npc_id not in state.battlefield.combatants
+        # XP deferred, not credited yet — pool holds the 200 XP entry.
+        assert state.battlefield.defeated_npc_log == [("Goblin", 200)]
+        for cid in char_ids:
+            assert state.characters[cid].experience == 0
+
+    def test_status_damage_kill_xp_paid_at_combat_end(self):
+        """The deferred XP from a status-effect kill is actually paid
+        out when combat ends (final NPC defeated)."""
+        from engine.combat import CombatantState
+        from engine.combat_hooks import _hook_deal_damage
+
+        state, char_ids, dying_npc_id = _make_combat_state(hit_dice=2, n_chars=2)
+        survivor = NPC(
+            name="Goblin2", hp_current=1, hp_max=1,
+            defense=0, damage_dice="1d4", hit_dice=1,
+        )
+        add_npc(state, survivor)
+        state.battlefield.combatants[survivor.npc_id] = CombatantState(
+            combatant_id=survivor.npc_id, is_player=False,
+            range_band=RangeBand.ENGAGE, initiative=1,
+        )
+
+        # Kill the first NPC via status damage.
+        _hook_deal_damage(
+            state, dying_npc_id, None, [],
+            {"dice": "999d1", "type": "fire"},
+        )
+        # Kill the survivor via a normal weapon attack to end combat.
+        state.current_turn.submissions = [_attack_submission(char_ids[0], survivor.npc_id)]
+        auto_resolve_round(state)
+
+        # 200 (status kill, hit_dice=2) + 100 (weapon kill) = 300 XP / 2 chars = 150 each.
+        for cid in char_ids:
+            assert state.characters[cid].experience == 150
+
 
 # ---------------------------------------------------------------------------
 # Room exploration XP

@@ -1219,6 +1219,9 @@ class TestPoisonAction:
 
     def test_poison_applies_condition_to_target(self):
         state, char_id, npc = self._thief_state()
+        # Poisoned ticks 4d100; bump HP high enough that the NPC survives
+        # the first tick so the condition is observable post-resolution.
+        npc.hp_current = npc.hp_max = 5000
         action = CombatAction(action_id="poison", target_id=npc.npc_id)
         from models import PlayerTurnSubmission
         state.current_turn.submissions = [PlayerTurnSubmission(
@@ -1249,6 +1252,9 @@ class TestPoisonAction:
         Rogue applies poison first; the NPC then acts and ticks — duration
         decrements to 2 and poison damage fires in the same round."""
         state, char_id, npc = self._thief_state()
+        # Poisoned ticks 4d100; bump HP high enough that the NPC survives
+        # the first tick so the condition is still active afterwards.
+        npc.hp_current = npc.hp_max = 5000
         # Pin initiatives: Rogue acts first, NPC second
         state.battlefield.combatants[char_id].initiative = 20
         npc_cs = state.battlefield.combatants[npc.npc_id]
@@ -1262,7 +1268,7 @@ class TestPoisonAction:
         auto_resolve_round(state)
         cond = next(c for c in npc.active_conditions if c.condition_id == "poisoned")
         assert cond.duration_rounds == 2   # started at 3, ticked once after NPC's turn
-        assert npc.hp_current < 20         # took poison damage this round
+        assert npc.hp_current < 5000       # took poison damage this round
 
     def test_poison_narrative_mentions_target(self):
         state, char_id, npc = self._thief_state()
