@@ -3350,3 +3350,139 @@ class TestPartialAutoResolveRound:
         # State is in EXPLORATION mode — no battlefield
         result = partial_auto_resolve_round(state)
         assert not result.ok
+
+    def test_logs_no_submission_for_missing_player(self):
+        """A player who never submitted gets an explicit 'no submission' log line
+        rather than being silently skipped."""
+        from engine import partial_auto_resolve_round
+        from models import PlayerTurnSubmission
+        state, (alice_id, bob_id), npc = self._setup(npc_hp=100, npc_def=0)
+        # Only Alice submits (a structured attack); Bob never submits.
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=alice_id, action_text="Attack",
+            is_latest=True,
+            combat_action=CombatAction(action_id="attack", target_id=npc.npc_id).to_dict(),
+        )]
+
+        result = partial_auto_resolve_round(state)
+
+        assert result.ok
+        assert state.current_turn.partial_resolved is True
+        assert "no submission" in result.message
+        assert state.characters[bob_id].name in result.message
+
+    def test_all_structured_one_missing_resolves(self):
+        """The widened no-Affect path: structured submitters resolve and NPCs act
+        even when an active member failed to submit; no Affect adjudication implied."""
+        from engine import partial_auto_resolve_round
+        from models import PlayerTurnSubmission
+        state, (alice_id, bob_id), npc = self._setup(npc_hp=100, npc_def=0)
+        # Alice submits structured; Bob is absent.
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=alice_id, action_text="Attack",
+            is_latest=True,
+            combat_action=CombatAction(action_id="attack", target_id=npc.npc_id).to_dict(),
+        )]
+
+        result = partial_auto_resolve_round(state)
+
+        assert result.ok
+        assert npc.hp_current < 100, "Alice's structured attack should have resolved"
+        # No Affect actor → no adjudication placeholder in the log
+        assert "pending DM adjudication" not in result.message
+
+    def test_submit_guard_blocks_when_partial_resolved(self):
+        """Defensive guard: if a turn is somehow OPEN while partial_resolved is set,
+        submit_turn refuses with the partial-resolved error."""
+        from engine import partial_auto_resolve_round, submit_turn
+        from engine.strings import get_string
+        from models import PlayerTurnSubmission, TurnStatus
+        state, (alice_id, bob_id), npc = self._setup(npc_hp=100, npc_def=0)
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=alice_id, action_text="Attack",
+            is_latest=True,
+            combat_action=CombatAction(action_id="attack", target_id=npc.npc_id).to_dict(),
+        )]
+        partial_auto_resolve_round(state)
+        # Force the otherwise-unreachable OPEN + partial_resolved state to exercise the guard.
+        state.current_turn.status = TurnStatus.OPEN
+
+        result = submit_turn(
+            state, bob_id, "Attack",
+            combat_action=CombatAction(action_id="attack", target_id=npc.npc_id).to_dict(),
+        )
+        assert not result.ok
+        assert result.error == get_string("turn.errors.partial_resolved_no_submit")
+
+    def test_ends_combat_on_victory_in_same_pass(self):
+        """If the last NPC dies during partial-resolve, combat exits and deferred XP
+        is distributed in the same pass rather than waiting for a later auto-resolve."""
+        from engine import partial_auto_resolve_round
+        from models import PlayerTurnSubmission, SessionMode
+        state, (alice_id, bob_id), npc = self._setup(npc_hp=1, npc_def=0)
+        npc.hit_dice = 1  # 100 XP on defeat
+        # Survive any NPC counter-attack so the kill (not a TPK) drives the exit.
+        for cid in (alice_id, bob_id):
+            state.characters[cid].hp_current = 50
+            state.characters[cid].hp_max = 50
+        # Alice lands a killing structured attack; Bob submits an Affect.
+        state.current_turn.submissions = [
+            PlayerTurnSubmission(
+                character_id=alice_id, action_text="Attack",
+                is_latest=True,
+                combat_action=CombatAction(action_id="attack", target_id=npc.npc_id).to_dict(),
+            ),
+            PlayerTurnSubmission(
+                character_id=bob_id, action_text="I shout a taunt.",
+                is_latest=True, combat_action=None,
+            ),
+        ]
+
+        result = partial_auto_resolve_round(state)
+
+        assert result.ok
+        assert npc.status == "dead"
+        # Combat exited within the partial-resolve pass.
+        assert state.battlefield is None
+        assert state.mode == SessionMode.EXPLORATION
+        # Victory text + XP are captured on the turn record for the DM to finalize.
+        assert state.current_turn.partial_resolved is True
+        assert "Victory" in state.current_turn.partial_resolution_log
+        # Deferred XP was actually distributed to the active party.
+        assert state.characters[alice_id].experience > 0
+        assert state.characters[bob_id].experience > 0
+
+    def test_no_victory_while_npc_survives(self):
+        """Partial-resolve does NOT exit combat while an NPC is still standing."""
+        from engine import partial_auto_resolve_round
+        from models import SessionMode
+        state, (alice_id, bob_id), npc = self._setup(npc_hp=100, npc_def=0)
+        self._make_submissions(state, alice_id, bob_id, npc.npc_id,
+                               alice_structured=True, bob_structured=False)
+
+        result = partial_auto_resolve_round(state)
+
+        assert result.ok
+        assert state.battlefield is not None
+        assert state.mode == SessionMode.ROUNDS
+        assert "Victory" not in state.current_turn.partial_resolution_log
+
+    def test_reopen_blocked_after_partial_resolve(self):
+        """A partially-resolved round cannot be reopened (would let resubmissions
+        land on an already-mutated battlefield)."""
+        from engine import close_turn, partial_auto_resolve_round, reopen_turn
+        from engine.strings import get_string
+        from models import PlayerTurnSubmission
+        state, (alice_id, bob_id), npc = self._setup(npc_hp=100, npc_def=0)
+        state.current_turn.submissions = [PlayerTurnSubmission(
+            character_id=alice_id, action_text="Attack",
+            is_latest=True,
+            combat_action=CombatAction(action_id="attack", target_id=npc.npc_id).to_dict(),
+        )]
+        # Mirror the real flow: the round is CLOSED before partial-resolve runs.
+        close_turn(state)
+        partial_auto_resolve_round(state)
+
+        result = reopen_turn(state, 24)
+        assert not result.ok
+        assert result.error == get_string("turn.errors.partial_resolved_no_reopen")

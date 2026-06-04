@@ -81,6 +81,8 @@ class TurnManager:
         if state.current_turn is None or state.current_turn.status != TurnStatus.OPEN:
             mode_str = "round" if state.mode == SessionMode.ROUNDS else "turn"
             return _err(state, fmt_string("turn.errors.no_open", mode_str=mode_str))
+        if state.current_turn.partial_resolved:
+            return _err(state, get_string("turn.errors.partial_resolved_no_submit"))
 
         char = state.characters.get(character_id)
         if char is None:
@@ -232,6 +234,8 @@ class TurnManager:
             return _err(state, get_string("turn.errors.no_current_turn"))
         if state.current_turn.status != TurnStatus.CLOSED:
             return _err(state, get_string("turn.errors.not_closed"))
+        if state.current_turn.partial_resolved:
+            return _err(state, get_string("turn.errors.partial_resolved_no_reopen"))
 
         state.current_turn.status = TurnStatus.OPEN
         state.current_turn.closed_at = None

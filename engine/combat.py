@@ -394,11 +394,34 @@ def auto_resolve_round(state: GameState) -> object:  # EngineResult
     bf.round_log = log[:]
     state.updated_at = _now()
 
+    narrative = _apply_combat_exit(state, narrative)
+    return _ok(state, narrative)
+
+
+def _apply_combat_exit(state: GameState, narrative: str) -> str:
+    """
+    Check post-action combat-exit conditions and, if met, exit rounds.
+
+    Shared by auto_resolve_round and partial_auto_resolve_round so the two paths
+    end combat identically. An Affect actor cannot revive a defeated NPC or undo a
+    successful abscond, so these outcomes are already final once the structured and
+    NPC actions for the round have resolved.
+
+      - Abscond succeeded: exit combat (no XP).
+      - All NPC combatants gone (and at least one was defeated): distribute deferred
+        XP, append victory lines, and exit combat.
+
+    Returns the (possibly augmented) narrative.
+    """
+    bf = state.battlefield
+    if bf is None:
+        return narrative
+
     # If Abscond succeeded this round, exit combat now (after all actions resolved).
     if bf.abscond_succeeded:
         from engine.session import SessionManager  # local import avoids circular dep
         SessionManager().exit_rounds(state)
-        return _ok(state, narrative)
+        return narrative
 
     # If all NPC combatants are gone, distribute deferred XP and exit combat.
     remaining_npc_combatants = any(not cs.is_player for cs in bf.combatants.values())
@@ -437,7 +460,7 @@ def auto_resolve_round(state: GameState) -> object:  # EngineResult
         SessionManager().exit_rounds(state)
         narrative = narrative + "\n\n" + "\n".join(victory_lines)
 
-    return _ok(state, narrative)
+    return narrative
 
 
 def partial_auto_resolve_round(state: GameState) -> object:  # EngineResult
@@ -505,8 +528,14 @@ def partial_auto_resolve_round(state: GameState) -> object:  # EngineResult
     )
     action_map: dict[UUID, CombatAction] = {**player_actions, **npc_actions}
 
+    # Characters with a live submission this round (used to flag non-submitters).
+    submitted_ids = {
+        s.character_id for s in state.current_turn.submissions if s.is_latest
+    }
+
     # --- 4. Execute actions + per-actor condition tick
     # Affect actors: skip _execute_action but tick conditions in initiative order.
+    # Non-submitting players: log that they took no action, then tick conditions.
     for actor_id in all_combatant_ids:
         cs = bf.combatants.get(actor_id)
         if cs is None or not _is_alive(state, actor_id):
@@ -519,7 +548,13 @@ def partial_auto_resolve_round(state: GameState) -> object:  # EngineResult
             )
             actor_name = _combatant_name(state, actor_id)
             affect_text = affect_sub.action_text if affect_sub else "Affect action"
-            log.append(f"[{actor_name}: {affect_text!r} — pending DM adjudication]")
+            log.append(fmt_string("combat.log.affect_pending",
+                                   actor_name=actor_name, action_text=repr(affect_text)))
+            _tick_actor_conditions(state, actor_id, log)
+            continue
+        if cs.is_player and actor_id not in submitted_ids:
+            log.append(fmt_string("combat.log.no_submission",
+                                   actor_name=_combatant_name(state, actor_id)))
             _tick_actor_conditions(state, actor_id, log)
             continue
         action = action_map.get(actor_id)
@@ -539,14 +574,18 @@ def partial_auto_resolve_round(state: GameState) -> object:  # EngineResult
         cs.used_move        = False
         cs.used_oracle      = False
 
-    # --- 7. Store log; do NOT advance turn or check combat-exit conditions
+    # --- 7. Store log and check combat-exit conditions (shared with auto_resolve_round).
+    # We do NOT advance the turn — the DM still finalizes the round — but combat-end is
+    # already determined (an Affect actor can't revive a defeated NPC), so end it here
+    # to distribute XP and exit rounds in the same pass rather than deferring a round.
     narrative = "\n".join(log) if log else get_string("combat.log.no_action")
     bf.round_log = log[:]
+    state.updated_at = _now()
+
+    narrative = _apply_combat_exit(state, narrative)
 
     state.current_turn.partial_resolved       = True
     state.current_turn.partial_resolution_log = narrative
-    state.updated_at = _now()
-
     return _ok(state, narrative)
 
 

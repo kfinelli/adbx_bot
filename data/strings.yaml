@@ -140,6 +140,8 @@ turn:
     no_current: "No current turn."
     not_open_unsubmit: "Current turn is not open; cannot un-submit."
     no_submission: "{name} has not submitted a turn."
+    partial_resolved_no_submit: "This round has been partially resolved; submissions are closed."
+    partial_resolved_no_reopen: "This round has been partially resolved and cannot be reopened. Finalize it instead."
 
 status:
   waiting: "Pre-start: waiting to Embark"
@@ -185,6 +187,8 @@ combat:
     wake_roll_failed: "{name} rolls {roll} (need {threshold}); still {cond_name}."
     no_action: "The round passes without incident."
     stunned: "{actor_name} is stunned and cannot act this round!"
+    affect_pending: "[{actor_name}: {action_text} — pending DM adjudication]"
+    no_submission: "[{actor_name}: no submission — took no action]"
     action_out_of_range: "{actor_name} cannot use {label} from {band}, target is {dist} band(s) away (max {max_range})."
   victory:
     header: "**Victory!**"

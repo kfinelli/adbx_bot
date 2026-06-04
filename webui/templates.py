@@ -396,29 +396,37 @@ def turn_panel(state: GameState, edit_id: str = "") -> str:
         if rows:
             subs_html = f'<table><tr><th>Character</th><th>Submitted Action</th></tr>{rows}</table>'
 
-    def _has_affect(t) -> bool:
-        for s in (t.submissions if t else []):
-            if not s.is_latest:
-                continue
-            if s.combat_action is None:
-                return True
-            adef = ACTION_REGISTRY.get(s.combat_action.get("action_id", ""))
-            if adef and adef.action_type == "affect":
-                return True
-        return False
+    # Classify active members for partial-resolve messaging: who submitted an
+    # Affect (needs a DM ruling) vs who never submitted (timed out, took no action).
+    latest_by_char = {
+        s.character_id: s for s in (turn.submissions if turn else []) if s.is_latest
+    }
+    affect_names: list[str] = []
+    missing_names: list[str] = []
+    for cid in (state.party.member_ids if (turn and state.party) else []):
+        char = state.characters.get(cid)
+        if not char or char.status.value != "active":
+            continue
+        s = latest_by_char.get(cid)
+        if s is None:
+            missing_names.append(_html.escape(char.name))
+        elif s.combat_action is None or (
+            ACTION_REGISTRY.get(s.combat_action.get("action_id", "")) is not None
+            and ACTION_REGISTRY[s.combat_action["action_id"]].action_type == "affect"
+        ):
+            affect_names.append(_html.escape(char.name))
 
-    # Partial auto-resolve button — ROUNDS + CLOSED + not yet run + has Affect submission(s)
+    # Partial auto-resolve button — any closed combat round not yet partially resolved.
     partial_resolve_html = ""
     if (state.mode == SessionMode.ROUNDS
             and turn is not None
             and turn.status == TurnStatus.CLOSED
-            and not turn.partial_resolved
-            and _has_affect(turn)):
+            and not turn.partial_resolved):
         partial_resolve_html = f"""
 <hr class="divider">
 <p class="muted" style="font-size:0.85rem;margin-bottom:0.5rem">
   Auto-resolve NPC actions and all structured player actions now.
-  Affect actors will be listed below for manual adjudication.
+  Anything needing your ruling will be listed below.
 </p>
 <form hx-post="/session/{channel_id}/partial_resolve"
       hx-target="#dashboard" hx-swap="outerHTML">
@@ -438,26 +446,29 @@ def turn_panel(state: GameState, edit_id: str = "") -> str:
   <h3 style="font-size:0.85rem;color:#7fbf7f;margin-bottom:0.5rem">Auto-Resolved Actions</h3>
   <pre style="white-space:pre-wrap;font-size:0.82rem;color:#aaffaa;margin:0">{esc_log}</pre>
 </div>"""
-            affect_names = []
-            for s in turn.submissions:
-                if not s.is_latest:
-                    continue
-                is_affect = s.combat_action is None or (
-                    ACTION_REGISTRY.get(s.combat_action.get("action_id", "")) is not None
-                    and ACTION_REGISTRY[s.combat_action["action_id"]].action_type == "affect"
-                )
-                if is_affect:
-                    char = state.characters.get(s.character_id)
-                    affect_names.append(_html.escape(char.name if char else str(s.character_id)))
             if affect_names:
-                affect_actors_section = (
+                affect_actors_section += (
                     f'<p class="muted" style="margin-bottom:0.5rem">Pending adjudication for: '
                     f'<strong>{", ".join(affect_names)}</strong></p>'
                 )
+            if missing_names:
+                affect_actors_section += (
+                    f'<p class="muted" style="margin-bottom:0.5rem">No submission: '
+                    f'{", ".join(missing_names)}</p>'
+                )
 
-        label = "Affect outcome narrative" if turn.partial_resolved else "Resolution narrative"
-        placeholder = "Describe the Affect actor outcome..." if turn.partial_resolved else "Describe what happens..."
-        btn_label = "Finalize Round" if turn.partial_resolved else "Resolve Turn"
+        if turn.partial_resolved:
+            if affect_names:
+                label = "Affect outcome narrative"
+                placeholder = "Describe the Affect actor outcome..."
+            else:
+                label = "Resolution narrative (optional)"
+                placeholder = "Add any extra detail, or finalize as-is..."
+            btn_label = "Finalize Round"
+        else:
+            label = "Resolution narrative"
+            placeholder = "Describe what happens..."
+            btn_label = "Resolve Turn"
 
         resolve_html = f"""
 <hr class="divider">

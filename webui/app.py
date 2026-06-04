@@ -274,7 +274,7 @@ async def route_partial_resolve(channel_id: str):
     if not result.ok:
         return _respond(channel_id, error=result.error, sync=False)
     await save_session_async(state)
-    return _respond(channel_id, flash="Structured actions resolved. Adjudicate Affect below.", sync=False)
+    return _respond(channel_id, flash="Auto-resolved structured actions and NPC turns. Review the log and finalize.", sync=False)
 
 
 @app.post("/session/{channel_id}/resolve", response_class=HTMLResponse)
