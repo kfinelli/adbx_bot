@@ -85,6 +85,35 @@ Slash commands may take a few minutes to appear in Discord after the first sync.
 
 ---
 
+## DM Control Panel
+
+The web control panel runs at `http://localhost:8080/` (port configurable via
+`DM_PANEL_PORT`). It is protected by a password login: every route requires a signed
+session cookie, and you sign in once at `/login`.
+
+Set it up by generating a password hash and adding it to `.env`:
+
+```bash
+python -m webui.auth          # prompts for a password, prints DM_PANEL_PASSWORD_HASH=...
+```
+
+Also set `DM_PANEL_SECRET_KEY` in `.env` so logins survive restarts (see `.env.example`).
+
+This auth layer is **defense-in-depth** — the panel should still be reached over a
+private network (e.g. Tailscale) rather than exposed directly to the internet. When
+served over HTTPS, leave `DM_PANEL_COOKIE_SECURE` at its default (`true`); set it to
+`false` only for plain-http local testing.
+
+### Passwordless login (optional)
+
+Instead of typing the password, you can have the bot DM you a one-time login link with
+the `/dm_panel` slash command. Set both `DM_PANEL_OWNER_ID` (your Discord user ID — only
+this user may run the command) and `DM_PANEL_BASE_URL` (the panel's public base URL, e.g.
+the Tailscale Serve address) in `.env`. The link is single-use and expires after 5
+minutes; password login remains available as a fallback.
+
+---
+
 ## Running tests
 
 Non-discord tests:

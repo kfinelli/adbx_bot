@@ -14,6 +14,7 @@ Commands:
 from __future__ import annotations
 
 import contextlib
+import os
 
 import discord
 from discord import app_commands
@@ -176,6 +177,46 @@ class DMCog(commands.Cog):
                 return
             emote(state, speaker, text)
             await update_status(interaction.channel, state)
+
+    # ------------------------------------------------------------------
+    # /dm_panel
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="dm_panel",
+        description="[DM] DM yourself a one-time login link for the web control panel.",
+    )
+    async def dm_panel(self, interaction: discord.Interaction):
+        await ack(interaction)
+
+        owner_id = os.environ.get("DM_PANEL_OWNER_ID", "")
+        if not owner_id:
+            await ack_err(interaction, "DM panel owner is not configured (set DM_PANEL_OWNER_ID).")
+            return
+        if str(interaction.user.id) != owner_id:
+            await ack_err(interaction, "You are not authorized to access the DM panel.")
+            return
+
+        base_url = os.environ.get("DM_PANEL_BASE_URL", "").rstrip("/")
+        if not base_url:
+            await ack_err(interaction, "DM_PANEL_BASE_URL is not configured.")
+            return
+
+        from webui.auth import issue_token
+
+        link = f"{base_url}/auth?t={issue_token()}"
+        try:
+            await interaction.user.send(
+                f"🔐 DM panel login link (one-time use, valid 5 minutes):\n{link}"
+            )
+        except (discord.Forbidden, discord.HTTPException):
+            await ack_err(
+                interaction,
+                "Couldn't DM you — enable DMs from server members and try again.",
+            )
+            return
+        with contextlib.suppress(discord.NotFound, discord.HTTPException):
+            await interaction.edit_original_response(content="📬 Sent a login link to your DMs.")
 
 
 async def setup(bot: commands.Bot):

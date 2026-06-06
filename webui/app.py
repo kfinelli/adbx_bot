@@ -124,6 +124,12 @@ from webui.templates import (
 
 app = FastAPI(title="DM Control Panel")
 
+# Authentication: gate every route behind a signed session cookie (see webui/auth.py).
+from webui import auth as _auth  # noqa: E402
+
+app.middleware("http")(_auth.auth_middleware)
+app.include_router(_auth.router)
+
 
 @app.exception_handler(RequestValidationError)
 async def validation_error_handler(request: Request, exc: RequestValidationError) -> HTMLResponse:
