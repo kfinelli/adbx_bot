@@ -80,7 +80,7 @@ def page(title: str, body: str) -> str:
     }}
     .card h3 {{ margin-bottom: 0.75rem; font-size: 1rem; }}
     label {{ display: block; font-size: 0.85rem; color: #aaa; margin-bottom: 2px; margin-top: 8px; }}
-    input[type=text], input[type=number], textarea, select {{
+    input[type=text], input[type=number], input[type=password], textarea, select {{
       width: 100%;
       background: #0f3460;
       border: 1px solid #1a4a8a;
@@ -194,6 +194,24 @@ def page(title: str, body: str) -> str:
 {body}
 </body>
 </html>"""
+
+
+def login_page(error: str | None = None) -> str:
+    """Standalone login page (no sidebar layout) for the DM panel auth gate."""
+    err_html = f'<div class="error">{error}</div>' if error else ""
+    body = f"""
+<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:1rem;">
+  <div class="card" style="max-width:360px;width:100%;">
+    <h1 style="font-size:1.3rem;">DM Panel Login</h1>
+    {err_html}
+    <form method="post" action="/login">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" autofocus autocomplete="current-password">
+      <button type="submit" class="btn-success" style="margin-top:1rem;">Sign in</button>
+    </form>
+  </div>
+</div>"""
+    return page("DM Panel — Login", body)
 
 
 def _tab_bar(channel_id: str, active_tab: str) -> str:
