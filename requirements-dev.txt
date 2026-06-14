@@ -5,6 +5,13 @@
 # YAML parsing (for data/strings.yaml)
 pyyaml>=6.0
 
+# Web framework — webui/auth.py exposes pure (testable) helpers alongside its
+# FastAPI routes. Unlike discord.py, FastAPI imports cleanly with no token, so
+# it belongs in the test env (it also lets the auth middleware be tested).
+# python-multipart is required by FastAPI at import time for Form() routes.
+fastapi>=0.109.0
+python-multipart>=0.0.6
+
 # Testing
 pytest>=8.0
 pytest-asyncio>=0.23
