@@ -14,7 +14,7 @@ from engine.azure_constants import (
 )
 from engine.data_loader import CLASS_DEFINITIONS, ITEM_REGISTRY, SkillDef
 from engine.dice import max_dice_expr, roll_dice_expr
-from engine.item import ChargeWeapon, ContainerItem, EquipItem, Weapon
+from engine.item import ChargeWeapon, ContainerItem, EquipItem, UtilitySpell, Weapon
 from models import (
     AzureStats,
     Character,
@@ -507,40 +507,41 @@ class CharacterManager:
 
         slot_cost = defn.slot_cost
 
+        # --- Capacity check ---
+        # Light items bundle BUNDLE_SIZE-per-slot, shared across all light-weight
+        # types (matching Character.slots_used); everything else costs slot_cost
+        # each. This is independent of how the item is stored below: a light
+        # charge spell still occupies a shared bundle slot even though it is
+        # never quantity-stacked.
         if defn.isLight:
-            # Bundle-aware capacity check: all light-weight items share bundle slots.
+            # Contained items (container_id set) consume no slots, so exclude them
+            # to stay consistent with Character.slots_used.
             current_light = sum(
                 i.quantity for i in char.inventory
                 if not i.equipped
+                and i.container_id is None
                 and (d := ITEM_REGISTRY.get(i.item_id)) is not None
                 and d.isLight
             )
             current_light_slots = ceil(current_light / BUNDLE_SIZE) if current_light else 0
             new_light_slots = ceil((current_light + quantity) / BUNDLE_SIZE)
-            non_light_slots = char.slots_used - current_light_slots
-            if non_light_slots + new_light_slots > char.inventory_size:
-                return _err(
-                    state,
-                    f"{char.name}'s inventory is full "
-                    f"({char.slots_used}/{char.inventory_size} slots used).",
-                )
-            existing = next(
-                (i for i in char.inventory if i.item_id == item_id and not i.equipped),
-                None,
-            )
-            if existing is not None:
-                existing.quantity += quantity
-            else:
-                char.inventory.append(InventoryItem(item_id=item_id, quantity=quantity))
+            projected = (char.slots_used - current_light_slots) + new_light_slots
+            over_capacity = projected > char.inventory_size
+        else:
+            over_capacity = slot_cost > 0 and char.slots_used + slot_cost * quantity > char.inventory_size
 
-        elif isinstance(defn, ChargeWeapon):
-            # Never stack charged items — each needs its own charge counter.
-            if slot_cost > 0 and char.slots_used + slot_cost * quantity > char.inventory_size:
-                return _err(
-                    state,
-                    f"{char.name}'s inventory is full "
-                    f"({char.slots_used}/{char.inventory_size} slots used).",
-                )
+        if over_capacity:
+            return _err(
+                state,
+                f"{char.name}'s inventory is full "
+                f"({char.slots_used}/{char.inventory_size} slots used).",
+            )
+
+        # --- Insertion (type-specific) ---
+        if isinstance(defn, (ChargeWeapon, UtilitySpell)):
+            # Never stack charge-bearing items — each needs its own charge counter,
+            # so charges must be initialized explicitly (this also covers light
+            # spells, which the bundle-stacking path would leave with charges=None).
             char.inventory.append(InventoryItem(
                 item_id=item_id,
                 quantity=quantity,
@@ -549,12 +550,6 @@ class CharacterManager:
 
         elif isinstance(defn, ContainerItem):
             # Containers are never stacked — each is its own InventoryItem.
-            if slot_cost > 0 and char.slots_used + slot_cost * quantity > char.inventory_size:
-                return _err(
-                    state,
-                    f"{char.name}'s inventory is full "
-                    f"({char.slots_used}/{char.inventory_size} slots used).",
-                )
             for _ in range(quantity):
                 container_inv = InventoryItem(item_id=item_id, quantity=1)
                 char.inventory.append(container_inv)
@@ -570,12 +565,8 @@ class CharacterManager:
                     ))
 
         else:
-            if slot_cost > 0 and char.slots_used + slot_cost * quantity > char.inventory_size:
-                return _err(
-                    state,
-                    f"{char.name}'s inventory is full "
-                    f"({char.slots_used}/{char.inventory_size} slots used).",
-                )
+            # Stackable items (including light consumables): merge onto an
+            # existing unequipped entry when one exists.
             existing = next(
                 (i for i in char.inventory if i.item_id == item_id and not i.equipped),
                 None,

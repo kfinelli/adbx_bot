@@ -1236,3 +1236,119 @@ class TestDuplicateStackLookups:
         equipped_items = [i for i in char.inventory if i.equipped]
         assert len(equipped_items) == 1
         assert equipped_items[0].item_id == second_id
+
+
+# ---------------------------------------------------------------------------
+# Light spells given individually (outside a spellbook)
+#
+# The Magic-category spells are flagged is_light so they bundle in inventory,
+# but they are charge-bearing: give_item must still initialize per-instance
+# charges and must NOT route them through the light bundle-stacking path
+# (which would leave charges=None and merge copies). See give_item in
+# engine/character.py.
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def light_charge_spell_id():
+    """A light, finite-charge ChargeWeapon spell (e.g. pyr_2)."""
+    for item_id, defn in ITEM_REGISTRY.items():
+        if isinstance(defn, ChargeWeapon) and defn.isLight and defn.maxCharges > 0:
+            return item_id
+    return None
+
+
+@pytest.fixture
+def light_utility_spell_id():
+    """A light, finite-charge UtilitySpell (e.g. viviu_2)."""
+    for item_id, defn in ITEM_REGISTRY.items():
+        if isinstance(defn, UtilitySpell) and defn.isLight and defn.maxCharges > 0:
+            return item_id
+    return None
+
+
+class TestLightSpellGivenIndividually:
+    def test_magic_spells_are_light(self, light_charge_spell_id, light_utility_spell_id):
+        assert light_charge_spell_id is not None, "Expected a light ChargeWeapon spell in registry"
+        assert light_utility_spell_id is not None, "Expected a light UtilitySpell in registry"
+
+    def test_give_light_charge_spell_initializes_charges(self, state_mage, light_charge_spell_id):
+        char = _get_char(state_mage)
+        give_item(state_mage, char.character_id, light_charge_spell_id)
+
+        defn = ITEM_REGISTRY[light_charge_spell_id]
+        inv = next(i for i in char.inventory if i.item_id == light_charge_spell_id)
+        assert inv.container_id is None
+        assert inv.charges == defn.maxCharges, "Charges must be initialized, not None"
+
+    def test_give_light_utility_spell_initializes_charges(self, state_mage, light_utility_spell_id):
+        char = _get_char(state_mage)
+        give_item(state_mage, char.character_id, light_utility_spell_id)
+
+        defn = ITEM_REGISTRY[light_utility_spell_id]
+        inv = next(i for i in char.inventory if i.item_id == light_utility_spell_id)
+        assert inv.charges == defn.maxCharges
+
+    def test_two_copies_of_light_charge_spell_not_merged(self, state_mage, light_charge_spell_id):
+        """Each charge spell needs its own charge counter, so giving it twice must
+        create two separate InventoryItems rather than a single quantity=2 stack."""
+        char = _get_char(state_mage)
+        give_item(state_mage, char.character_id, light_charge_spell_id)
+        give_item(state_mage, char.character_id, light_charge_spell_id)
+
+        entries = [i for i in char.inventory if i.item_id == light_charge_spell_id]
+        assert len(entries) == 2
+        assert all(e.quantity == 1 for e in entries)
+
+    def test_light_spell_charges_survive_roundtrip(self, state_mage, light_charge_spell_id):
+        char = _get_char(state_mage)
+        give_item(state_mage, char.character_id, light_charge_spell_id)
+        # Spend a charge so we're not just round-tripping the max value.
+        inv = next(i for i in char.inventory if i.item_id == light_charge_spell_id)
+        inv.charges -= 1
+        spent = inv.charges
+
+        restored = deserialize_state(serialize_state(state_mage))
+        rest_char = next(iter(restored.characters.values()))
+        rest_inv = next(i for i in rest_char.inventory if i.item_id == light_charge_spell_id)
+        assert rest_inv.charges == spent
+
+    def test_light_spells_bundle_in_inventory(self, state_mage, light_charge_spell_id):
+        """Several distinct light spells should share bundle slots rather than
+        costing one slot apiece (consistent with Character.slots_used)."""
+        from engine.azure_constants import BUNDLE_SIZE
+
+        char = _get_char(state_mage)
+        light_spells = [
+            iid for iid, defn in ITEM_REGISTRY.items()
+            if isinstance(defn, (ChargeWeapon, UtilitySpell)) and defn.isLight
+        ][:BUNDLE_SIZE]
+        assert len(light_spells) >= 2, "Need multiple light spells to test bundling"
+
+        for sid in light_spells:
+            result = give_item(state_mage, char.character_id, sid)
+            assert result.ok, result.error
+
+        # Up to BUNDLE_SIZE light items occupy a single bundle slot.
+        from math import ceil
+        assert char.slots_used == ceil(len(light_spells) / BUNDLE_SIZE)
+
+    def test_contained_light_spells_not_double_counted(self, state_mage, weapon_spellbook_id):
+        """A spellbook full of (now light) contained spells must not inflate the
+        light-bundle capacity check when giving another light item: contained
+        items consume no slots, matching Character.slots_used."""
+        assert weapon_spellbook_id is not None
+        char = _get_char(state_mage)
+        give_item(state_mage, char.character_id, weapon_spellbook_id)
+
+        slots_before = char.slots_used
+        # Give a standalone light spell — capacity math must only count it, not
+        # the book's contained spells.
+        standalone = next(
+            iid for iid, defn in ITEM_REGISTRY.items()
+            if isinstance(defn, (ChargeWeapon, UtilitySpell)) and defn.isLight
+        )
+        result = give_item(state_mage, char.character_id, standalone)
+        assert result.ok, result.error
+        # Adding one light item to an existing bundle (or opening a new one) adds
+        # at most one slot — never one-per-contained-spell.
+        assert char.slots_used - slots_before <= 1
