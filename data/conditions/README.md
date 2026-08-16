@@ -8,29 +8,26 @@ via `CONDITION_REGISTRY`.
 
 ```json
 {
-  "condition_id":   "poisoned",
-  "label":          "Poisoned",
+  "condition_id":   "burning",
+  "label":          "Burning",
   "duration_type":  "rounds",
+  "stackable":      false,
   "hooks": {
-    "on_turn_start":    "deal_1d4_poison_damage",
-    "on_turn_end":      null,
-    "on_attack":        null,
-    "on_hit":           null,
-    "on_take_damage":   null,
-    "on_death":         null,
-    "on_move":          null,
-    "stat_modifiers":   {}
+    "on_turn_end": {"tag": "deal_damage", "dice": "1d6", "type": "fire"}
   },
+  "stat_modifiers": {},
   "grants_actions": []
 }
 ```
 
+The file name (stem) must match `condition_id`. `stackable` defaults to
+`false`; when `true`, multiple instances stack instead of replacing.
+
 ### Hook tags
 
-Hook values are string tags dispatched by `engine/combat.py:_dispatch_hook()`.
-`null` means no effect for that hook.  `stat_modifiers` is a dict of
-`ability_name → integer` (e.g. `{"strength": -2}`).  `grants_actions` is a
-list of action IDs from `data/actions/` that are added to the combatant's
-available actions while this condition is active.
-
-Condition files will be added in Phase 4.
+Only include hooks that do something — there are no `null` placeholders.
+Hook values are string tags (or `{"tag": ..., ...params}` objects) dispatched
+by `engine/combat_hooks.py:_dispatch_hook()`. `stat_modifiers` is a dict of
+`ability_name → integer` using the Azure stats (e.g. `{"physique": -2}`).
+`grants_actions` is a list of action IDs from `data/actions/` that are added
+to the combatant's available actions while this condition is active.

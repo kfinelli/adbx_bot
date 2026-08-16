@@ -40,7 +40,7 @@ A hook entry is either a plain string (tag, no params) or a hook object
 
 ## Adding a new hook: step-by-step
 
-### Step 1 — Write the handler in `engine/combat.py`
+### Step 1 — Write the handler in `engine/combat_hooks.py`
 
 Find the `# Hook handlers` section and add a new function.
 Every handler has the same signature:
@@ -78,7 +78,7 @@ Key rules:
 
 ### Step 2 — Register the tag in `_HOOK_DISPATCH`
 
-Still in `engine/combat.py`, find `_HOOK_DISPATCH` near the bottom:
+Still in `engine/combat_hooks.py`, find `_HOOK_DISPATCH` near the bottom:
 
 ```python
 _HOOK_DISPATCH: dict[str, object] = {
@@ -145,7 +145,7 @@ def test_burning_deals_fire_damage(self):
     apply_condition(state, char_id, "burning", duration=2)
     hp_before = state.characters[char_id].hp_current
 
-    from engine.combat import _tick_conditions
+    from engine.combat_hooks import _tick_conditions
     log: list[str] = []
     _tick_conditions(state, log)
 
@@ -162,14 +162,16 @@ def test_burning_deals_fire_damage(self):
 | `on_turn_start`| Before the actor's action each round               | the affected combatant |
 | `on_turn_end`  | After all actions, during condition tick           | the affected combatant |
 | `on_move`      | Inside `move_to_band`, before position changes     | the moving combatant |
-| `on_attack`    | When the combatant makes an attack roll *(stub)*   | the attacker |
+| `on_attack`    | After the combatant executes an attack action      | the attacker |
 | `on_hit`       | When a hit lands *(stub)*                          | the attacker |
 | `on_take_damage` | When damage is applied *(stub)*                  | the target |
 | `on_death`     | When a combatant reaches 0 HP *(stub)*             | the dying combatant |
 
 Stubs are recognised by the loader but have no wiring yet in
 `auto_resolve_round`. To activate one, follow the pattern for
-`on_turn_start` in `_fire_turn_start_hooks`.
+`on_turn_start` in `_fire_turn_start_hooks` or `on_attack` in
+`_fire_on_attack_hooks` (both in `engine/combat_hooks.py`, called from
+`engine/combat.py`).
 
 ---
 
@@ -181,9 +183,15 @@ Stubs are recognised by the loader but have no wiring yet in
 | `check_death`     | *(none)*                        | Mark target dead if HP ≤ 0                |
 | `deal_damage`     | `dice` (str), `type` (str)      | Deal damage to `actor_id` (condition tick)|
 | `apply_condition` | `condition` (str), `duration` (int) | Apply a condition to the action target|
+| `remove_condition` | `condition` (str, required)    | Remove all instances of a condition from the actor |
+| `remove_this_condition_on_roll` | `dice` (str, "1d4"), `threshold` (int, 4) | Roll at `on_turn_end`; remove the parent condition if total ≥ threshold |
 | `move_to_band`    | *(none)*                        | Move actor toward `action.destination`    |
 | `block_movement`  | *(none)*                        | Set `movement_blocked` flag (entangle)    |
 | `skip_action`     | *(none)*                        | Set `skip_action` flag (stun)             |
+| `abscond_roll`    | *(none)*                        | Flee attempt: 1d1000 + Finesse vs 500 + highest enemy Finesse; enemies at engage range block escape |
+| `stat_check`      | `stat` (str), `dc` (int), `on_success` / `on_failure` (hook lists) | 1d1000 + stat vs DC, dispatch follow-up hooks |
+| `resolve_equip`   | *(none — reads `action.weapon_id` / `action.free_text`)* | Equip an item during round resolution |
+| `resolve_unequip` | *(none — reads `action.free_text` slot)* | Unequip an item during round resolution |
 
 ---
 

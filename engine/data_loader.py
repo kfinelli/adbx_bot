@@ -25,7 +25,7 @@ A hook value in a condition or action effect_tags list can be either:
         "on_turn_end": {"tag": "deal_damage", "dice": "1d4", "type": "poison"}
         "effect_tags": [{"tag": "melee_attack", "dice": "1d6"}]
 
-Both forms are valid everywhere.  _dispatch_hook() in combat.py handles
+Both forms are valid everywhere.  _dispatch_hook() in combat_hooks.py handles
 unwrapping transparently.  See CONTRIBUTING.md for how to add new hooks.
 
 Job / Skill files
