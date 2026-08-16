@@ -92,6 +92,50 @@ def _make_combat_state_with_hidden_npc():
     return state, char_id, visible.npc_id, hidden.npc_id
 
 
+def _make_combat_state_with_hidden_npc_in_other_room():
+    """
+    One character and visible NPC in the current room, hidden NPC in another room.
+    Returns (state, char_id, visible_npc_id, hidden_npc_id).
+    """
+    state = _make_state()
+    current_room = Room(name="Hall", description="A dark hall.")
+    other_room = Room(name="Vault", description="A locked vault.")
+    register_room(state, current_room)
+    register_room(state, other_room)
+    state.current_room_id = current_room.room_id
+
+    visible = NPC(
+        name="Goblin", hp_current=1, hp_max=1,
+        defense=0, damage_dice="1d4", hit_dice=1,
+        hidden=False,
+    )
+    # Place hidden NPC in the other room by adding it after switching current_room.
+    add_npc(state, visible)
+
+    for char in state.characters.values():
+        char.hp_current = 50
+        char.hp_max = 50
+
+    enter_rounds(state)
+    open_turn(state)
+
+    char_id = list(state.characters.keys())[0]
+    state.battlefield.combatants[char_id].range_band = RangeBand.ENGAGE
+    state.battlefield.combatants[visible.npc_id].range_band = RangeBand.ENGAGE
+
+    # Now add the hidden NPC to the other room.
+    state.current_room_id = other_room.room_id
+    hidden = NPC(
+        name="Ghost", hp_current=50, hp_max=50,
+        defense=0, damage_dice="1d4", hit_dice=2,
+        hidden=True,
+    )
+    add_npc(state, hidden)
+    state.current_room_id = current_room.room_id
+
+    return state, char_id, visible.npc_id, hidden.npc_id
+
+
 def _attack_submission(char_id, target_id) -> PlayerTurnSubmission:
     action = CombatAction(action_id="attack", target_id=target_id)
     return PlayerTurnSubmission(
@@ -170,3 +214,12 @@ class TestHiddenNpcCombatExclusion:
 
         assert result.ok
         assert visible_id not in state.battlefield.combatants
+
+    def test_reveal_hidden_npc_in_other_room_does_not_join_combat(self):
+        state, char_id, visible_id, hidden_id = _make_combat_state_with_hidden_npc_in_other_room()
+        assert hidden_id not in state.battlefield.combatants
+
+        result = set_npc_visibility(state, hidden_id, hidden=False)
+
+        assert result.ok
+        assert hidden_id not in state.battlefield.combatants

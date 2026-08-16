@@ -141,22 +141,29 @@ class NPCManager:
         npc.hidden = hidden
 
         # Keep an active battlefield in sync: hidden NPCs are excluded from
-        # combat, revealed NPCs join at the enemy starting band.
-        if state.mode == SessionMode.ROUNDS and state.battlefield is not None:
-            bf = state.battlefield
-            if hidden:
-                bf.combatants.pop(npc_id, None)
-            elif (
-                npc.status != "dead"
-                and npc.hp_current > 0
-                and npc_id not in bf.combatants
-            ):
-                bf.combatants[npc_id] = CombatantState(
-                    combatant_id=npc_id,
-                    is_player=False,
-                    range_band=RangeBand.FAR_PLUS,
-                    initiative=random.randint(1, 10),
-                )
+        # combat, revealed NPCs join at the enemy starting band. Only touch the
+        # battlefield if the NPC is actually in the party's current room.
+        if (
+            state.mode == SessionMode.ROUNDS
+            and state.battlefield is not None
+            and state.current_room_id is not None
+        ):
+            group = _find_npcgroup_with_npc(state, npc_id)
+            if group is not None and group.current_room_id == state.current_room_id:
+                bf = state.battlefield
+                if hidden:
+                    bf.combatants.pop(npc_id, None)
+                elif (
+                    npc.status != "dead"
+                    and npc.hp_current > 0
+                    and npc_id not in bf.combatants
+                ):
+                    bf.combatants[npc_id] = CombatantState(
+                        combatant_id=npc_id,
+                        is_player=False,
+                        range_band=RangeBand.FAR_PLUS,
+                        initiative=random.randint(1, 10),
+                    )
 
         state.updated_at = _now()
         label = "hidden" if hidden else "visible"
