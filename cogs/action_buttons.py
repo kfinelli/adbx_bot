@@ -1740,13 +1740,17 @@ def render_battlefield_section(state) -> str:
             char = state.characters.get(cid)
             name = char.name if char else str(cid)[:8]
         else:
-            # Find NPC name
+            # Find NPC name; skip hidden NPCs so they don't leak to players.
             name = str(cid)[:8]
+            npc = None
             for group in state.npc_roster.groups.values():
-                for npc in group.npcs:
-                    if npc.npc_id == cid:
-                        name = npc.name
+                for n in group.npcs:
+                    if n.npc_id == cid:
+                        npc = n
+                        name = n.name
                         break
+            if npc is not None and npc.hidden:
+                continue
         bands[cs.range_band].append(name)
 
     lines = []

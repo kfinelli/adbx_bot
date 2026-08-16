@@ -182,7 +182,7 @@ def initialize_battlefield(state: GameState) -> CombatBattlefield:
         )
 
     for npc in state.npcs_in_current_room:
-        if npc.status == "dead":
+        if npc.status == "dead" or npc.hidden:
             continue
         bf.combatants[npc.npc_id] = CombatantState(
             combatant_id=npc.npc_id,

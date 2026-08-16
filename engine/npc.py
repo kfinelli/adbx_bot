@@ -3,9 +3,19 @@ NPC management for the dungeon crawler engine.
 """
 
 import copy
+import random
 from uuid import UUID, uuid4
 
-from models import NPC, EncounterEntry, GameState, NPCGroup, NPCMovementLogic
+from models import (
+    NPC,
+    CombatantState,
+    EncounterEntry,
+    GameState,
+    NPCGroup,
+    NPCMovementLogic,
+    RangeBand,
+    SessionMode,
+)
 from validation import validate_hp_value, validate_non_empty_string
 
 from .helpers import _err, _find_npc_in_roster, _find_npcgroup_with_npc, _now, _ok
@@ -129,6 +139,25 @@ class NPCManager:
         if npc is None:
             return _err(state, fmt_string("npc.errors.not_found", npc_id=npc_id))
         npc.hidden = hidden
+
+        # Keep an active battlefield in sync: hidden NPCs are excluded from
+        # combat, revealed NPCs join at the enemy starting band.
+        if state.mode == SessionMode.ROUNDS and state.battlefield is not None:
+            bf = state.battlefield
+            if hidden:
+                bf.combatants.pop(npc_id, None)
+            elif (
+                npc.status != "dead"
+                and npc.hp_current > 0
+                and npc_id not in bf.combatants
+            ):
+                bf.combatants[npc_id] = CombatantState(
+                    combatant_id=npc_id,
+                    is_player=False,
+                    range_band=RangeBand.FAR_PLUS,
+                    initiative=random.randint(1, 10),
+                )
+
         state.updated_at = _now()
         label = "hidden" if hidden else "visible"
         return _ok(state, f"{npc.name} is now {label}.")
