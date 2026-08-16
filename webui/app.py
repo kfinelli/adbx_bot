@@ -105,6 +105,7 @@ from models import (
     NPC,
     CharacterStatus,
     DoorState,
+    NPCBehaviorMode,
     NPCGroup,
     NPCMovementLogic,
     RangeBand,
@@ -124,6 +125,14 @@ from webui.templates import (
     session_list_page,
     session_page,
 )
+
+
+def _parse_behavior(value: str) -> NPCBehaviorMode:
+    try:
+        return NPCBehaviorMode(value)
+    except ValueError:
+        return NPCBehaviorMode.SIMPLE
+
 
 app = FastAPI(title="DM Control Panel")
 
@@ -736,6 +745,7 @@ async def route_addnpc(
     weapon_range: Annotated[int, Form()] = 0,
     description: Annotated[str, Form()] = "",
     notes: Annotated[str, Form()] = "",
+    behavior: Annotated[str, Form()] = "simple",
     hidden: Annotated[bool, Form()] = False,
     view_room_id: Annotated[str, Form()] = "",
 ):
@@ -748,6 +758,7 @@ async def route_addnpc(
         hit_dice=hit_dice,
         resistance=resistance, weapon_range=weapon_range,
         description=description, notes=notes,
+        behavior=_parse_behavior(behavior),
         hidden=hidden,
     )
     room_id = UUID(view_room_id) if view_room_id else None
@@ -1044,6 +1055,7 @@ async def route_npc_update(
     resistance: Annotated[int, Form()] = 0,
     weapon_range: Annotated[int, Form()] = 0,
     damage_dice: Annotated[str, Form()] = "1d6",
+    behavior: Annotated[str, Form()] = "simple",
     view_room_id: Annotated[str, Form()] = "",
     from_page: Annotated[str, Form()] = "",
 ):
@@ -1055,6 +1067,7 @@ async def route_npc_update(
         result = update_npc(
             state, UUID(npc_id), name, description, hp_max, hp_current, defense,
             notes, hit_dice, resistance, weapon_range, damage_dice,
+            behavior,
         )
         if not result.ok:
             if from_page == "npcs":
@@ -1187,6 +1200,7 @@ async def route_addgroup(
     hit_dice: Annotated[int, Form()] = 1,
     weapon_range: Annotated[int, Form()] = 0,
     description: Annotated[str, Form()] = "",
+    behavior: Annotated[str, Form()] = "simple",
 ):
     state = store.get_session(channel_id)
     if state is None:
@@ -1200,6 +1214,7 @@ async def route_addgroup(
         defense=defense, damage_dice=damage_dice,
         hit_dice=hit_dice, resistance=resistance,
         weapon_range=weapon_range, description=description,
+        behavior=_parse_behavior(behavior),
     )
     group = NPCGroup(
         name=group_name or None,
@@ -1263,6 +1278,7 @@ async def route_group_addnpc(
     hit_dice: Annotated[int, Form()] = 1,
     weapon_range: Annotated[int, Form()] = 0,
     description: Annotated[str, Form()] = "",
+    behavior: Annotated[str, Form()] = "simple",
 ):
     state = store.get_session(channel_id)
     if state is None:
@@ -1272,6 +1288,7 @@ async def route_group_addnpc(
         defense=defense, damage_dice=damage_dice,
         hit_dice=hit_dice, resistance=resistance,
         weapon_range=weapon_range, description=description,
+        behavior=_parse_behavior(behavior),
     )
     result = eng_add_npc_to_group(state, UUID(group_id), npc)
     if not result.ok:
@@ -1309,6 +1326,7 @@ async def route_encounter_roster_add(
     hit_dice: Annotated[int, Form()] = 1,
     weapon_range: Annotated[int, Form()] = 0,
     description: Annotated[str, Form()] = "",
+    behavior: Annotated[str, Form()] = "simple",
 ):
     state = store.get_session(channel_id)
     if state is None:
@@ -1318,6 +1336,7 @@ async def route_encounter_roster_add(
         defense=defense, damage_dice=damage_dice,
         hit_dice=hit_dice, resistance=resistance,
         weapon_range=weapon_range, description=description,
+        behavior=_parse_behavior(behavior),
     )
     template_group = NPCGroup(name=group_name or None, npcs=[npc])
     result = eng_add_encounter_entry(state, template_group, weight)
@@ -1367,6 +1386,7 @@ async def route_encounter_addnpc(
     hit_dice: Annotated[int, Form()] = 1,
     weapon_range: Annotated[int, Form()] = 0,
     description: Annotated[str, Form()] = "",
+    behavior: Annotated[str, Form()] = "simple",
 ):
     state = store.get_session(channel_id)
     if state is None:
@@ -1376,6 +1396,7 @@ async def route_encounter_addnpc(
         defense=defense, damage_dice=damage_dice,
         hit_dice=hit_dice, resistance=resistance,
         weapon_range=weapon_range, description=description,
+        behavior=_parse_behavior(behavior),
     )
     result = eng_add_npc_to_encounter_group(state, UUID(group_id), npc)
     if not result.ok:
@@ -1398,6 +1419,7 @@ async def route_encounter_npc_update(
     weapon_range: Annotated[int, Form()] = 0,
     description: Annotated[str, Form()] = "",
     notes: Annotated[str, Form()] = "",
+    behavior: Annotated[str, Form()] = "simple",
 ):
     state = store.get_session(channel_id)
     if state is None:
@@ -1405,6 +1427,7 @@ async def route_encounter_npc_update(
     result = eng_update_encounter_npc(
         state, UUID(group_id), UUID(npc_id), name, description, hp_max,
         defense, notes, hit_dice, resistance, weapon_range, damage_dice,
+        behavior,
     )
     if not result.ok:
         return _respond_npcs(channel_id, error=result.error)

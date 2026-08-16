@@ -466,6 +466,13 @@ class NPCMovementLogic(Enum):
     PATROL = "patrol"               # follows a fixed route between rooms
 
 
+class NPCBehaviorMode(Enum):
+    """Combat decision behavior for an individual NPC."""
+    SIMPLE = "simple"               # move forward, attack random player
+    SMART  = "smart"                # target lowest HP possible, avoid opportunity attacks
+    RANGED = "ranged"               # maintain distance, attack from range band
+
+
 @dataclass
 class NPCGroup:
     """
@@ -581,6 +588,7 @@ class NPC:
     saving_throw:   int               = 15          # single value for simplicity
     hit_dice:       int               = 1           # used to compute XP on kill (hit_dice * 100)
     weapon_range:   int               = 0           # max band-step distance for attacks (0 = ENGAGE only)
+    behavior:        NPCBehaviorMode   = NPCBehaviorMode.SIMPLE
     status:            str               = "active"    # free-form: active/dead/fled/charmed/etc.
     notes:             str               = ""          # DM-facing
     active_conditions: list[ActiveCondition] = field(default_factory=list)

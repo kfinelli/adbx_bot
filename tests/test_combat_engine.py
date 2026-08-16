@@ -38,6 +38,7 @@ from models import (
     ActiveCondition,
     CharacterClass,
     GameState,
+    NPCBehaviorMode,
     Party,
     RangeBand,
     SessionMode,
@@ -806,10 +807,11 @@ class TestNPCDecide:
         assert action.action_id == "attack"
         assert action.target_id is not None
 
-    def test_npc_targets_lowest_hp_player(self):
+    def test_smart_npc_targets_lowest_hp_player(self):
         state = _make_party_state()
         enter_rounds(state)
         npc = state.npcs_in_current_room[0]
+        npc.behavior = NPCBehaviorMode.SMART
         cs  = state.battlefield.combatants[npc.npc_id]
         cs.range_band = RangeBand.ENGAGE
 

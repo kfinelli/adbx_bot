@@ -272,6 +272,7 @@ def update_npc(
     resistance: int = 0,
     weapon_range: int = 0,
     damage_dice: str = "1d6",
+    behavior: str = "simple",
 ):
     """Update an NPC."""
     nm = NPCManager()
@@ -279,6 +280,7 @@ def update_npc(
         state, npc_id, name, description, hp_max,
         hp_current, defense, notes, hit_dice,
         resistance, weapon_range, damage_dice,
+        behavior,
     )
 
 
@@ -331,11 +333,13 @@ def promote_group_to_encounter(state: GameState, group_id, weight: int):
 
 
 def update_encounter_npc(state: GameState, encounter_group_id, npc_id, name, description, hp_max,
-                         defense, notes="", hit_dice=1, resistance=0, weapon_range=0, damage_dice="1d6"):
+                         defense, notes="", hit_dice=1, resistance=0, weapon_range=0, damage_dice="1d6",
+                         behavior="simple"):
     """Update an NPC in an encounter template group."""
     nm = NPCManager()
     return nm.update_encounter_npc(state, encounter_group_id, npc_id, name, description, hp_max,
-                                   defense, notes, hit_dice, resistance, weapon_range, damage_dice)
+                                   defense, notes, hit_dice, resistance, weapon_range, damage_dice,
+                                   behavior)
 
 
 def remove_encounter_npc(state: GameState, encounter_group_id, npc_id):

@@ -31,8 +31,8 @@ auto_resolve_round pipeline:
   6.  Reset single-round flags.
   7.  Build narrative.
 
-NPC AI is intentionally simple: move toward players if far; attack the
-lowest-HP active character if in range.
+NPC AI is configured per-NPC via NPCBehaviorMode (simple/smart/ranged).
+See _npc_decide and its helpers below for the current behavior definitions.
 """
 
 from __future__ import annotations
@@ -46,6 +46,7 @@ from models import (
     CombatantState,
     CombatBattlefield,
     GameState,
+    NPCBehaviorMode,
     RangeBand,
 )
 
@@ -660,31 +661,155 @@ def _has_condition(state: GameState, cid: UUID, condition_id: str) -> bool:
     return False
 
 
+def _living_targetable_players(
+    state: GameState,
+) -> list[tuple[UUID, CombatantState]]:
+    """Return living, non-hidden player combatants."""
+    if state.battlefield is None:
+        return []
+    return [
+        (cid, pcs) for cid, pcs in state.battlefield.combatants.items()
+        if pcs.is_player and _is_alive(state, cid)
+        and not _has_condition(state, cid, "hidden")
+    ]
+
+
+def _enemy_shares_band(
+    state:    GameState,
+    actor_id: UUID,
+    band:     RangeBand,
+) -> bool:
+    """Return True if a living enemy shares band with actor_id."""
+    actor_char = state.characters.get(actor_id)
+    for enemy_id, cs in state.battlefield.combatants.items():
+        if enemy_id == actor_id or cs.range_band != band:
+            continue
+        if (actor_char is not None) == cs.is_player:
+            continue
+        if _is_alive(state, enemy_id):
+            return True
+    return False
+
+
 def _npc_decide(
     state:  GameState,
     npc_id: UUID,
     cs:     CombatantState,
 ) -> CombatAction | None:
-    """NPC AI: move toward the nearest player; attack if in range. Ties broken by lowest HP."""
-    living_players = [
-        (cid, pcs) for cid, pcs in state.battlefield.combatants.items()
-        if pcs.is_player and _is_alive(state, cid)
-        and not _has_condition(state, cid, "hidden")
-    ]
+    """Dispatch to the NPC's configured behavior mode."""
+    living_players = _living_targetable_players(state)
     if not living_players:
         return None
 
     npc_obj   = _find_npc(state, npc_id)
     npc_range = npc_obj.weapon_range if npc_obj else 0
+    behavior  = npc_obj.behavior if npc_obj else NPCBehaviorMode.SIMPLE
+
+    if behavior == NPCBehaviorMode.SMART:
+        return _npc_decide_smart(state, cs, npc_id, npc_range, living_players)
+    if behavior == NPCBehaviorMode.RANGED:
+        return _npc_decide_ranged(state, cs, npc_id, npc_range, living_players)
+    return _npc_decide_simple(state, cs, npc_range, living_players)
+
+
+def _npc_decide_simple(
+    state:          GameState,
+    cs:             CombatantState,
+    npc_range:      int,
+    living_players: list[tuple[UUID, CombatantState]],
+) -> CombatAction | None:
+    """Move toward a random player; attack if in range.
+
+    If the NPC already shares a band with any player, it picks from that band
+    so it does not wander away from a target and eat opportunity attacks.
+    """
+    same_band = [
+        (cid, pcs) for cid, pcs in living_players
+        if pcs.range_band == cs.range_band
+    ]
+    if same_band:
+        target_id, target_cs = random.choice(same_band)
+        return CombatAction(action_id="attack", target_id=target_id)
+
+    target_id, target_cs = random.choice(living_players)
+    if target_cs and _band_distance(cs.range_band, target_cs.range_band) <= npc_range:
+        return CombatAction(action_id="attack", target_id=target_id)
+
+    destination = _step_toward(cs.range_band, target_cs.range_band)
+    if destination != cs.range_band:
+        return CombatAction(action_id="move", destination=destination)
+    return None
+
+
+def _npc_decide_smart(
+    state:          GameState,
+    cs:             CombatantState,
+    npc_id:         UUID,
+    npc_range:      int,
+    living_players: list[tuple[UUID, CombatantState]],
+) -> CombatAction | None:
+    """Target the lowest-HP player possible; avoid opportunity attacks."""
+    in_range = [
+        (cid, pcs) for cid, pcs in living_players
+        if _band_distance(cs.range_band, pcs.range_band) <= npc_range
+    ]
+    if in_range:
+        target_id = _lowest_hp_player(state, in_range)
+        if target_id:
+            return CombatAction(action_id="attack", target_id=target_id)
+
+    # No one in range: move toward the lowest-HP player overall.
+    target_id = _lowest_hp_player(state, living_players)
+    target_cs = state.battlefield.combatants.get(target_id) if target_id else None
+    if target_cs is None:
+        return None
+
+    # Guard: never leave a band containing an enemy. If stuck, attack a random
+    # enemy in the band so the action is not wasted.
+    if _enemy_shares_band(state, npc_id, cs.range_band):
+        same_band_enemies = [
+            enemy_id for enemy_id, enemy_cs in state.battlefield.combatants.items()
+            if enemy_id != npc_id
+            and enemy_cs.range_band == cs.range_band
+            and enemy_cs.is_player
+            and _is_alive(state, enemy_id)
+        ]
+        if same_band_enemies:
+            return CombatAction(action_id="attack", target_id=random.choice(same_band_enemies))
+        return None
+
+    destination = _step_toward(cs.range_band, target_cs.range_band)
+    if destination != cs.range_band:
+        return CombatAction(action_id="move", destination=destination)
+    return None
+
+
+def _npc_decide_ranged(
+    state:          GameState,
+    cs:             CombatantState,
+    npc_id:         UUID,
+    npc_range:      int,
+    living_players: list[tuple[UUID, CombatantState]],
+) -> CombatAction | None:
+    """Maintain distance: retreat if engaged, attack from range, close if too far."""
+    if npc_range <= 0:
+        return _npc_decide_simple(state, cs, npc_range, living_players)
+
+    if _enemy_shares_band(state, npc_id, cs.range_band):
+        destination = _step_toward(cs.range_band, RangeBand.FAR_PLUS)
+        if destination != cs.range_band:
+            return CombatAction(action_id="move", destination=destination)
 
     target_id = _nearest_player(state, cs.range_band, living_players)
     target_cs = state.battlefield.combatants.get(target_id) if target_id else None
+    if target_cs is None:
+        return None
 
-    if target_id and target_cs and _band_distance(cs.range_band, target_cs.range_band) <= npc_range:
+    distance = _band_distance(cs.range_band, target_cs.range_band)
+    if distance <= npc_range:
         return CombatAction(action_id="attack", target_id=target_id)
 
-    move_target = target_cs.range_band if target_cs else RangeBand.ENGAGE
-    destination = _step_toward(cs.range_band, move_target)
+    destination = _step_toward(cs.range_band, target_cs.range_band)
     if destination != cs.range_band:
         return CombatAction(action_id="move", destination=destination)
     return None

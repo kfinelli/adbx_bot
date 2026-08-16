@@ -20,11 +20,21 @@ from models import (
     CharacterStatus,
     DoorState,
     GameState,
+    NPCBehaviorMode,
     NPCMovementLogic,
     RangeBand,
     SessionMode,
     TurnStatus,
 )
+
+
+def _behavior_select(name: str = "behavior", selected: str = "simple") -> str:
+    options = "".join(
+        f'<option value="{m.value}"{" selected" if m.value == selected else ""}>{m.value.capitalize()}</option>'
+        for m in NPCBehaviorMode
+    )
+    return f'<select name="{name}">{options}</select>'
+
 
 # ---------------------------------------------------------------------------
 # Page chrome
@@ -1414,6 +1424,7 @@ def npc_panel(
         <div><label>RES</label><input type="number" name="resistance" value="{npc.resistance}" min="0" style="width:55px"></div>
         <div><label>Range</label><input type="number" name="weapon_range" value="{npc.weapon_range}" min="0" style="width:55px"></div>
         <div><label>Damage</label><input type="text" name="damage_dice" value="{_e_dmg}" style="width:70px"></div>
+        <div><label>Behavior</label>{_behavior_select(selected=npc.behavior.value)}</div>
         <div><label>Dodge</label><span style="align-self:center;font-size:0.9rem">{npc.dodge}</span></div>
       </div>
       <label>Description</label>
@@ -1665,6 +1676,7 @@ def _npc_groups_section(state: GameState, channel_id: str, edit_id: str) -> str:
         <div><label>HD</label><input type="number" name="hit_dice" value="{npc.hit_dice}" min="1" style="width:55px"></div>
         <div><label>Range</label><input type="number" name="weapon_range" value="{npc.weapon_range}" min="0" style="width:55px"></div>
         <div><label>Damage</label><input type="text" name="damage_dice" value="{_eq_dmg}" style="width:70px"></div>
+        <div><label>Behavior</label>{_behavior_select(selected=npc.behavior.value)}</div>
       </div>
       <div class="row">
         <div><label>Description</label><input type="text" name="description" value="{_eq_desc}"></div>
@@ -1692,6 +1704,7 @@ def _npc_groups_section(state: GameState, channel_id: str, edit_id: str) -> str:
   <td>{npc.damage_dice}</td>
   <td>{npc.hit_dice}</td>
   <td>{npc.weapon_range}</td>
+  <td>{npc.behavior.value.capitalize()}</td>
   <td style="white-space:nowrap">
     <a href="/session/{channel_id}/npcs?edit=npc:{nid}" class="btn-sm">Edit</a>
     <form style="display:inline" hx-post="/session/{channel_id}/npc/{nid}/copy"
@@ -1710,7 +1723,7 @@ def _npc_groups_section(state: GameState, channel_id: str, edit_id: str) -> str:
 
         npc_table = f"""
 <table style="margin-top:0.5rem;font-size:0.85rem">
-  <tr><th>NPC</th><th>HP</th><th>DEF</th><th>RES</th><th>DMG</th><th>HD</th><th>Rng</th><th>Actions</th></tr>
+  <tr><th>NPC</th><th>HP</th><th>DEF</th><th>RES</th><th>DMG</th><th>HD</th><th>Rng</th><th>Behavior</th><th>Actions</th></tr>
   {npc_rows}
 </table>""" if npc_rows else '<p class="muted" style="font-size:0.85rem;margin-top:0.5rem">No NPCs in this group.</p>'
 
@@ -1726,6 +1739,7 @@ def _npc_groups_section(state: GameState, channel_id: str, edit_id: str) -> str:
     <div><label>Damage</label><input type="text" name="damage_dice" value="1d6" style="width:70px"></div>
     <div><label>HD</label><input type="number" name="hit_dice" value="1" min="1" style="width:55px"></div>
     <div><label>Range</label><input type="number" name="weapon_range" value="0" min="0" style="width:55px"></div>
+    <div><label>Behavior</label>{_behavior_select()}</div>
   </div>
   <div><label>Description</label><input type="text" name="description" placeholder="Brief description"></div>
   <button type="submit" style="margin-top:0.4rem">Add NPC</button>
@@ -1771,6 +1785,7 @@ def _npc_groups_section(state: GameState, channel_id: str, edit_id: str) -> str:
       <div><label>Damage</label><input type="text" name="damage_dice" value="1d6" style="width:70px"></div>
       <div><label>HD</label><input type="number" name="hit_dice" value="1" min="1" style="width:55px"></div>
       <div><label>Range</label><input type="number" name="weapon_range" value="0" min="0" style="width:55px"></div>
+      <div><label>Behavior</label>{_behavior_select()}</div>
     </div>
     <div><label>Description</label><input type="text" name="description" placeholder="Brief description"></div>
     <button type="submit" style="margin-top:0.5rem">Create Group</button>
@@ -1843,6 +1858,7 @@ def _encounter_roster_section(state: GameState, channel_id: str, edit_id: str) -
         <div><label>HD</label><input type="number" name="hit_dice" value="{npc.hit_dice}" min="1" style="width:55px"></div>
         <div><label>Range</label><input type="number" name="weapon_range" value="{npc.weapon_range}" min="0" style="width:55px"></div>
         <div><label>Damage</label><input type="text" name="damage_dice" value="{_eq_dmg}" style="width:70px"></div>
+        <div><label>Behavior</label>{_behavior_select(selected=npc.behavior.value)}</div>
       </div>
       <div><label>Description</label><input type="text" name="description" value="{_eq_desc}"></div>
       <div class="row" style="margin-top:0.4rem">
@@ -1861,6 +1877,7 @@ def _encounter_roster_section(state: GameState, channel_id: str, edit_id: str) -
   <td>{npc.resistance}</td>
   <td>{npc.hit_dice}</td>
   <td>{npc.weapon_range}</td>
+  <td>{npc.behavior.value.capitalize()}</td>
   <td style="white-space:nowrap">
     <a href="/session/{channel_id}/npcs?edit=enc_npc:{nid}" class="btn-sm">Edit</a>
     <form style="display:inline" hx-post="/session/{channel_id}/encounter_roster/{egid}/npc/{nid}/delete"
@@ -1873,7 +1890,7 @@ def _encounter_roster_section(state: GameState, channel_id: str, edit_id: str) -
 
         npc_subtable = f"""
 <table style="font-size:0.82rem;margin-left:1rem;margin-top:0.3rem">
-  <tr><th>NPC</th><th>HP</th><th>DEF</th><th>RES</th><th>HD</th><th>Rng</th><th>Actions</th></tr>
+  <tr><th>NPC</th><th>HP</th><th>DEF</th><th>RES</th><th>HD</th><th>Rng</th><th>Behavior</th><th>Actions</th></tr>
   {npc_detail_rows}
 </table>"""
 
@@ -1887,6 +1904,7 @@ def _encounter_roster_section(state: GameState, channel_id: str, edit_id: str) -
     <div><label>DEF</label><input type="number" name="defense" value="0" min="0" style="width:55px"></div>
     <div><label>Damage</label><input type="text" name="damage_dice" value="1d6" style="width:70px"></div>
     <div><label>HD</label><input type="number" name="hit_dice" value="1" min="1" style="width:55px"></div>
+    <div><label>Behavior</label>{_behavior_select()}</div>
   </div>
   <button type="submit" style="margin-top:0.3rem">Add NPC</button>
 </form></details>"""
@@ -1931,6 +1949,7 @@ def _encounter_roster_section(state: GameState, channel_id: str, edit_id: str) -
     <div><label>Damage</label><input type="text" name="damage_dice" value="1d6" style="width:70px"></div>
     <div><label>HD</label><input type="number" name="hit_dice" value="1" min="1" style="width:55px"></div>
     <div><label>Range</label><input type="number" name="weapon_range" value="0" min="0" style="width:55px"></div>
+    <div><label>Behavior</label>{_behavior_select()}</div>
   </div>
   <div><label>Description</label><input type="text" name="description" placeholder="Brief description"></div>
   <button type="submit" style="margin-top:0.5rem">Add to Encounter Roster</button>
@@ -2278,7 +2297,8 @@ def character_sheet_panel(character: Character) -> str:
                     _charges_display = _charge_controls(
                         _child.item_id, _child.charges, _cdefn.maxCharges,
                         recharge_period=getattr(_cdefn, "rechargePeriod", None),
-                    )
+)
+
             else:
                 _charges_display = ""
             item_rows += (

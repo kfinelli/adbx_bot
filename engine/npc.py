@@ -11,6 +11,7 @@ from models import (
     CombatantState,
     EncounterEntry,
     GameState,
+    NPCBehaviorMode,
     NPCGroup,
     NPCMovementLogic,
     RangeBand,
@@ -20,6 +21,14 @@ from validation import validate_hp_value, validate_non_empty_string
 
 from .helpers import _err, _find_npc_in_roster, _find_npcgroup_with_npc, _now, _ok
 from .strings import fmt_string, get_string
+
+
+def _parse_behavior(value: str) -> NPCBehaviorMode:
+    """Return the requested NPC behavior mode, falling back to SIMPLE for unknown values."""
+    try:
+        return NPCBehaviorMode(value)
+    except ValueError:
+        return NPCBehaviorMode.SIMPLE
 
 
 class NPCManager:
@@ -214,6 +223,7 @@ class NPCManager:
         resistance:   int = 0,
         weapon_range: int = 0,
         damage_dice:  str = "1d6",
+        behavior:     str = "simple",
     ):
         """Update an NPC's attributes. Searches the entire roster."""
         npc = _find_npc_in_roster(state, npc_id)
@@ -259,6 +269,7 @@ class NPCManager:
         npc.hit_dice     = max(1, int(hit_dice))
         npc.resistance   = max(0, int(resistance))
         npc.weapon_range = max(0, int(weapon_range))
+        npc.behavior     = _parse_behavior(behavior)
         if damage_dice and damage_dice.strip():
             npc.damage_dice = damage_dice.strip()
         state.updated_at = _now()
@@ -388,6 +399,7 @@ class NPCManager:
         resistance: int = 0,
         weapon_range: int = 0,
         damage_dice: str = "1d6",
+        behavior: str = "simple",
     ):
         """Update an NPC inside an encounter roster template group."""
         if state.dungeon is None:
@@ -411,6 +423,7 @@ class NPCManager:
                         npc.hit_dice = max(1, int(hit_dice))
                         npc.resistance = max(0, int(resistance))
                         npc.weapon_range = max(0, int(weapon_range))
+                        npc.behavior = _parse_behavior(behavior)
                         if damage_dice and damage_dice.strip():
                             npc.damage_dice = damage_dice.strip()
                         state.updated_at = _now()
