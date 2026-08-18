@@ -17,7 +17,14 @@ from datetime import UTC
 from typing import Any
 
 from engine.azure_constants import DEFAULT_ROOM_XP
-from models import DoorState, GameState, PlayerTurnSubmission, SessionMode, TurnStatus
+from models import (
+    DoorState,
+    GameState,
+    PlayerTurnSubmission,
+    RoomItemVisibility,
+    SessionMode,
+    TurnStatus,
+)
 
 # Import managers and utilities from submodules
 from .character import CharacterManager
@@ -513,6 +520,36 @@ def add_exit(
     return rm.add_exit(state, label, description, door_state, notes, room_id, destination_id)
 
 
+def add_room_item(
+    state: GameState,
+    item_id: str,
+    quantity: int = 1,
+    visibility: RoomItemVisibility = RoomItemVisibility.ACCESSIBLE,
+    notes: str = "",
+    room_id=None,
+):
+    """Add an item to a room's floor inventory."""
+    rm = RoomManager()
+    return rm.add_room_item(state, item_id, quantity, visibility, notes, room_id)
+
+
+def remove_room_item(state: GameState, instance_id: str, room_id=None):
+    """Remove an item from a room's floor inventory."""
+    rm = RoomManager()
+    return rm.remove_room_item(state, instance_id, room_id)
+
+
+def set_room_item_visibility(
+    state: GameState,
+    instance_id: str,
+    visibility: RoomItemVisibility,
+    room_id=None,
+):
+    """Change the visibility of a room item."""
+    rm = RoomManager()
+    return rm.set_room_item_visibility(state, instance_id, visibility, room_id)
+
+
 def say(state: GameState, speaker: str, text: str):
     """Say something."""
     om = OracleManager()
@@ -823,6 +860,15 @@ def render_status(state: GameState) -> str:
                 )
                 flag_str = " (explored)" if explored else ""
                 lines.append(f"  {i}. {ex.label.capitalize()}: {ex.description} [{ex.door_state.value}]{flag_str}")
+        visible_items = [ri for ri in room.items if ri.visibility is not RoomItemVisibility.HIDDEN]
+        if visible_items:
+            lines.append("Items:")
+            for ri in visible_items:
+                defn = ITEM_REGISTRY.get(ri.item.item_id)
+                name = defn.name if defn is not None else ri.item.item_id
+                qty = f" x{ri.item.quantity}" if ri.item.quantity > 1 else ""
+                tag = " (inaccessible)" if ri.visibility is RoomItemVisibility.INACCESSIBLE else ""
+                lines.append(f"  • {name}{qty}{tag}")
     else:
         lines.append("Room: (none)")
 
@@ -936,6 +982,9 @@ __all__ = [
     "set_exit_state",
     "set_exit_visibility",
     "add_exit",
+    "add_room_item",
+    "remove_room_item",
+    "set_room_item_visibility",
     "say",
     "emote",
     "ask_oracle",

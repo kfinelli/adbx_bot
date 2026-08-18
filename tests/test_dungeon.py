@@ -8,12 +8,14 @@ from engine import (
     abscond,
     add_exit,
     add_npc,
+    add_room_item,
     delete_exit,
     delete_feature,
     import_dungeon,
     move_party_to_room,
     register_room,
     remove_npc,
+    remove_room_item,
     set_exit_state,
     set_exit_visibility,
     set_feature_state,
@@ -21,12 +23,31 @@ from engine import (
     set_npc_status,
     set_npc_visibility,
     set_room,
+    set_room_item_visibility,
     update_exit,
     update_feature,
     update_npc,
     update_room,
 )
-from models import NPC, DoorState, Dungeon, Exit, Room, RoomFeature
+from models import (
+    NPC,
+    DoorState,
+    Dungeon,
+    Exit,
+    InventoryItem,
+    Room,
+    RoomFeature,
+    RoomItem,
+    RoomItemVisibility,
+)
+from serialization import (
+    deserialize_dungeon_file,
+    deserialize_room,
+    deserialize_room_item,
+    serialize_dungeon_file,
+    serialize_room,
+    serialize_room_item,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -455,6 +476,147 @@ class TestNPCs:
         del data["hidden"]  # simulate old JSON without the field
         loaded = deserialize_npc(data)
         assert loaded.hidden is False
+
+
+# ---------------------------------------------------------------------------
+# Room items
+# ---------------------------------------------------------------------------
+
+class TestRoomItems:
+    def test_add_room_item(self, bare_state):
+        set_room(bare_state, _make_room())
+        result = add_room_item(bare_state, "torch", quantity=3)
+        assert result.ok
+        assert len(bare_state.current_room.items) == 1
+        ri = bare_state.current_room.items[0]
+        assert ri.item.item_id == "torch"
+        assert ri.item.quantity == 3
+        assert ri.visibility is RoomItemVisibility.ACCESSIBLE
+
+    def test_add_room_item_unknown_item_fails(self, bare_state):
+        set_room(bare_state, _make_room())
+        result = add_room_item(bare_state, "not_an_item")
+        assert not result.ok
+
+    def test_add_room_item_invalid_quantity_fails(self, bare_state):
+        set_room(bare_state, _make_room())
+        result = add_room_item(bare_state, "torch", quantity=0)
+        assert not result.ok
+
+    def test_add_room_item_no_room_fails(self, bare_state):
+        result = add_room_item(bare_state, "torch")
+        assert not result.ok
+
+    def test_add_charge_weapon_sets_charges(self, bare_state):
+        from engine.data_loader import ITEM_REGISTRY
+        set_room(bare_state, _make_room())
+        result = add_room_item(bare_state, "pyr_1")
+        assert result.ok
+        ri = bare_state.current_room.items[0]
+        assert ri.item.charges == ITEM_REGISTRY["pyr_1"].maxCharges
+
+    def test_add_container_populates_contained(self, bare_state):
+        from engine.data_loader import ITEM_REGISTRY
+        set_room(bare_state, _make_room())
+        result = add_room_item(bare_state, "apprentice_manual")
+        assert result.ok
+        ri = bare_state.current_room.items[0]
+        container_defn = ITEM_REGISTRY["apprentice_manual"]
+        assert len(ri.contained) == len(container_defn.contained_item_ids)
+        for child in ri.contained:
+            assert child.container_id == ri.item.instance_id
+            assert child.charges is not None
+
+    def test_remove_room_item(self, bare_state):
+        set_room(bare_state, _make_room())
+        add_room_item(bare_state, "torch")
+        instance_id = bare_state.current_room.items[0].item.instance_id
+        result = remove_room_item(bare_state, instance_id)
+        assert result.ok
+        assert bare_state.current_room.items == []
+
+    def test_remove_unknown_room_item_fails(self, bare_state):
+        set_room(bare_state, _make_room())
+        result = remove_room_item(bare_state, "nonexistent")
+        assert not result.ok
+
+    def test_set_room_item_visibility(self, bare_state):
+        set_room(bare_state, _make_room())
+        add_room_item(bare_state, "torch")
+        instance_id = bare_state.current_room.items[0].item.instance_id
+        result = set_room_item_visibility(bare_state, instance_id, RoomItemVisibility.HIDDEN)
+        assert result.ok
+        assert bare_state.current_room.items[0].visibility is RoomItemVisibility.HIDDEN
+        result = set_room_item_visibility(
+            bare_state, instance_id, RoomItemVisibility.INACCESSIBLE
+        )
+        assert result.ok
+        assert bare_state.current_room.items[0].visibility is RoomItemVisibility.INACCESSIBLE
+
+    def test_set_unknown_room_item_visibility_fails(self, bare_state):
+        set_room(bare_state, _make_room())
+        result = set_room_item_visibility(bare_state, "nope", RoomItemVisibility.HIDDEN)
+        assert not result.ok
+
+    def test_room_item_serialization_roundtrip(self):
+        ri = RoomItem(
+            item=InventoryItem(item_id="torch", quantity=2),
+            visibility=RoomItemVisibility.HIDDEN,
+            notes="under the stone",
+        )
+        data = serialize_room_item(ri)
+        loaded = deserialize_room_item(data)
+        assert loaded.item.item_id == "torch"
+        assert loaded.item.quantity == 2
+        assert loaded.visibility is RoomItemVisibility.HIDDEN
+        assert loaded.notes == "under the stone"
+
+    def test_room_items_old_json_default_empty(self):
+        room = _make_room()
+        data = serialize_room(room)
+        del data["items"]
+        loaded = deserialize_room(data)
+        assert loaded.items == []
+
+    def test_dungeon_file_roundtrip_with_items(self):
+        with open("data/example_dungeon/tomb_of_agellar.json") as f:
+            json_str = f.read()
+        dungeon, roster = deserialize_dungeon_file(json_str)
+        shrine = next(r for r in dungeon.rooms.values() if r.name == "The Shrine")
+        assert len(shrine.items) == 2
+        assert any(
+            i.item.item_id == "torch" and i.item.quantity == 4 for i in shrine.items
+        )
+        roundtrip = serialize_dungeon_file(dungeon, roster)
+        dungeon2, _ = deserialize_dungeon_file(roundtrip)
+        shrine2 = next(r for r in dungeon2.rooms.values() if r.name == "The Shrine")
+        assert len(shrine2.items) == 2
+        assert any(
+            i.item.item_id == "torch" and i.item.quantity == 4 for i in shrine2.items
+        )
+
+    def test_render_status_shows_accessible_items(self, bare_state):
+        from engine import render_status
+        set_room(bare_state, _make_room("Vault"))
+        add_room_item(bare_state, "torch", quantity=3)
+        status = render_status(bare_state)
+        assert "Torch" in status
+        assert "x3" in status
+
+    def test_render_status_inaccessible_items_tagged(self, bare_state):
+        from engine import render_status
+        set_room(bare_state, _make_room("Vault"))
+        add_room_item(bare_state, "torch", visibility=RoomItemVisibility.INACCESSIBLE)
+        status = render_status(bare_state)
+        assert "Torch" in status
+        assert "(inaccessible)" in status
+
+    def test_render_status_hidden_items_hidden(self, bare_state):
+        from engine import render_status
+        set_room(bare_state, _make_room("Vault"))
+        add_room_item(bare_state, "torch", visibility=RoomItemVisibility.HIDDEN)
+        status = render_status(bare_state)
+        assert "Torch" not in status
 
 
 # ---------------------------------------------------------------------------

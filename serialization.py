@@ -45,6 +45,8 @@ from models import (
     RangeBand,
     Room,
     RoomFeature,
+    RoomItem,
+    RoomItemVisibility,
     SessionMode,
     TurnRecord,
     TurnStatus,
@@ -156,6 +158,23 @@ def serialize_exit(e: Exit) -> dict:
     }
 
 
+def serialize_room_item(ri: RoomItem) -> dict:
+    return {
+        "item_id":    ri.item.item_id,
+        "quantity":   ri.item.quantity,
+        "charges":    ri.item.charges,
+        "instance_id": ri.item.instance_id,
+        "item_notes": ri.item.notes,
+        "container_id": ri.item.container_id,
+        "familiar":   ri.item.familiar,
+        "broken":     ri.item.broken,
+        "equipped":   ri.item.equipped,
+        "visibility": _enum(ri.visibility),
+        "notes":      ri.notes,
+        "contained":  [serialize_inventory_item(i) for i in ri.contained],
+    }
+
+
 def serialize_room(r: Room) -> dict:
     return {
         "room_id":     _uuid(r.room_id),
@@ -164,6 +183,7 @@ def serialize_room(r: Room) -> dict:
         "notes":       r.notes,
         "features":       [serialize_room_feature(f) for f in r.features],
         "exits":          [serialize_exit(e) for e in r.exits],
+        "items":          [serialize_room_item(i) for i in r.items],
         "visited":        r.visited,
         "authored":       r.authored,
         "exploration_xp": r.exploration_xp,
@@ -478,6 +498,59 @@ def deserialize_exit(d: dict) -> Exit:
     )
 
 
+def deserialize_room_item(d: dict) -> RoomItem:
+    from engine.data_loader import ITEM_REGISTRY
+    from engine.item import ChargeWeapon, ContainerItem, UtilitySpell
+
+    item = deserialize_inventory_item(
+        {
+            "item_id": d["item_id"],
+            "quantity": d.get("quantity", 1),
+            "equipped": d.get("equipped", False),
+            "broken": d.get("broken", False),
+            "charges": d.get("charges"),
+            "notes": d.get("item_notes", ""),
+            "container_id": d.get("container_id"),
+            "instance_id": d.get("instance_id"),
+            "familiar": d.get("familiar", False),
+        }
+    )
+
+    contained = [deserialize_inventory_item(c) for c in d.get("contained", [])]
+
+    defn = ITEM_REGISTRY.get(item.item_id)
+    if defn is not None and isinstance(defn, ContainerItem) and not contained:
+        for spell_id in defn.contained_item_ids:
+            spell_def = ITEM_REGISTRY.get(spell_id)
+            spell_charges = (
+                spell_def.maxCharges
+                if isinstance(spell_def, (ChargeWeapon, UtilitySpell))
+                else None
+            )
+            contained.append(
+                InventoryItem(
+                    item_id=spell_id,
+                    quantity=1,
+                    container_id=item.instance_id,
+                    charges=spell_charges,
+                )
+            )
+
+    if (
+        defn is not None
+        and isinstance(defn, (ChargeWeapon, UtilitySpell))
+        and item.charges is None
+    ):
+        item.charges = defn.maxCharges
+
+    return RoomItem(
+        item=item,
+        contained=contained,
+        visibility=RoomItemVisibility(d.get("visibility", "accessible")),
+        notes=d.get("notes", ""),
+    )
+
+
 def deserialize_room(d: dict) -> Room:
     return Room(
         room_id=_load_uuid(d["room_id"]),
@@ -486,6 +559,7 @@ def deserialize_room(d: dict) -> Room:
         notes=d["notes"],
         features=[deserialize_room_feature(f) for f in d["features"]],
         exits=[deserialize_exit(e) for e in d["exits"]],
+        items=[deserialize_room_item(i) for i in d.get("items", [])],
         visited=d["visited"],
         authored=d["authored"],
         exploration_xp=d.get("exploration_xp", 0),

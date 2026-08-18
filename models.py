@@ -407,6 +407,29 @@ class RoomFeature:
     notes:       str  = ""          # DM-facing notes
 
 
+class RoomItemVisibility(Enum):
+    """Visibility state for items lying in a room."""
+    ACCESSIBLE   = "accessible"    # visible to players and may be picked up
+    INACCESSIBLE = "inaccessible"  # visible to players but not auto-takeable
+    HIDDEN       = "hidden"        # invisible to players until DM reveals
+
+
+@dataclass
+class RoomItem:
+    """
+    An item lying in a room, ready for players to pick up (when accessible).
+
+    `item` is the InventoryItem instance (its instance_id is the row key in DM
+    controls). `contained` holds child InventoryItems for ContainerItem/spellbook
+    contents, with `container_id` set to `item.instance_id`. This keeps a
+    container and its charges as one atomic entry with one visibility state.
+    """
+    item:       InventoryItem
+    contained:  list[InventoryItem] = field(default_factory=list)
+    visibility: RoomItemVisibility = RoomItemVisibility.ACCESSIBLE
+    notes:      str = ""           # DM-facing notes
+
+
 @dataclass
 class Room:
     room_id:     UUID               = field(default_factory=uuid4)
@@ -416,6 +439,7 @@ class Room:
 
     features:    list[RoomFeature]  = field(default_factory=list)
     exits:       list[Exit]         = field(default_factory=list)
+    items:       list[RoomItem]     = field(default_factory=list)
 
     # Bookkeeping
     visited:       bool               = False

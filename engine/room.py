@@ -7,7 +7,10 @@ from models import (
     Dungeon,
     Exit,
     GameState,
+    InventoryItem,
     Room,
+    RoomItem,
+    RoomItemVisibility,
 )
 from validation import (
     validate_description,
@@ -308,3 +311,101 @@ class RoomManager:
         n = len(room.exits)
         state.updated_at = _now()
         return _ok(state, f"Exit {n} added: {label_result.value}.")
+
+    @staticmethod
+    def _build_room_item(
+        item_id: str,
+        quantity: int,
+        visibility: RoomItemVisibility,
+        notes: str,
+    ) -> RoomItem:
+        from engine.data_loader import ITEM_REGISTRY
+        from engine.item import ChargeWeapon, ContainerItem, UtilitySpell
+
+        defn = ITEM_REGISTRY[item_id]
+        item = InventoryItem(item_id=item_id, quantity=quantity)
+        contained: list[InventoryItem] = []
+
+        if isinstance(defn, (ChargeWeapon, UtilitySpell)):
+            item.charges = defn.maxCharges
+        elif isinstance(defn, ContainerItem):
+            for spell_id in defn.contained_item_ids:
+                spell_def = ITEM_REGISTRY.get(spell_id)
+                spell_charges = (
+                    spell_def.maxCharges
+                    if isinstance(spell_def, (ChargeWeapon, UtilitySpell))
+                    else None
+                )
+                contained.append(
+                    InventoryItem(
+                        item_id=spell_id,
+                        quantity=1,
+                        container_id=item.instance_id,
+                        charges=spell_charges,
+                    )
+                )
+
+        return RoomItem(item=item, contained=contained, visibility=visibility, notes=notes)
+
+    def add_room_item(
+        self,
+        state: GameState,
+        item_id: str,
+        quantity: int = 1,
+        visibility: RoomItemVisibility = RoomItemVisibility.ACCESSIBLE,
+        notes: str = "",
+        room_id = None,
+    ):
+        """DM adds an item to the room's floor inventory."""
+        room = _resolve_room(state, room_id)
+        if room is None:
+            return _err(state, get_string("room.errors.no_current"))
+
+        from engine.data_loader import ITEM_REGISTRY
+        defn = ITEM_REGISTRY.get(item_id)
+        if defn is None:
+            return _err(state, f"Unknown item '{item_id}'.")
+        if quantity < 1:
+            return _err(state, "Quantity must be at least 1.")
+
+        ri = self._build_room_item(item_id, quantity, visibility, notes)
+        room.items.append(ri)
+        state.updated_at = _now()
+        return _ok(state, f"{defn.name} added to room.")
+
+    def remove_room_item(self, state: GameState, instance_id: str, room_id = None):
+        """Remove an item from the room's floor inventory."""
+        room = _resolve_room(state, room_id)
+        if room is None:
+            return _err(state, get_string("room.errors.no_current"))
+
+        before = len(room.items)
+        room.items = [ri for ri in room.items if ri.item.instance_id != instance_id]
+        if len(room.items) == before:
+            return _err(state, "Item not found.")
+
+        state.updated_at = _now()
+        return _ok(state, "Item removed from room.")
+
+    def set_room_item_visibility(
+        self,
+        state: GameState,
+        instance_id: str,
+        visibility: RoomItemVisibility,
+        room_id = None,
+    ):
+        """Change the visibility state of a room item."""
+        room = _resolve_room(state, room_id)
+        if room is None:
+            return _err(state, get_string("room.errors.no_current"))
+
+        for ri in room.items:
+            if ri.item.instance_id == instance_id:
+                ri.visibility = visibility
+                state.updated_at = _now()
+                from engine.data_loader import ITEM_REGISTRY
+                defn = ITEM_REGISTRY.get(ri.item.item_id)
+                name = defn.name if defn is not None else ri.item.item_id
+                return _ok(state, f"{name} is now {visibility.value}.")
+
+        return _err(state, "Item not found.")

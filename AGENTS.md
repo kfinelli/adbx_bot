@@ -71,6 +71,9 @@ are deliberate (circular-import avoidance) — follow the pattern.
 - `ContainerItem` (spellbooks): contained items become their own `InventoryItem`s with
   charges, take no inventory slots, aren't independently equippable, and are purged
   when the container is removed.
+- `Room.items` holds `RoomItem` instances with tri-state visibility (`accessible`,
+  `inaccessible`, `hidden`). Mutations live in `engine/room.py` and the DM panel;
+  serialized inside the dungeon blob with no version bump.
 - `data/*.json` is synced from a Google Sheet (ground truth) by
   `scripts/google_sheets_sync.py` (`GOOGLE_API_KEY` + `GOOGLE_SHEET_KEY` env). Sync
   overwrites files matching sheet rows — check with the user before hand-editing

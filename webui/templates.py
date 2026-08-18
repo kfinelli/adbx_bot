@@ -23,6 +23,7 @@ from models import (
     NPCBehaviorMode,
     NPCMovementLogic,
     RangeBand,
+    RoomItemVisibility,
     SessionMode,
     TurnStatus,
 )
@@ -1183,6 +1184,85 @@ def room_panel(
   <button type="submit">Add Exit</button>
 </form>"""
 
+    # --- Items
+    items_html = ""
+    for ri in room.items:
+        iid = ri.item.instance_id
+        defn = ITEM_REGISTRY.get(ri.item.item_id)
+        name = _html.escape(defn.name if defn is not None else ri.item.item_id)
+        qty = f" x{ri.item.quantity}" if ri.item.quantity > 1 else ""
+        charges = ri.item.charges
+        if charges is not None:
+            charges_str = " (∞)" if charges == -1 else f" ({charges} charges)"
+        else:
+            charges_str = ""
+        hidden = ri.visibility is RoomItemVisibility.HIDDEN
+        inaccessible = ri.visibility is RoomItemVisibility.INACCESSIBLE
+        hidden_badge = ' <span style="font-size:0.75rem;color:#888">[hidden]</span>' if hidden else ""
+        inaccess_badge = ' <span style="font-size:0.75rem;color:#888">[inaccessible]</span>' if inaccessible else ""
+        row_style = ' style="opacity:0.55;font-style:italic"' if hidden else ""
+        notes_txt = _html.escape(ri.notes)
+        notes_str = f'<br><span class="muted">{notes_txt}</span>' if notes_txt else ""
+        vis_options = "".join(
+            f'<option value="{v.value}"{" selected" if v == ri.visibility else ""}>{v.value.capitalize()}</option>'
+            for v in RoomItemVisibility
+        )
+        contained_rows = ""
+        for child in ri.contained:
+            child_defn = ITEM_REGISTRY.get(child.item_id)
+            child_name = _html.escape(child_defn.name if child_defn is not None else child.item_id)
+            child_charges = child.charges
+            if child_charges is not None:
+                child_charges_str = " (∞)" if child_charges == -1 else f" ({child_charges} charges)"
+            else:
+                child_charges_str = ""
+            contained_rows += (
+                f'<tr><td style="padding-left:1.5rem;font-size:0.9rem">'
+                f'<span class="muted">└</span> {child_name}{child_charges_str}'
+                f'</td><td></td></tr>'
+            )
+        items_html += f"""
+<tr{row_style}>
+  <td><strong>{name}</strong>{qty}{charges_str}{hidden_badge}{inaccess_badge}{notes_str}</td>
+  <td style="white-space:nowrap">
+    <form style="display:inline" hx-post="/session/{channel_id}/roomitem/{iid}/setvisibility"
+          hx-target="#dashboard" hx-swap="outerHTML">
+      <input type="hidden" name="view_room_id" value="{view_room_id}">
+      <select name="visibility" onchange="this.form.requestSubmit()">{vis_options}</select>
+    </form>
+    <form style="display:inline" hx-post="/session/{channel_id}/roomitem/{iid}/delete"
+          hx-target="#dashboard" hx-swap="outerHTML"
+          hx-confirm="Delete {name} from room?">
+      <input type="hidden" name="view_room_id" value="{view_room_id}">
+      <button class="btn-sm btn-danger" type="submit">Del</button>
+    </form>
+  </td>
+</tr>{contained_rows}"""
+
+    item_options = "\n".join(
+        f'<option value="{iid}">{_html.escape(item.name)}</option>'
+        for iid, item in sorted(ITEM_REGISTRY.items(), key=lambda x: x[1].name)
+    )
+    vis_options_add = "".join(
+        f'<option value="{v.value}">{v.value.capitalize()}</option>'
+        for v in RoomItemVisibility
+    )
+    add_item_html = f"""
+<hr class="divider">
+<div class="section-header"><h3>Add Item</h3></div>
+<form hx-post="/session/{channel_id}/addroomitem"
+      hx-target="#dashboard" hx-swap="outerHTML">
+  <input type="hidden" name="view_room_id" value="{view_room_id}">
+  <div class="row">
+    <div><label>Item</label><select name="item_id">{item_options}</select></div>
+    <div><label>Qty</label><input type="number" name="quantity" value="1" min="1" style="width:70px"></div>
+    <div><label>Visibility</label><select name="visibility">{vis_options_add}</select></div>
+  </div>
+  <label>Notes</label>
+  <input type="text" name="notes" placeholder="DM-facing placement note">
+  <button type="submit">Add Item</button>
+</form>"""
+
     return f"""
 <div class="card">
   <div class="section-header">
@@ -1198,6 +1278,11 @@ def room_panel(
   <div class="section-header"><h3>Exits</h3></div>
   {"<table><tr><th>Exit</th><th>Controls</th></tr>" + exits_html + "</table>" if exits_html else '<p class="muted">No exits.</p>'}
   {add_exit_html}
+
+  <hr class="divider">
+  <div class="section-header"><h3>Items</h3></div>
+  {"<table><tr><th>Item</th><th>Controls</th></tr>" + items_html + "</table>" if items_html else '<p class="muted">No items.</p>'}
+  {add_item_html}
 </div>"""
 
 

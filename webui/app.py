@@ -27,6 +27,7 @@ from engine import (
 )
 from engine import (
     add_exit,
+    add_room_item,
     adjust_light_charges,
     adjust_skill_uses,
     adjust_spell_charges,
@@ -48,6 +49,7 @@ from engine import (
     remove_item,
     remove_npc,
     remove_npc_condition,
+    remove_room_item,
     reopen_turn,
     resolve_turn,
     resume_session,
@@ -59,6 +61,7 @@ from engine import (
     set_npc_hp,
     set_npc_status,
     set_npc_visibility,
+    set_room_item_visibility,
     set_turn_number,
     start_session,
     unsubmit_turn,
@@ -111,6 +114,7 @@ from models import (
     RangeBand,
     Room,
     RoomFeature,
+    RoomItemVisibility,
     SessionMode,
     TurnStatus,
 )
@@ -723,6 +727,73 @@ async def route_exit_setvisibility(
         return HTMLResponse("Session not found.", status_code=404)
     rid = _parse_uuid(view_room_id)
     result = set_exit_visibility(state, UUID(exit_id), hidden, room_id=rid)
+    if not result.ok:
+        return _respond(channel_id, error=result.error, view_room_id=view_room_id)
+    await save_session_async(state)
+    return _respond(channel_id, view_room_id=view_room_id)
+
+
+# ---------------------------------------------------------------------------
+# Room item routes
+# ---------------------------------------------------------------------------
+
+@app.post("/session/{channel_id}/addroomitem", response_class=HTMLResponse)
+async def route_addroomitem(
+    channel_id: str,
+    item_id: Annotated[str, Form()],
+    visibility: Annotated[str, Form()] = "accessible",
+    quantity: Annotated[int, Form()] = 1,
+    notes: Annotated[str, Form()] = "",
+    view_room_id: Annotated[str, Form()] = "",
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    try:
+        vis = RoomItemVisibility(visibility)
+    except ValueError:
+        return _respond(channel_id, error=f"Unknown visibility: {visibility}", view_room_id=view_room_id)
+    rid = _parse_uuid(view_room_id)
+    result = add_room_item(state, item_id, quantity, vis, notes, room_id=rid)
+    if not result.ok:
+        return _respond(channel_id, error=result.error, view_room_id=view_room_id)
+    await save_session_async(state)
+    return _respond(channel_id, view_room_id=view_room_id)
+
+
+@app.post("/session/{channel_id}/roomitem/{instance_id}/setvisibility", response_class=HTMLResponse)
+async def route_roomitem_setvisibility(
+    channel_id: str,
+    instance_id: str,
+    visibility: Annotated[str, Form()],
+    view_room_id: Annotated[str, Form()] = "",
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    try:
+        vis = RoomItemVisibility(visibility)
+    except ValueError:
+        return _respond(channel_id, error=f"Unknown visibility: {visibility}", view_room_id=view_room_id)
+    rid = _parse_uuid(view_room_id)
+    result = set_room_item_visibility(state, instance_id, vis, room_id=rid)
+    if not result.ok:
+        return _respond(channel_id, error=result.error, view_room_id=view_room_id)
+    await save_session_async(state)
+    return _respond(channel_id, view_room_id=view_room_id)
+
+
+@app.post("/session/{channel_id}/roomitem/{instance_id}/delete", response_class=HTMLResponse)
+async def route_roomitem_delete(
+    channel_id: str,
+    instance_id: str,
+    view_room_id: Annotated[str, Form()] = "",
+):
+    state = store.get_session(channel_id)
+    if state is None:
+        return HTMLResponse("Session not found.", status_code=404)
+    rid = _parse_uuid(view_room_id)
+    result = remove_room_item(state, instance_id, room_id=rid)
     if not result.ok:
         return _respond(channel_id, error=result.error, view_room_id=view_room_id)
     await save_session_async(state)
