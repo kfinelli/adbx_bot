@@ -714,9 +714,9 @@ class TestLightSources:
         inv2 = next(i for i in char.inventory if i.item_id == "lantern" and i.equipped)
         assert inv2.charges == 0  # no oil → still dark
 
-    def test_lantern_equipped_before_oil_lights_on_first_tick(self, state_with_fighter):
-        """Lantern equipped dark (no oil at equip time) auto-lights when oil is acquired and the first turn resolves."""
-        from engine import equip_item, give_item, resolve_turn, start_session
+    def test_lantern_equipped_before_oil_lights_on_embark(self, state_with_fighter):
+        """#176: a lantern equipped dark (no oil at equip time) is lit on Embark once oil is in inventory."""
+        from engine import close_turn, equip_item, give_item, resolve_turn, start_session
         from engine.azure_constants import ItemSlot
         char = next(iter(state_with_fighter.characters.values()))
         give_item(state_with_fighter, char.character_id, "lantern", 1)
@@ -725,10 +725,37 @@ class TestLightSources:
         assert inv.charges == 0  # dark: no oil at equip time
         give_item(state_with_fighter, char.character_id, "oil_flask", 1)
         start_session(state_with_fighter)
-        resolve_turn(state_with_fighter, "The party moves forward.")
-        # After the first tick the dark lantern should have consumed the oil and lit
+        # Lit immediately on Embark — oil consumed, full charges
         assert inv.charges == 24
         assert all(i.item_id != "oil_flask" for i in char.inventory)
+        # ...and burns down normally from there
+        close_turn(state_with_fighter)
+        resolve_turn(state_with_fighter, "The party moves forward.")
+        assert inv.charges == 23
+
+    def test_lantern_embark_no_oil_stays_dark(self, state_with_fighter):
+        """A dark lantern with no oil in inventory stays dark (but equipped) on Embark."""
+        from engine import equip_item, give_item, start_session
+        from engine.azure_constants import ItemSlot
+        char = next(iter(state_with_fighter.characters.values()))
+        give_item(state_with_fighter, char.character_id, "lantern", 1)
+        equip_item(state_with_fighter, char.character_id, "lantern", ItemSlot.OFF_HAND)
+        inv = next(i for i in char.inventory if i.item_id == "lantern" and i.equipped)
+        assert inv.charges == 0
+        start_session(state_with_fighter)
+        assert inv.charges == 0
+        assert char.equipped_slots.get("off_hand") == "lantern"
+
+    def test_torch_lit_on_embark(self, state_with_fighter):
+        """A torch equipped in pre-game begins play lit on Embark."""
+        from engine import equip_item, give_item, start_session
+        from engine.azure_constants import ItemSlot
+        char = next(iter(state_with_fighter.characters.values()))
+        give_item(state_with_fighter, char.character_id, "torch", 1)
+        equip_item(state_with_fighter, char.character_id, "torch", ItemSlot.OFF_HAND)
+        start_session(state_with_fighter)
+        inv = next(i for i in char.inventory if i.item_id == "torch" and i.equipped)
+        assert inv.charges == 6
 
     def test_light_does_not_tick_in_combat(self, active_state):
         char = next(iter(active_state.characters.values()))

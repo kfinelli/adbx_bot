@@ -35,6 +35,44 @@ def _tick_light(state: GameState) -> None:
                 _handle_light_burnout(state, char, inv_item, defn)
 
 
+def _ignite_equipped_lights(state: GameState) -> None:
+    """Light equipped light sources when the session embarks.
+
+    A lantern equipped before oil was in inventory sits dark at 0 charges;
+    on Embark it consumes fuel (if available) so it begins play lit.
+    Fuel-less lights (torches) are set to full. Items already burning
+    keep their current charges; a dark lantern with no fuel stays dark.
+    """
+    for char in state.characters.values():
+        for item_id in list(char.equipped_slots.values()):
+            if item_id is None:
+                continue
+            defn = ITEM_REGISTRY.get(item_id)
+            if defn is None or getattr(defn, "max_light_turns", None) is None:
+                continue
+            inv_item = next(
+                (i for i in char.inventory if i.item_id == item_id and i.equipped),
+                None,
+            )
+            if inv_item is None:
+                continue
+            if inv_item.charges is not None and inv_item.charges > 0:
+                continue  # already lit
+            fuel_id = getattr(defn, "fuel_item_id", None)
+            if fuel_id:
+                fuel = next(
+                    (i for i in char.inventory if i.item_id == fuel_id and not i.equipped),
+                    None,
+                )
+                if fuel is None:
+                    inv_item.charges = 0  # no fuel at embark: stays dark
+                    continue
+                fuel.quantity -= 1
+                if fuel.quantity <= 0:
+                    char.inventory.remove(fuel)
+            inv_item.charges = defn.max_light_turns
+
+
 def _handle_light_burnout(state, char, inv_item, defn) -> None:
     fuel_id = getattr(defn, "fuel_item_id", None)
     if fuel_id:

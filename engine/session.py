@@ -22,6 +22,11 @@ class SessionManager:
             return _err(state, get_string("session.errors.no_characters"))
         state.mode = SessionMode.EXPLORATION
         state.session_active = True
+        # Light any equipped light sources that are dark (e.g. a lantern
+        # equipped in pre-game before oil was purchased) so the party
+        # embarks lit.
+        from .light import _ignite_equipped_lights
+        _ignite_equipped_lights(state)
         if state.current_room_id and state.dungeon and state.current_room_id in state.dungeon.rooms:
             state.dungeon.rooms[state.current_room_id].visited = True
         state.updated_at = _now()
