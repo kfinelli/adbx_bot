@@ -49,6 +49,14 @@ are deliberate (circular-import avoidance) — follow the pattern.
   `engine.resolve_turn`; there is no `/dm_resolve` command). Status messages are
   restored on startup (`bot.py:on_ready` → `store.restore_status_message`) — keep the
   stored status message current or status updates break after a restart.
+- The pinned status message is an **embed**: `store._build_message` =
+  `render_status_header` (message content) + `cogs/status_embed.build_status_embed`.
+  Section extraction and budget packing (6000-char total / 1024-per-field, with
+  per-field prose caps and explicit `… +N more` overflow markers) live in the
+  engine: `render_status_sections` + `pack_sections`. `render_status` is the
+  legacy plain-text rendering of the same sections, kept for tests/debug — never
+  slice the assembled string to fit limits (that was the old `_build_content` bug).
+
 - **ROUNDS mode:** `submit_turn` auto-resolves the round internally once all players
   submit structured combat actions. A test that calls `submit_turn` for all players
   *and then* `auto_resolve_round` resolves **two** rounds, not one. A free-form

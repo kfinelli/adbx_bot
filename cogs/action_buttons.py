@@ -1453,7 +1453,9 @@ class _SayEmoteModal(discord.ui.Modal):
             ),
             style=discord.TextStyle.paragraph,
             required=True,
-            max_length=500,
+            # Matches CAP_SAY_ENTRY (engine status rendering) so an entry
+            # can never be ellipsized in the status embed.
+            max_length=250,
         )
         self.add_item(self.text)
 

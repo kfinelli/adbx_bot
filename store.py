@@ -13,7 +13,8 @@ from datetime import UTC, datetime, timedelta
 
 import discord
 
-from engine import render_status, render_status_header
+from cogs.status_embed import build_status_embed
+from engine import render_status_header
 from models import GameState, Party
 from persistence import Database
 from session_cache import _sessions, sync_character_to_sessions  # noqa: F401 (re-exported)
@@ -123,19 +124,13 @@ async def save_session_async(state: GameState) -> None:
 # Status message helpers
 # ---------------------------------------------------------------------------
 
-def _build_content(state: GameState) -> str:
-    header = render_status_header(state)
-    body = render_status(state)
-    content = header + "\n```\n" + body + "\n```"
-    if len(content) <= 2000:
-        return content
-    import logging
-    logging.getLogger(__name__).warning(
-        "Status message exceeded 2000 chars (%d); truncating.", len(content)
-    )
-    tail = "\n[status truncated — room content exceeds Discord message limit]\n```"
-    max_body = 2000 - len(header) - len("\n```\n") - len(tail)
-    return header + "\n```\n" + body[:max_body] + tail
+def _build_message(state: GameState) -> tuple[str, discord.Embed]:
+    """
+    Build the status message payload: the plain-text header line (message
+    content) plus the budget-packed status embed. pack_sections (engine)
+    guarantees the embed fits Discord's limits, so no slicing happens here.
+    """
+    return render_status_header(state), build_status_embed(state)
 
 
 def _build_view(state: GameState):
@@ -153,8 +148,8 @@ def _build_view(state: GameState):
 
 async def _post_fresh_status(channel: discord.TextChannel, state: GameState) -> None:
     """Post a new status message at the bottom of the channel."""
-    view = _build_view(state)
-    msg = await channel.send(_build_content(state), view=view)
+    content, embed = _build_message(state)
+    msg = await channel.send(content, embed=embed, view=_build_view(state))
     _status_messages[str(channel.id)] = msg
 
 
@@ -168,10 +163,11 @@ async def update_status(
     Saves state to DB first.
     """
     await save_session_async(state)
+    content, embed = _build_message(state)
     existing = _status_messages.get(str(channel.id))
     if existing is not None:
         try:
-            await existing.edit(content=_build_content(state), view=_build_view(state))
+            await existing.edit(content=content, embed=embed, view=_build_view(state))
             return
         except discord.NotFound:
             pass
@@ -228,7 +224,9 @@ async def restore_status_message(bot: discord.Client, channel_id: str) -> None:
         async for msg in channel.history(limit=50):
             if msg.author != bot.user:
                 continue
-            if "```" not in msg.content:
+            # Status messages are embed-based; the "```" check keeps
+            # pre-embed (legacy code-block) status posts discoverable.
+            if "```" not in msg.content and not msg.embeds:
                 continue
             msg_ts = msg.created_at
             if msg_ts.tzinfo is None:
@@ -239,7 +237,8 @@ async def restore_status_message(bot: discord.Client, channel_id: str) -> None:
         if candidates:
             _, best = max(candidates, key=lambda x: x[0])
             _status_messages[channel_id] = best
-            await best.edit(content=_build_content(state), view=_build_view(state))
+            content, embed = _build_message(state)
+            await best.edit(content=content, embed=embed, view=_build_view(state))
             return
     except discord.Forbidden:
         pass

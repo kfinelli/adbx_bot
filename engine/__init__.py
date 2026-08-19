@@ -757,19 +757,72 @@ def render_status_header(state: GameState) -> str:
     return turn_label
 
 
-def render_status(state: GameState) -> str:
-    """
-    Produce the code-block body of the status message.
-    Does not include the header line (see render_status_header).
-    """
-    lines: list[str] = []
-    sep = "─" * 32
+# ---------------------------------------------------------------------------
+# Status sections + budget packing
+#
+# The status message is rendered from StatusSection blocks. The Discord layer
+# packs them into embed fields (see cogs/status_embed.py) under two budgets:
+# 6000 total chars per message, 1024 per field value. Section builders apply
+# per-field prose caps so no single field can dominate; the packer fills the
+# remaining budget by priority and degrades itemized sections (features, say
+# log) with explicit overflow markers — content is never cut silently.
+# ---------------------------------------------------------------------------
 
-    lines.append(sep)
+STATUS_TOTAL_BUDGET = 5900  # margin under Discord's 6000-char embed total
+STATUS_FIELD_CAP = 1024     # Discord per-field-value limit
+_FENCE_OVERHEAD = len("```\n\n```")
+
+# Per-field prose caps
+CAP_ROOM_DESC = 600
+CAP_FEATURE_DESC = 150
+CAP_SAY_ENTRY = 250
+CAP_SUBMISSION = 120
+CAP_NPC_DESC = 100
+CAP_EXIT_DESC = 100
+
+
+def _cap(text: str, limit: int) -> str:
+    """Hard cap with ellipsis, applied to a single prose field."""
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rstrip() + "…"
+
+
+@dataclass
+class StatusSection:
+    """
+    One block of the status message (party, room, features, …).
+
+    `priority` orders budget packing (lower packs first; gameplay-critical
+    sections have the lowest values). `order` is the display order in the
+    legacy text rendering. `legacy_header` is the "Header:" line prepended
+    in the text rendering (embed rendering uses the field name instead).
+    Degradable sections drop items when over budget, leaving a marker line
+    formatted from `marker_fmt` (say log drops oldest first).
+    """
+    key:           str
+    title:         str
+    lines:         list[str]
+    priority:      int
+    order:         int
+    legacy_header: str | None = None
+    degradable:    bool = False
+    drop_oldest:   bool = False
+    marker_fmt:    str = "… +{n} more"
+
+
+def render_status_sections(state: GameState) -> tuple[str, list[StatusSection]]:
+    """
+    Split the session status into a one-liner description (mode/turn state,
+    light, gold) plus prioritized sections. Pure data — the platform layer
+    decides how to render (embed fields) or pack (pack_sections).
+    """
+    desc_lines: list[str] = []
 
     # Mode and session/turn state
     if state.mode == SessionMode.PRE_START:
-        lines.append(get_string("status.waiting"))
+        desc_lines.append(get_string("status.waiting"))
     else:
         mode_str = "Rounds" if state.mode == SessionMode.ROUNDS else "Exploration"
         if not state.session_active:
@@ -782,9 +835,9 @@ def render_status(state: GameState) -> str:
             state_str = get_string("status.turn_closed")
         else:
             state_str = state.current_turn.status.value
-        lines.append(f"{mode_str} | {state_str}")
+        desc_lines.append(f"{mode_str} | {state_str}")
 
-    # Light source
+    # Light source + gold
     if state.party:
         light_lines = []
         for char_id in state.party.member_ids:
@@ -803,15 +856,14 @@ def render_status(state: GameState) -> str:
                 )
                 if inv and inv.charges is not None:
                     light_lines.append(f"{defn.name} ({char.name}): {inv.charges} turns")
-        lines.extend(light_lines if light_lines else ["No light source"])
+        desc_lines.extend(light_lines if light_lines else ["No light source"])
+        desc_lines.append(f"Gold: {state.party.gold}")
 
-        # Gold / XP
-        lines.append(f"Gold: {state.party.gold}")
+    sections: list[StatusSection] = []
 
-    lines.append(sep)
-
-    # Party members
+    # Party members (sacred)
     if state.party:
+        lines = []
         for cid in state.party.member_ids:
             char = state.characters.get(cid)
             if char is None:
@@ -829,28 +881,38 @@ def render_status(state: GameState) -> str:
                 s for s in (state.current_turn.submissions if state.current_turn else [])
                 if s.character_id == cid and s.is_latest
             ]
-            sub_text = f" (\"{'; '.join(s.action_text for s in active_subs)}\")" if active_subs else ""
+            sub_text = ""
+            if active_subs:
+                joined = "; ".join(_cap(s.action_text, CAP_SUBMISSION) for s in active_subs)
+                sub_text = f' ("{joined}")'
 
             cls_name = char.character_class.value
             lines.append(
                 f"{leader_mark}{char.name} the {cls_name}: {char.hp_current}/{char.hp_max}"
                 f"{status_tag}{sub_text}"
             )
+        if lines:
+            sections.append(StatusSection("party", "Party", lines, priority=10, order=10))
 
-    lines.append(sep)
+    # Battlefield positions (sacred, ROUNDS mode only)
+    if state.mode == SessionMode.ROUNDS and state.battlefield is not None:
+        try:
+            from cogs.action_buttons import render_battlefield_section
+            body = render_battlefield_section(state)
+            if body:
+                sections.append(StatusSection(
+                    "positions", "Positions", body.split("\n"),
+                    priority=20, order=70, legacy_header="Positions",
+                ))
+        except ImportError:
+            pass  # platform layer not loaded (e.g. during testing)
 
-    # Room
     room = state.current_room
     if room:
-        lines.append(f"✵{room.name}✵\n{room.description}")
-        if room.features:
-            lines.append("Features:")
-            for feat in room.features:
-                state_note = f" [{feat.state}]" if feat.state and feat.state != "intact" else ""
-                lines.append(f" \u2023 {feat.name}{state_note}: {feat.description}")
+        # Exits (sacred — navigation)
         visible_exits = [e for e in room.exits if not e.hidden]
         if visible_exits:
-            lines.append("Exits:")
+            lines = []
             for i, ex in enumerate(visible_exits, 1):
                 explored = (
                     state.dungeon is not None
@@ -859,52 +921,239 @@ def render_status(state: GameState) -> str:
                     and dest.visited
                 )
                 flag_str = " (explored)" if explored else ""
-                lines.append(f"  {i}. {ex.label.capitalize()}: {ex.description} [{ex.door_state.value}]{flag_str}")
+                lines.append(
+                    f"  {i}. {ex.label.capitalize()}: "
+                    f"{_cap(ex.description, CAP_EXIT_DESC)} "
+                    f"[{ex.door_state.value}]{flag_str}"
+                )
+            sections.append(StatusSection(
+                "exits", "Exits", lines, priority=30, order=40, legacy_header="Exits",
+            ))
+
+        # Room items
         visible_items = [ri for ri in room.items if ri.visibility is not RoomItemVisibility.HIDDEN]
         if visible_items:
-            lines.append("Items:")
+            lines = []
             for ri in visible_items:
                 defn = ITEM_REGISTRY.get(ri.item.item_id)
                 name = defn.name if defn is not None else ri.item.item_id
                 qty = f" x{ri.item.quantity}" if ri.item.quantity > 1 else ""
                 tag = " (inaccessible)" if ri.visibility is RoomItemVisibility.INACCESSIBLE else ""
                 lines.append(f"  • {name}{qty}{tag}")
-    else:
-        lines.append("Room: (none)")
+            sections.append(StatusSection(
+                "items", "Items", lines, priority=50, order=50, legacy_header="Items",
+            ))
 
-    lines.append(sep)
+        # Room name + description (flavor)
+        lines = [f"✵{room.name}✵"]
+        if room.description.strip():
+            lines.append(_cap(room.description, CAP_ROOM_DESC))
+        sections.append(StatusSection("room", "Room", lines, priority=60, order=20))
 
-    # NPCs - get from roster based on current room
+        # Features (degradable item-by-item)
+        if room.features:
+            lines = []
+            for feat in room.features:
+                state_note = f" [{feat.state}]" if feat.state and feat.state != "intact" else ""
+                lines.append(
+                    f" ⁃ {feat.name}{state_note}: {_cap(feat.description, CAP_FEATURE_DESC)}"
+                )
+            sections.append(StatusSection(
+                "features", "Features", lines, priority=70, order=30,
+                legacy_header="Features", degradable=True,
+                marker_fmt="… +{n} more features",
+            ))
+
+    # NPCs in the current room (sacred)
     active_npcs = [n for n in state.npcs_in_current_room if n.status != "dead" and not n.hidden]
     if active_npcs:
-        lines.append("NPCs:")
+        lines = []
         for npc in active_npcs:
-            lines.append(
-                f"  {npc.name}: {npc.hp_current}/{npc.hp_max}"
-                + (f" · {npc.status}" if npc.status != "active" else "")
-                + (f" ({npc.description})" if npc.description else "")
-            )
+            line = f"  {npc.name}: {npc.hp_current}/{npc.hp_max}"
+            if npc.status != "active":
+                line += f" · {npc.status}"
+            if npc.description:
+                line += f" ({_cap(npc.description, CAP_NPC_DESC)})"
+            lines.append(line)
+        sections.append(StatusSection(
+            "npcs", "NPCs", lines, priority=40, order=60, legacy_header="NPCs",
+        ))
+
+    # Say log (degradable; chronological, oldest dropped first)
+    if state.say_log:
+        lines = [_cap(entry, CAP_SAY_ENTRY) for entry in state.say_log]
+        sections.append(StatusSection(
+            "say", "Say Log", lines, priority=80, order=80,
+            degradable=True, drop_oldest=True,
+            marker_fmt="… +{n} earlier entries",
+        ))
+
+    return "\n".join(desc_lines), sections
+
+
+def _field_cost(title: str, body_lines: list[str]) -> int:
+    """Chars charged against both the per-field cap and the total budget."""
+    return len(title) + len("\n".join(body_lines)) + _FENCE_OVERHEAD
+
+
+def _split_fields(title: str, lines: list[str], field_cap: int) -> list[tuple[str, list[str]]]:
+    """Greedy split of lines into ≤field_cap fields ('Title', 'Title (2)', …)."""
+    out: list[tuple[str, list[str]]] = []
+    current: list[str] = []
+    for line in lines:
+        t = title if not out else f"{title} ({len(out) + 1})"
+        if current and _field_cost(t, current + [line]) > field_cap:
+            out.append((t, current))
+            current = [line]
+        else:
+            current.append(line)
+    if current:
+        out.append((title if not out else f"{title} ({len(out) + 1})", current))
+    return out
+
+
+def pack_sections(
+    description: str,
+    sections: list[StatusSection],
+    total_budget: int = STATUS_TOTAL_BUDGET,
+    field_cap: int = STATUS_FIELD_CAP,
+) -> list[tuple[str, list[str]]]:
+    """
+    Pack sections into (field title, body lines) pairs under the budget.
+
+    Sacred sections are always included in full (line-truncated only as a
+    pathological backstop, with an explicit marker). Degradable sections fill
+    continuation fields until the budget runs out, then drop items — say log
+    from the front, features from the end — always leaving an explicit
+    overflow marker, never a silent cut.
+    """
+    remaining = total_budget - len(description)
+    packed: list[tuple[str, list[str]]] = []
+
+    def commit(title: str, lines: list[str]) -> bool:
+        nonlocal remaining
+        cost = _field_cost(title, lines)
+        if cost > remaining:
+            return False
+        packed.append((title, lines))
+        remaining -= cost
+        return True
+
+    for sec in sorted(sections, key=lambda s: s.priority):
+        if not sec.degradable:
+            # Sacred: commit every field; the total budget only fails here in
+            # truly pathological states, so trim the last field with a marker.
+            for i, (t, lines) in enumerate(_split_fields(sec.title, sec.lines, field_cap)):
+                if not commit(t, lines):
+                    if packed and i > 0:
+                        packed[-1][1].append("… (truncated)")
+                    break
+            continue
+
+        if sec.drop_oldest:
+            # Trim from the front until the whole section (marker line on
+            # top) fits the remaining budget.
+            lines = list(sec.lines)
+            while True:
+                dropped = len(sec.lines) - len(lines)
+                body = ([sec.marker_fmt.format(n=dropped)] if dropped else []) + lines
+                fields = _split_fields(sec.title, body, field_cap)
+                fits = sum(_field_cost(t, fl) for t, fl in fields) <= remaining
+                if fits or not lines:
+                    break
+                lines.pop(0)
+            if lines:
+                for t, fl in fields:
+                    commit(t, fl)
+            continue
+
+        # Drop-from-end (features): commit whole continuation fields while
+        # they fit, then a partial final field + marker.
+        fields = _split_fields(sec.title, sec.lines, field_cap)
+        committed_items = 0
+        failed_idx: int | None = None
+        for i, (t, lines) in enumerate(fields):
+            if commit(t, lines):
+                committed_items += len(lines)
+            else:
+                failed_idx = i
+                break
+
+        rest = sec.lines[committed_items:]
+        if not rest:
+            continue
+
+        # Budget ran out mid-section: keep as many remaining items as fit in
+        # one final field, reserving room for the overflow marker.
+        t = sec.title if not failed_idx else f"{sec.title} ({failed_idx + 1})"
+        marker_room = len(sec.marker_fmt.format(n=len(rest))) + 1
+        avail = min(field_cap, remaining) - len(t) - _FENCE_OVERHEAD - marker_room
+        kept: list[str] = []
+        used = 0
+        for line in rest:
+            add = len(line) + (1 if kept else 0)
+            if used + add > avail:
+                break
+            kept.append(line)
+            used += add
+        dropped = len(rest) - len(kept)
+        if dropped:
+            kept.append(sec.marker_fmt.format(n=dropped))
+        if kept:
+            commit(t, kept)
+
+    return packed
+
+
+def render_status(state: GameState) -> str:
+    """
+    Produce the legacy plain-text status body (pre-embed format), assembled
+    from the same sections the embed renderer packs. Kept for tests and
+    debugging; the Discord status message uses render_status_sections +
+    pack_sections via cogs/status_embed.py.
+    """
+    description, sections = render_status_sections(state)
+    by_key = {s.key: s for s in sections}
+    sep = "─" * 32
+
+    lines: list[str] = [sep, *description.split("\n"), sep]
+
+    party = by_key.get("party")
+    if party:
+        lines.extend(party.lines)
+    lines.append(sep)
+
+    room = by_key.get("room")
+    if room:
+        lines.extend(room.lines)
+        for key in ("features", "exits", "items"):
+            sec = by_key.get(key)
+            if sec:
+                lines.append(f"{sec.legacy_header}:")
+                lines.extend(sec.lines)
+    else:
+        lines.append("Room: (none)")
+    lines.append(sep)
+
+    npcs = by_key.get("npcs")
+    if npcs:
+        lines.append("NPCs:")
+        lines.extend(npcs.lines)
     else:
         lines.append("NPCs: none")
 
-    # Battlefield positions (ROUNDS mode only)
-    if state.mode == SessionMode.ROUNDS and state.battlefield is not None:
+    positions = by_key.get("positions")
+    if positions:
         lines.append(sep)
         lines.append("Positions:")
-        try:
-            from cogs.action_buttons import render_battlefield_section
-            lines.append(render_battlefield_section(state))
-        except ImportError:
-            pass  # platform layer not loaded (e.g. during testing)
+        lines.extend(positions.lines)
 
-    # Say log — clears each turn
-    if state.say_log:
+    say = by_key.get("say")
+    if say:
         lines.append(sep)
-        for entry in state.say_log:
-            lines.append(entry)
+        lines.extend(say.lines)
 
     lines.append(sep)
-
     return "\n".join(lines)
 
 __all__ = [
@@ -1010,6 +1259,9 @@ __all__ = [
     "abscond",
     "render_status_header",
     "render_status",
+    "render_status_sections",
+    "pack_sections",
+    "StatusSection",
     "award_xp",
     "check_level_up",
     "distribute_xp",
