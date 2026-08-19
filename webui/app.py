@@ -315,7 +315,9 @@ async def route_resolve(channel_id: str, narrative: Annotated[str, Form()]):
     if _bot:
         channel = _bot.get_channel(int(channel_id))
         if channel:
-            asyncio.create_task(dispatch_turn_resolved(channel, state, full_narrative, bot=_bot))
+            # result.message (not full_narrative) — resolve_turn appends any
+            # random-encounter announcement to the returned message.
+            asyncio.create_task(dispatch_turn_resolved(channel, state, result.message, bot=_bot))
     return _respond(channel_id, flash="Turn resolved.", sync=False)
 
 
