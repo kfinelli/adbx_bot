@@ -1699,6 +1699,25 @@ async def archive_resurrect(
                 "Check the ID is correct and the bot is in that channel."
             )
 
+    # Guard: none of the archived session's characters may be active in
+    # another session (characters are shared across sessions, so activating
+    # one in two places would corrupt its state)
+    archived = await store.db.load_archive_async(session_id)
+    if archived is None:
+        return await _err("Archive entry not found.")
+    char_ids = [str(mid) for mid in archived.party.member_ids] if archived.party else []
+    conflicts = await store.db.get_active_channels_for_characters_async(char_ids)
+    if conflicts:
+        parts = []
+        for cid, active_channel in conflicts.items():
+            char = await store.db.load_character_async(cid)
+            name = char.name if char else cid
+            parts.append(f"{name} (active in channel {active_channel})")
+        return await _err(
+            "Cannot resurrect: " + ", ".join(parts) + ". "
+            "A character cannot be active in two sessions at once."
+        )
+
     state = await store.db.resurrect_async(session_id, channel_id)
     if state is None:
         return await _err("Archive entry not found.")

@@ -520,12 +520,32 @@ class Database:
         )
         self._conn.commit()
 
+    def _archived_character_ids(self, state_json: str) -> list[str]:
+        """Extract the character IDs that belonged to an archived session.
+
+        The archived blob has no character rows (they live in the characters
+        table), but party.member_ids is serialized into state_json and every
+        enrolled character is a party member (both add paths — create_character
+        and the arrive/import flow — append to party.member_ids; no removal
+        path exists).
+        """
+        try:
+            blob = json.loads(state_json)
+        except (TypeError, json.JSONDecodeError):
+            return []
+        return [str(mid) for mid in (blob.get("party") or {}).get("member_ids", [])]
+
     def _resurrect_sync(self, session_id: str, channel_id: str) -> GameState | None:
         """
         Copy an archived session back into the active sessions table under
         the given channel_id. Returns the loaded GameState, or None if the
         session_id was not found in the archive.
         Does NOT remove the archive entry — a copy stays in the archive.
+
+        Re-enrolls the archived session's characters (discovered via
+        party.member_ids in the archived blob) so the resurrected session
+        loads with its roster. Characters hard-deleted while archived are
+        skipped silently.
         """
         row = self._conn.execute(
             "SELECT * FROM archived_sessions WHERE session_id = ?",
@@ -547,8 +567,51 @@ class Database:
             (channel_id, row["session_id"], row["dm_user_id"],
              _now_iso(), row["state_json"]),
         )
+        # Re-link the session's characters (archiving removes the links)
+        char_ids = self._archived_character_ids(row["state_json"])
+        if char_ids:
+            placeholders = ",".join("?" for _ in char_ids)
+            existing = {
+                r["character_id"]
+                for r in self._conn.execute(
+                    f"SELECT character_id FROM characters WHERE character_id IN ({placeholders})",
+                    char_ids,
+                ).fetchall()
+            }
+            for cid in char_ids:
+                if cid in existing:
+                    self._conn.execute(
+                        """
+                        INSERT OR REPLACE INTO session_characters
+                            (session_id, character_id, joined_at)
+                        VALUES (?, ?, ?)
+                        """,
+                        (row["session_id"], cid, _now_iso()),
+                    )
         self._conn.commit()
         return self._load_sync(channel_id)
+
+    def _get_active_channels_for_characters_sync(
+        self, character_ids: list[str]
+    ) -> dict[str, str]:
+        """Map character_id -> channel_id for characters enrolled in ACTIVE
+        sessions (i.e. linked to a session_id present in the sessions table).
+        Links to archived sessions do not count. Used by the webui to guard
+        against resurrecting a session whose characters are active elsewhere.
+        """
+        if not character_ids:
+            return {}
+        placeholders = ",".join("?" for _ in character_ids)
+        rows = self._conn.execute(
+            f"""
+            SELECT sc.character_id, s.channel_id
+            FROM   session_characters sc
+            JOIN   sessions s ON s.session_id = sc.session_id
+            WHERE  sc.character_id IN ({placeholders})
+            """,
+            character_ids,
+        ).fetchall()
+        return {r["character_id"]: r["channel_id"] for r in rows}
 
     # ------------------------------------------------------------------
     # Public API — lock-guarded async versions
@@ -590,6 +653,14 @@ class Database:
     async def resurrect_async(self, session_id: str, channel_id: str) -> GameState | None:
         async with self._lock:
             return self._resurrect_sync(session_id, channel_id)
+
+    async def get_active_channels_for_characters_async(
+        self, character_ids: list[str]
+    ) -> dict[str, str]:
+        """Map character_id -> channel_id for characters enrolled in active
+        sessions. Used to guard resurrect against character conflicts."""
+        async with self._lock:
+            return self._get_active_channels_for_characters_sync(character_ids)
 
     # ------------------------------------------------------------------
     # Character persistence — async wrappers
@@ -670,6 +741,12 @@ class Database:
 
     def resurrect(self, session_id: str, channel_id: str) -> GameState | None:
         return self._resurrect_sync(session_id, channel_id)
+
+    def get_active_channels_for_characters(
+        self, character_ids: list[str]
+    ) -> dict[str, str]:
+        """Sync character_id -> channel_id map for characters in active sessions."""
+        return self._get_active_channels_for_characters_sync(character_ids)
 
     # Character persistence — sync wrappers
     def save_character(self, character) -> None:

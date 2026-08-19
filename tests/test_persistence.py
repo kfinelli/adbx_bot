@@ -179,6 +179,56 @@ class TestResurrect:
         # ch2 now holds the resurrected state
         assert db.load("ch2").party.name == "Party A"
 
+    def test_resurrect_restores_characters(self, db):
+        """Regression #64: archiving deletes session_characters links and the
+        archived blob has no character rows; resurrect must re-enroll the
+        characters via party.member_ids so they load with the session."""
+        s = _make_state("ch1")
+        create_character(s, "Aldric", CharacterClass.KNIGHT, "", owner_id="u1")
+        create_character(s, "Berta", CharacterClass.MAGE, "", owner_id="u2")
+        char_ids = set(s.characters.keys())
+        db.save(s)
+        asyncio.run(db.archive_async("ch1"))
+        restored = asyncio.run(db.resurrect_async(str(s.session_id), "ch1_new"))
+        assert restored is not None
+        assert set(restored.characters.keys()) == char_ids
+        assert {c.name for c in restored.characters.values()} == {"Aldric", "Berta"}
+        # A fresh load from the DB sees them too (links were really re-created)
+        reloaded = db.load("ch1_new")
+        assert set(reloaded.characters.keys()) == char_ids
+
+    def test_resurrect_skips_deleted_characters(self, db):
+        """Characters hard-deleted while the session was archived are skipped."""
+        s = _make_state("ch1")
+        create_character(s, "Aldric", CharacterClass.KNIGHT, "", owner_id="u1")
+        create_character(s, "Berta", CharacterClass.MAGE, "", owner_id="u2")
+        doomed = next(c for c in s.characters.values() if c.name == "Aldric")
+        db.save(s)
+        asyncio.run(db.archive_async("ch1"))
+        db.delete_character(str(doomed.character_id))
+        restored = asyncio.run(db.resurrect_async(str(s.session_id), "ch1_new"))
+        assert {c.name for c in restored.characters.values()} == {"Berta"}
+
+    def test_get_active_channels_for_characters(self, db):
+        """The resurrect guard query: characters linked to an ACTIVE session
+        are reported; links to archived sessions don't count."""
+        s = _make_state("ch1")
+        create_character(s, "Aldric", CharacterClass.KNIGHT, "", owner_id="u1")
+        char = next(iter(s.characters.values()))
+        cid = str(char.character_id)
+        assert db.get_active_channels_for_characters([]) == {}
+        # Not enrolled anywhere yet
+        assert db.get_active_channels_for_characters([cid]) == {}
+        db.save(s)
+        # Active session -> conflict reported
+        assert db.get_active_channels_for_characters([cid]) == {cid: "ch1"}
+        # After archiving the links are gone -> no conflict
+        asyncio.run(db.archive_async("ch1"))
+        assert db.get_active_channels_for_characters([cid]) == {}
+        # After resurrect the character is active again (blocks double-resurrect)
+        asyncio.run(db.resurrect_async(str(s.session_id), "ch1_new"))
+        assert db.get_active_channels_for_characters([cid]) == {cid: "ch1_new"}
+
 
 # ---------------------------------------------------------------------------
 # Concurrent async saves (lock correctness)
