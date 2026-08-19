@@ -146,9 +146,14 @@ class InventoryItem:
 
     @property
     def definition(self):
-        # Returns Item: No return type hint to avoid imports
+        # Returns Item | None: No return type hint to avoid imports.
+        # None when item_id is no longer in the registry (e.g. removed by a
+        # sheet sync) — call sites must handle it (#189).
         from engine.data_loader import ITEM_REGISTRY
-        return ITEM_REGISTRY[self.item_id]
+        defn = ITEM_REGISTRY.get(self.item_id)
+        if defn is None:
+            log.warning("Unknown item_id %r — not in ITEM_REGISTRY", self.item_id)
+        return defn
 
 
 @dataclass

@@ -462,3 +462,35 @@ class TestLightBundling:
         result = give_item(bare_state, char.character_id, inkwell_id)
         assert not result.ok
         assert "full" in result.error.lower()
+
+
+# ---------------------------------------------------------------------------
+# InventoryItem.definition with missing registry entries (#189)
+# ---------------------------------------------------------------------------
+
+class TestMissingItemDefinition:
+    """A sheet sync can remove/rename an item while saves still reference it."""
+
+    def test_definition_returns_none_for_unknown_item(self):
+        inv = InventoryItem(item_id="__missing_item__")
+        assert inv.definition is None  # must not raise KeyError
+
+    def test_definition_returns_item_for_known_id(self):
+        wid = _find_weapon_id()
+        assert wid is not None
+        inv = InventoryItem(item_id=wid)
+        assert inv.definition is ITEM_REGISTRY[wid]
+
+    def test_character_sheet_renders_unknown_item(self, bare_state):
+        pytest.importorskip("discord")
+        from cogs.character_views import _character_sheet
+
+        create_character(
+            bare_state, name="Survivor", character_class=CharacterClass.KNIGHT,
+            equipment_package="", owner_id="u1",
+        )
+        char = _get_char(bare_state)
+        char.inventory.append(InventoryItem(item_id="__missing_item__", quantity=2))
+
+        sheet = _character_sheet(char, bare_state)
+        assert "2x __missing_item__" in sheet  # falls back to the raw item_id
