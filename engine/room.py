@@ -2,6 +2,8 @@
 Room management for the dungeon crawler engine.
 """
 
+from typing import TYPE_CHECKING
+
 from models import (
     DoorState,
     Dungeon,
@@ -20,6 +22,9 @@ from validation import (
 
 from .helpers import _err, _now, _ok, _resolve_room
 from .strings import fmt_string, get_string
+
+if TYPE_CHECKING:
+    from engine.item import Item
 
 
 class RoomManager:
@@ -314,16 +319,16 @@ class RoomManager:
 
     @staticmethod
     def _build_room_item(
-        item_id: str,
+        defn: "Item",
         quantity: int,
         visibility: RoomItemVisibility,
         notes: str,
     ) -> RoomItem:
+        # Caller (add_room_item) must have resolved defn from ITEM_REGISTRY.
         from engine.data_loader import ITEM_REGISTRY
         from engine.item import ChargeWeapon, ContainerItem, UtilitySpell
 
-        defn = ITEM_REGISTRY[item_id]
-        item = InventoryItem(item_id=item_id, quantity=quantity)
+        item = InventoryItem(item_id=defn.item_id, quantity=quantity)
         contained: list[InventoryItem] = []
 
         if isinstance(defn, (ChargeWeapon, UtilitySpell)):
@@ -368,7 +373,7 @@ class RoomManager:
         if quantity < 1:
             return _err(state, "Quantity must be at least 1.")
 
-        ri = self._build_room_item(item_id, quantity, visibility, notes)
+        ri = self._build_room_item(defn, quantity, visibility, notes)
         room.items.append(ri)
         state.updated_at = _now()
         return _ok(state, f"{defn.name} added to room.")
