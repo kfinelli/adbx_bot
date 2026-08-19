@@ -24,10 +24,10 @@ from engine import (
     start_session,
 )
 from engine.combat import CombatAction, _execute_action
+from engine.data_loader import CharacterClass
 from models import (
     NPC,
     AzureStats,
-    CharacterClass,
     GameState,
     Party,
     RangeBand,

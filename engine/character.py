@@ -12,13 +12,12 @@ from engine.azure_constants import (
     SkillType,
     getLowerWeaponRanks,
 )
-from engine.data_loader import CLASS_DEFINITIONS, ITEM_REGISTRY, SkillDef
+from engine.data_loader import CLASS_DEFINITIONS, ITEM_REGISTRY, CharacterClass, SkillDef
 from engine.dice import max_dice_expr, roll_dice_expr
 from engine.item import ChargeWeapon, ContainerItem, EquipItem, UtilitySpell, Weapon
 from models import (
     AzureStats,
     Character,
-    CharacterClass,
     CharacterStatus,
     GameState,
     InventoryItem,

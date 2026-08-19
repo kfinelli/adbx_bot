@@ -13,9 +13,9 @@ from engine import (
     start_session,
 )
 from engine.combat import _npc_decide
+from engine.data_loader import CharacterClass
 from models import (
     NPC,
-    CharacterClass,
     GameState,
     NPCBehaviorMode,
     Party,

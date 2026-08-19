@@ -17,7 +17,8 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from engine import create_character, start_session
-from models import CharacterClass, GameState, Party
+from engine.data_loader import CharacterClass
+from models import GameState, Party
 
 # ---------------------------------------------------------------------------
 # Helpers (mirror test_agile_tag.py pattern)

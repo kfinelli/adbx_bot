@@ -19,12 +19,12 @@ from datetime import datetime
 from uuid import UUID
 
 from engine.azure_constants import DEFAULT_EQUIPPED_SLOTS
+from engine.data_loader import CharacterClass
 from models import (
     NPC,
     ActiveCondition,
     AzureStats,
     Character,
-    CharacterClass,
     CharacterStatus,
     CombatantState,
     CombatBattlefield,

@@ -33,10 +33,10 @@ from engine import (
     submit_turn,
 )
 from engine.combat import CombatAction, _npc_decide, _tick_conditions
+from engine.data_loader import CharacterClass
 from models import (
     NPC,
     ActiveCondition,
-    CharacterClass,
     GameState,
     NPCBehaviorMode,
     Party,
@@ -1471,9 +1471,8 @@ class TestWeaponIdSelection:
         """Set up combat state with a mage holding a spellbook (multiple weapons)."""
         from engine import create_character, equip_item, give_item
         from engine.azure_constants import ItemSlot
-        from engine.data_loader import ITEM_REGISTRY
+        from engine.data_loader import ITEM_REGISTRY, CharacterClass
         from engine.item import ChargeWeapon, ContainerItem
-        from models import CharacterClass
 
         state = _make_state_with_npc()
 

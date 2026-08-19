@@ -16,9 +16,9 @@ import pytest
 
 from engine import create_character, equip_item, give_item
 from engine.azure_constants import BASE_INVENTORY_SIZE, BUNDLE_SIZE
-from engine.data_loader import ITEM_REGISTRY
+from engine.data_loader import ITEM_REGISTRY, CharacterClass
 from engine.item import ChargeWeapon, Gear, Item, Weapon
-from models import AzureStats, CharacterClass, InventoryItem
+from models import AzureStats, InventoryItem
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -2,9 +2,13 @@
 Core data model for the async dungeon crawler engine.
 No I/O, no platform dependencies — pure game state.
 
-Ruleset-agnostic: CharacterClass is defined in tables.py and generated
-from _CLASS_DEFINITIONS, so adding/removing classes only requires editing
-tables.py. Nothing here changes when the ruleset changes.
+Ruleset-agnostic: CharacterClass is defined in engine/data_loader.py and
+generated from the per-job data files, so adding/removing classes only
+requires editing data/classes/. Nothing here changes when the ruleset changes.
+
+engine.* imports in this file are deliberately function-level: importing
+engine/__init__.py requires models to be fully loaded, so a module-level
+engine import here would be circular. Guarded by tests/test_import_order.py.
 
 Any update here requires a parallel update in serialization.py!
 """
@@ -15,10 +19,12 @@ import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from engine.data_loader import CONDITION_REGISTRY, ITEM_REGISTRY, CharacterClass
-from engine.item import ContainerItem, EquipItem, Gear, Weapon
+if TYPE_CHECKING:
+    from engine.data_loader import CharacterClass
+    from engine.item import Weapon
 
 log = logging.getLogger(__name__)
 
@@ -141,6 +147,7 @@ class InventoryItem:
     @property
     def definition(self):
         # Returns Item: No return type hint to avoid imports
+        from engine.data_loader import ITEM_REGISTRY
         return ITEM_REGISTRY[self.item_id]
 
 
@@ -156,6 +163,7 @@ class Character:
     @property
     def character_class(self) -> CharacterClass:
         """Derive the primary class from the jobs dict. Backward-compat for all existing readers."""
+        from engine.data_loader import CharacterClass
         if self.jobs:
             return CharacterClass[next(iter(self.jobs)).upper()]
         return CharacterClass.KNIGHT  # unreachable in normal flow
@@ -195,6 +203,8 @@ class Character:
     @property
     def defense(self) -> int:
         """Sum DEF from equipped Gear items plus active condition modifiers, floored at 0."""
+        from engine.data_loader import CONDITION_REGISTRY, ITEM_REGISTRY
+        from engine.item import Gear
         total = 0
         for item_id in self.equipped_slots.values():
             if item_id is None:
@@ -212,6 +222,8 @@ class Character:
     @property
     def resistance(self) -> int:
         """Sum RST from equipped Gear items plus active condition modifiers, floored at 0."""
+        from engine.data_loader import CONDITION_REGISTRY, ITEM_REGISTRY
+        from engine.item import Gear
         total = 0
         for item_id in self.equipped_slots.values():
             if item_id is None:
@@ -228,6 +240,7 @@ class Character:
 
     def effective_stat(self, stat: str) -> int:
         """Return ability score for `stat` including any active condition modifiers."""
+        from engine.data_loader import CONDITION_REGISTRY
         base = getattr(self.ability_scores, stat, 0)
         bonus = sum(
             CONDITION_REGISTRY[c.condition_id].stat_modifiers.get(stat, 0) * c.stacks
@@ -240,6 +253,8 @@ class Character:
     def dodge(self) -> int:
         """Dodge target number (base = finesse). Capped at POWER_LEVEL when any Heavy item is equipped."""
         from engine.azure_constants import POWER_LEVEL
+        from engine.data_loader import ITEM_REGISTRY
+        from engine.item import EquipItem
         base = self.ability_scores.finesse
         for item_id in self.equipped_slots.values():
             if item_id is None:
@@ -283,6 +298,9 @@ class Character:
         here and identified by their virtual item_id in CombatAction.weapon_id.
         """
         import copy as _copy
+
+        from engine.data_loader import ITEM_REGISTRY
+        from engine.item import ContainerItem, Weapon
         inv_item = self.equipped_weapon()
         if inv_item is None:
             return []
@@ -360,6 +378,7 @@ class Character:
         from math import ceil
 
         from engine.azure_constants import BUNDLE_SIZE
+        from engine.data_loader import ITEM_REGISTRY
         non_light = 0
         light_qty = 0
         for inv_item in self.inventory:

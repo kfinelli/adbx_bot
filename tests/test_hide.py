@@ -22,11 +22,11 @@ from engine import (
     start_session,
 )
 from engine.combat import CombatAction, _execute_action, _has_condition, _npc_decide
+from engine.data_loader import CharacterClass
 from models import (
     NPC,
     ActiveCondition,
     AzureStats,
-    CharacterClass,
     GameState,
     Party,
     Room,

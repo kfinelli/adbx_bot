@@ -17,12 +17,9 @@ import pytest
 
 from engine import create_character, equip_item, give_item, remove_item, unequip_item
 from engine.azure_constants import UI_SLOTS, ItemSlot
-from engine.data_loader import ITEM_REGISTRY
+from engine.data_loader import ITEM_REGISTRY, CharacterClass
 from engine.item import ChargeWeapon, ContainerItem, Gear, UtilitySpell, Weapon
-from models import (
-    CharacterClass,
-    InventoryItem,
-)
+from models import InventoryItem
 from serialization import deserialize_state, serialize_state
 
 # ---------------------------------------------------------------------------

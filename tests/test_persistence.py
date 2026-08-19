@@ -9,7 +9,8 @@ import tempfile
 import pytest
 
 from engine import award_xp, create_character, start_session
-from models import CharacterClass, GameState, Party
+from engine.data_loader import CharacterClass
+from models import GameState, Party
 from persistence import Database
 
 # ---------------------------------------------------------------------------
@@ -376,7 +377,8 @@ class TestActiveConditionsPersistence:
     def test_character_active_conditions_round_trip(self, db):
         """active_conditions survive save → load via the characters table."""
         from engine import apply_condition, start_session
-        from models import CharacterClass, GameState, Party
+        from engine.data_loader import CharacterClass
+        from models import GameState, Party
 
         s = GameState(platform_channel_id="ch99", dm_user_id="dm")
         s.party = Party(name="P")
@@ -396,7 +398,8 @@ class TestActiveConditionsPersistence:
 
     def test_character_conditions_empty_by_default(self, db):
         """Characters without conditions save and reload cleanly."""
-        from models import CharacterClass, GameState, Party
+        from engine.data_loader import CharacterClass
+        from models import GameState, Party
 
         s = GameState(platform_channel_id="ch100", dm_user_id="dm")
         s.party = Party(name="P")

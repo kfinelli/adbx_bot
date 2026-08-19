@@ -29,9 +29,9 @@ from engine import (
     start_session,
 )
 from engine.azure_constants import RechargePeriod
-from engine.data_loader import ITEM_REGISTRY
+from engine.data_loader import ITEM_REGISTRY, CharacterClass
 from engine.item import ChargeWeapon
-from models import CharacterClass, GameState, Party
+from models import GameState, Party
 from persistence import Database
 
 # ---------------------------------------------------------------------------

@@ -7,7 +7,8 @@ All tests are pure engine — no Discord or database required.
 
 from engine import award_xp, check_level_up, create_character
 from engine.azure_constants import XP_THRESHOLDS
-from models import CharacterClass, GameState, Party
+from engine.data_loader import CharacterClass
+from models import GameState, Party
 from serialization import deserialize_character, serialize_character
 
 # ---------------------------------------------------------------------------

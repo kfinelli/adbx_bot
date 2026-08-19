@@ -25,9 +25,9 @@ from engine import (
 )
 from engine.azure_constants import XP_THRESHOLDS, SkillType
 from engine.character import CharacterManager
-from engine.data_loader import CLASS_DEFINITIONS, ITEM_REGISTRY, SkillDef
+from engine.data_loader import CLASS_DEFINITIONS, ITEM_REGISTRY, CharacterClass, SkillDef
 from engine.item import ChargeWeapon, Weapon
-from models import CharacterClass, GameState, Party
+from models import GameState, Party
 
 # ---------------------------------------------------------------------------
 # Helpers

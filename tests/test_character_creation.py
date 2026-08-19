@@ -4,7 +4,8 @@ test_character_creation.py — Character creation tests for the Azure ruleset.
 
 from engine import create_character, roll_stats
 from engine.azure_constants import POWER_LEVEL
-from models import AzureStats, CharacterClass, CharacterStatus, GameState, Party
+from engine.data_loader import CharacterClass
+from models import AzureStats, CharacterStatus, GameState, Party
 
 
 class TestRollStats:

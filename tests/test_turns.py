@@ -60,7 +60,7 @@ class TestSubmitTurn:
     def test_submit_pre_start_fails(self, bare_state):
         """Cannot submit before the session is started."""
         from engine import create_character
-        from models import CharacterClass
+        from engine.data_loader import CharacterClass
         create_character(bare_state, "Aldric", CharacterClass.KNIGHT, "")
         char_id = list(bare_state.characters.keys())[0]
         result = submit_turn(bare_state, char_id, "Action.")

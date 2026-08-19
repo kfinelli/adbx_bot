@@ -21,10 +21,10 @@ from discord import app_commands
 from discord.ext import commands
 
 from engine import create_character, equip_item, give_item, roll_stats
-from engine.data_loader import ITEM_REGISTRY
+from engine.data_loader import ITEM_REGISTRY, CharacterClass
 from engine.item import ChargeWeapon, EquipItem, Gear, Item, Weapon
 from engine.strings import fmt_string, get_string
-from models import CharacterClass, SessionMode
+from models import SessionMode
 from store import get_characters_by_owner, get_session, save_session, update_status
 from validation import validate_character_name
 

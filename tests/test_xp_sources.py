@@ -31,9 +31,9 @@ from engine import (
 )
 from engine.azure_constants import DEFAULT_ROOM_XP
 from engine.combat import CombatAction
+from engine.data_loader import CharacterClass
 from models import (
     NPC,
-    CharacterClass,
     CharacterStatus,
     GameState,
     Party,

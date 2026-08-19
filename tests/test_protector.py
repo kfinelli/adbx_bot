@@ -28,10 +28,10 @@ from engine import (
     submit_turn,
 )
 from engine.combat import CombatAction, _execute_action
+from engine.data_loader import CharacterClass
 from models import (
     NPC,
     ActiveCondition,
-    CharacterClass,
     GameState,
     Party,
     PlayerTurnSubmission,

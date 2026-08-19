@@ -28,9 +28,9 @@ from engine import (
     start_session,
 )
 from engine.combat import CombatAction
+from engine.data_loader import CharacterClass
 from models import (
     NPC,
-    CharacterClass,
     GameState,
     Party,
     PlayerTurnSubmission,

@@ -38,6 +38,12 @@ are deliberate (circular-import avoidance) — follow the pattern.
 - **Never import `discord`, `store`, or `bot` at module level in tests.** discord.py is
   deliberately absent from `requirements-dev.txt`; `conftest.py` skips
   `tests/discord_integration/` when it's missing. Use function-level imports instead.
+- **`models.py` must not import `engine.*` at module level** — `engine/__init__.py`
+  imports `models`, so a module-level engine import in models is a circular import
+  whenever models is loaded first (#188). Registry/class access there
+  (`ITEM_REGISTRY`, `CONDITION_REGISTRY`, item types) is function-level, and
+  `CharacterClass` is imported directly from `engine.data_loader` by its consumers
+  (it is no longer re-exported from models). Guarded by `tests/test_import_order.py`.
 - **New `Character` fields must be added in three places in `persistence.py`:**
   `_save_character_sync` INSERT, `_char_dict_from_row`, and a migration in `_migrate()`.
   Missing any one = silent data loss on reload. Add a save→reload→assert test.

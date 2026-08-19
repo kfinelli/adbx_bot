@@ -25,7 +25,8 @@ def pytest_ignore_collect(collection_path, config):
 
 
 from engine import create_character, start_session  # noqa: E402
-from models import CharacterClass, GameState, Party  # noqa: E402
+from engine.data_loader import CharacterClass  # noqa: E402
+from models import GameState, Party  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Bare state — no party, no characters

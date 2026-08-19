@@ -9,7 +9,8 @@ the channel. No human interaction required.
 import pytest
 
 from engine import create_character, open_turn, start_session
-from models import CharacterClass, SessionMode, TurnStatus
+from engine.data_loader import CharacterClass
+from models import SessionMode, TurnStatus
 from tests.discord_integration._config import TEST_CHANNEL_ID, TEST_DM_USER_ID
 
 

@@ -28,7 +28,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from engine import create_character, start_session
 from engine.azure_constants import ItemSlot
-from models import CharacterClass, GameState, InventoryItem, Party
+from engine.data_loader import CharacterClass
+from models import GameState, InventoryItem, Party
 
 
 def _make_state_with_char():
