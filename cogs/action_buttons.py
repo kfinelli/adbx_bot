@@ -289,7 +289,7 @@ class ExplorationActionView(discord.ui.View):
         self.leader_character_id = leader_character_id
         if not turn_is_open:
             for item in self.children:
-                if getattr(item, "custom_id", None) != "action:character":
+                if getattr(item, "custom_id", None) not in ("action:character", "action:items"):
                     item.disabled = True
 
     # row 0 ----------------------------------------------------------------
@@ -573,6 +573,39 @@ class ExplorationActionView(discord.ui.View):
             )
         except discord.Forbidden:
             await interaction.edit_original_response(content=sheet)
+
+    @discord.ui.button(
+        label="Items", style=discord.ButtonStyle.secondary,
+        custom_id="action:items", row=3,
+    )
+    async def items_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        from cogs.character_views import RoomItemMenuView, _find_character, _room_items_summary
+        channel_id = str(interaction.channel_id)
+        state = get_session(channel_id)
+        if state is None:
+            await interaction.response.send_message(
+                get_string("errors.no_session"), ephemeral=True
+            )
+            return
+        char = _find_character(state, str(interaction.user.id))
+        if char is None:
+            await interaction.response.send_message(
+                "You don't have a character in this session.", ephemeral=True
+            )
+            return
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        summary = _room_items_summary(char, state)
+        try:
+            dm_channel = await interaction.user.create_dm()
+            await dm_channel.send(
+                content=summary,
+                view=RoomItemMenuView(char, state, channel_id),
+            )
+            await interaction.edit_original_response(
+                content=get_string("character.items_sent")
+            )
+        except discord.Forbidden:
+            await interaction.edit_original_response(content=summary)
 
 
 # ---------------------------------------------------------------------------

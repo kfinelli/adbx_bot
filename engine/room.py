@@ -414,3 +414,154 @@ class RoomManager:
                 return _ok(state, f"{name} is now {visibility.value}.")
 
         return _err(state, "Item not found.")
+
+    def pick_up_item(
+        self,
+        state: GameState,
+        character_id,
+        instance_id: str,
+        quantity: int | None = None,
+    ):
+        """
+        Player picks up an accessible room item into their inventory.
+
+        Stacking rules (matching give_item): plain stackables merge onto an
+        existing unequipped entry; ChargeWeapons, UtilitySpells, and
+        containers always stay separate entries so per-instance charge state
+        and contents are preserved. A picked-up item carrying charges (e.g.
+        a dropped lit torch) also stays separate. Partial pickup of a
+        stacked item splits the stack. Enforces the inventory slot limit.
+        """
+        from engine.character import _exceeds_inventory_capacity
+        from engine.data_loader import ITEM_REGISTRY
+        from engine.item import ChargeWeapon, ContainerItem, UtilitySpell
+
+        char = state.characters.get(character_id)
+        if char is None:
+            return _err(state, f"Character {character_id} not found.")
+        room = _resolve_room(state, None)
+        if room is None:
+            return _err(state, get_string("room.errors.no_current"))
+
+        ri = next((r for r in room.items if r.item.instance_id == instance_id), None)
+        if ri is None or ri.visibility is RoomItemVisibility.HIDDEN:
+            return _err(state, "That item is no longer here.")
+        defn = ITEM_REGISTRY.get(ri.item.item_id)
+        name = defn.name if defn is not None else ri.item.item_id
+        if ri.visibility is RoomItemVisibility.INACCESSIBLE:
+            return _err(state, f"{name} is out of reach.")
+
+        take = ri.item.quantity if quantity is None else quantity
+        if take < 1 or take > ri.item.quantity:
+            return _err(state, f"Cannot pick up {take}x {name}: only {ri.item.quantity} available.")
+
+        over_capacity = (
+            _exceeds_inventory_capacity(char, defn, take)
+            if defn is not None
+            else char.slots_used + take > char.inventory_size
+        )
+        if over_capacity:
+            return _err(
+                state,
+                f"{char.name}'s inventory is full "
+                f"({char.slots_used}/{char.inventory_size} slots used).",
+            )
+
+        # Merge plain stackables onto an existing unequipped entry (matching
+        # give_item); charge-bearing items, containers, and items carrying
+        # charges always move as their own entry.
+        mergeable = (
+            defn is not None
+            and not isinstance(defn, (ChargeWeapon, UtilitySpell, ContainerItem))
+            and ri.item.charges is None
+        )
+        existing = (
+            next(
+                (i for i in char.inventory
+                 if i.item_id == ri.item.item_id
+                 and not i.equipped
+                 and i.container_id is None),
+                None,
+            )
+            if mergeable else None
+        )
+
+        if existing is not None:
+            existing.quantity += take
+            if take == ri.item.quantity:
+                room.items.remove(ri)
+            else:
+                ri.item.quantity -= take
+        elif take == ri.item.quantity:
+            # Move the whole entry, including any contained items.
+            room.items.remove(ri)
+            char.inventory.append(ri.item)
+            char.inventory.extend(ri.contained)
+        else:
+            ri.item.quantity -= take
+            char.inventory.append(InventoryItem(
+                item_id=ri.item.item_id,
+                quantity=take,
+                charges=ri.item.charges,
+            ))
+
+        state.updated_at = _now()
+        qty_str = f"{take}x " if take > 1 else ""
+        return _ok(state, f"{char.name} picked up {qty_str}{name}.")
+
+    def drop_item(
+        self,
+        state: GameState,
+        character_id,
+        instance_id: str,
+        quantity: int | None = None,
+    ):
+        """
+        Player drops an inventory item onto the floor of the current room.
+
+        The dropped item becomes an accessible RoomItem. Containers carry
+        their contained items with them; partial drops split the stack.
+        Equipped items must be unequipped first.
+        """
+        from engine.data_loader import ITEM_REGISTRY
+        from engine.item import ContainerItem
+
+        char = state.characters.get(character_id)
+        if char is None:
+            return _err(state, f"Character {character_id} not found.")
+        room = _resolve_room(state, None)
+        if room is None:
+            return _err(state, get_string("room.errors.no_current"))
+
+        inv = next((i for i in char.inventory if i.instance_id == instance_id), None)
+        if inv is None:
+            return _err(state, f"Item not in {char.name}'s inventory.")
+        defn = ITEM_REGISTRY.get(inv.item_id)
+        name = defn.name if defn is not None else inv.item_id
+        if inv.container_id is not None:
+            return _err(state, f"{name} is contained in another item and can't be dropped on its own.")
+        if inv.equipped:
+            return _err(state, f"{name} is equipped and must be unequipped first.")
+
+        take = inv.quantity if quantity is None else quantity
+        if take < 1 or take > inv.quantity:
+            return _err(state, f"Cannot drop {take}x {name}: only {inv.quantity} available.")
+
+        if take == inv.quantity:
+            char.inventory.remove(inv)
+            contained = []
+            if isinstance(defn, ContainerItem):
+                contained = [i for i in char.inventory if i.container_id == inv.instance_id]
+                char.inventory = [i for i in char.inventory if i.container_id != inv.instance_id]
+            room.items.append(RoomItem(item=inv, contained=contained))
+        else:
+            inv.quantity -= take
+            room.items.append(RoomItem(item=InventoryItem(
+                item_id=inv.item_id,
+                quantity=take,
+                charges=inv.charges,
+            )))
+
+        state.updated_at = _now()
+        qty_str = f"{take}x " if take > 1 else ""
+        return _ok(state, f"{char.name} dropped {qty_str}{name}.")

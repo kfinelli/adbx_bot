@@ -87,7 +87,13 @@ are deliberate (circular-import avoidance) — follow the pattern.
   when the container is removed.
 - `Room.items` holds `RoomItem` instances with tri-state visibility (`accessible`,
   `inaccessible`, `hidden`). Mutations live in `engine/room.py` and the DM panel;
-  serialized inside the dungeon blob with no version bump.
+  serialized inside the dungeon blob with no version bump. Players pick up / drop
+  accessible items via the "Items" button on the exploration status message —
+  DM views in `cogs/character_views.py`, engine `pick_up_item` / `drop_item`.
+  Pickup merges plain stackables into existing stacks (matching `give_item`);
+  charge-bearing items, containers, and items carrying charges stay separate.
+  Capacity math is shared with `give_item` via `_exceeds_inventory_capacity`
+  (`engine/character.py`).
 - `data/*.json` is synced from a Google Sheet (ground truth) by
   `scripts/google_sheets_sync.py` (`GOOGLE_API_KEY` + `GOOGLE_SHEET_KEY` env). Sync
   overwrites files matching sheet rows — check with the user before hand-editing

@@ -82,6 +82,37 @@ def _projected_slots_used_after_equip(
     return non_light + (ceil(L / BUNDLE_SIZE) if L > 0 else 0)
 
 
+def _exceeds_inventory_capacity(char, defn, quantity: int) -> bool:
+    """
+    Return True if adding ``quantity`` of ``defn`` to ``char``'s unequipped
+    inventory would exceed the slot limit.
+
+    Light-weight items (is_light=True) are bundled BUNDLE_SIZE-per-slot,
+    shared across all light-weight types (matching Character.slots_used);
+    everything else costs slot_cost slots per unit.
+    """
+    from math import ceil
+
+    from engine.azure_constants import BUNDLE_SIZE
+
+    if defn.isLight:
+        # Contained items (container_id set) consume no slots, so exclude them
+        # to stay consistent with Character.slots_used.
+        current_light = sum(
+            i.quantity for i in char.inventory
+            if not i.equipped
+            and i.container_id is None
+            and (d := ITEM_REGISTRY.get(i.item_id)) is not None
+            and d.isLight
+        )
+        current_light_slots = ceil(current_light / BUNDLE_SIZE) if current_light else 0
+        new_light_slots = ceil((current_light + quantity) / BUNDLE_SIZE)
+        projected = (char.slots_used - current_light_slots) + new_light_slots
+        return projected > char.inventory_size
+    slot_cost = defn.slot_cost
+    return slot_cost > 0 and char.slots_used + slot_cost * quantity > char.inventory_size
+
+
 class CharacterManager:
     """Manages character creation and mutations."""
 
@@ -491,10 +522,7 @@ class CharacterManager:
         - All other items stack onto an existing unequipped entry if one
           exists; each unit consumes slot_cost slots.
         """
-        from math import ceil
-
         from engine import _now
-        from engine.azure_constants import BUNDLE_SIZE
 
         char = state.characters.get(character_id)
         if char is None:
@@ -504,32 +532,8 @@ class CharacterManager:
         if defn is None:
             return _err(state, f"Unknown item '{item_id}'.")
 
-        slot_cost = defn.slot_cost
-
         # --- Capacity check ---
-        # Light items bundle BUNDLE_SIZE-per-slot, shared across all light-weight
-        # types (matching Character.slots_used); everything else costs slot_cost
-        # each. This is independent of how the item is stored below: a light
-        # charge spell still occupies a shared bundle slot even though it is
-        # never quantity-stacked.
-        if defn.isLight:
-            # Contained items (container_id set) consume no slots, so exclude them
-            # to stay consistent with Character.slots_used.
-            current_light = sum(
-                i.quantity for i in char.inventory
-                if not i.equipped
-                and i.container_id is None
-                and (d := ITEM_REGISTRY.get(i.item_id)) is not None
-                and d.isLight
-            )
-            current_light_slots = ceil(current_light / BUNDLE_SIZE) if current_light else 0
-            new_light_slots = ceil((current_light + quantity) / BUNDLE_SIZE)
-            projected = (char.slots_used - current_light_slots) + new_light_slots
-            over_capacity = projected > char.inventory_size
-        else:
-            over_capacity = slot_cost > 0 and char.slots_used + slot_cost * quantity > char.inventory_size
-
-        if over_capacity:
+        if _exceeds_inventory_capacity(char, defn, quantity):
             return _err(
                 state,
                 f"{char.name}'s inventory is full "

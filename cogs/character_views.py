@@ -1,21 +1,24 @@
 """
-cogs/character_views.py — Character sheet renderer and equipment management views.
+cogs/character_views.py — Character sheet renderer, equipment management, and
+room item pickup/drop views.
 
-These are sent as DMs when a player clicks "My Character" or uses /character.
-All views are transient (timeout > 0) — they are not registered as persistent.
+These are sent as DMs when a player clicks "View Character" or "Items" (or
+uses /character). All views are transient (timeout > 0) — they are not
+registered as persistent.
 """
 
 from __future__ import annotations
 
 import discord
 
-from engine import equip_item, set_familiar_weapon, unequip_item
+from engine import drop_item, equip_item, pick_up_item, set_familiar_weapon, unequip_item
 from engine.azure_constants import UI_SLOTS, ItemSlot, RechargePeriod
 from engine.character import CharacterManager
 from engine.data_loader import CONDITION_REGISTRY, ITEM_REGISTRY
 from engine.item import EquipItem, UtilitySpell, Weapon
 from engine.strings import get_string
-from store import save_session_async
+from models import RoomItemVisibility, SessionMode
+from store import get_session, save_session_async, update_status
 
 # Human-readable labels for each slot.
 _SLOT_LABELS: dict[ItemSlot, str] = {
@@ -570,4 +573,325 @@ class FamiliarWeaponView(discord.ui.View):
         await interaction.response.edit_message(
             content=_character_sheet(self.char, self.state),
             view=EquipMenuView(self.char, self.state, self.channel_id),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Room item pickup / drop (exploration mode, via DM)
+# ---------------------------------------------------------------------------
+
+def _room_items_summary(char, state) -> str:
+    """Content of the room-items DM: what's on the ground here, plus the
+    character's inventory slot usage."""
+    room = state.current_room
+    lines = []
+    if room is not None:
+        lines.append(f"**{room.name}** — items on the ground:")
+        visible = [ri for ri in room.items if ri.visibility is not RoomItemVisibility.HIDDEN]
+        if visible:
+            for ri in visible:
+                defn = ITEM_REGISTRY.get(ri.item.item_id)
+                name = defn.name if defn else ri.item.item_id
+                qty = f" ×{ri.item.quantity}" if ri.item.quantity > 1 else ""
+                tag = " (out of reach)" if ri.visibility is RoomItemVisibility.INACCESSIBLE else ""
+                lines.append(f"  • {name}{qty}{tag}")
+        else:
+            lines.append("  (nothing here)")
+    else:
+        lines.append("You are not in a room.")
+    lines.append(f"\nInventory: {char.slots_used}/{char.inventory_size} slots used.")
+    return "\n".join(lines)
+
+
+async def _complete_item_action(
+    interaction: discord.Interaction,
+    state,
+    char,
+    channel_id: str,
+    action: str,
+    instance_id: str,
+    quantity: int | None = None,
+) -> None:
+    """
+    Shared tail for pickup/drop: guard, engine call, save, DM update, then
+    announce in the game channel and refresh the pinned status message.
+    """
+    if not state.session_active:
+        await interaction.response.edit_message(
+            content=get_string("errors.session_on_hold"),
+            view=RoomItemMenuView(char, state, channel_id),
+        )
+        return
+    if state.mode == SessionMode.ROUNDS:
+        await interaction.response.edit_message(
+            content=get_string("character.items.not_in_combat"),
+            view=RoomItemMenuView(char, state, channel_id),
+        )
+        return
+
+    if action == "pickup":
+        result = pick_up_item(state, char.character_id, instance_id, quantity)
+    else:
+        result = drop_item(state, char.character_id, instance_id, quantity)
+
+    if not result.ok:
+        await interaction.response.edit_message(
+            content=result.error,
+            view=RoomItemMenuView(char, state, channel_id),
+        )
+        return
+
+    await save_session_async(state)
+    await interaction.response.edit_message(
+        content=result.message,
+        view=RoomItemMenuView(char, state, channel_id),
+    )
+    channel = interaction.client.get_channel(int(channel_id))
+    if channel is not None:
+        await channel.send(result.message)
+        await update_status(channel, state)
+
+
+class RoomItemMenuView(discord.ui.View):
+    """
+    Top-level room item menu — Pick Up / Drop / Done.
+    Sent as a DM when the player clicks "Items" on the exploration status
+    message. Select views are built at click time from live state so two
+    players can't race for the same item.
+    """
+
+    def __init__(self, char, state, channel_id: str):
+        super().__init__(timeout=300)
+        self.char = char
+        self.state = state
+        self.channel_id = channel_id
+
+    @discord.ui.button(label="Pick Up Item", style=discord.ButtonStyle.primary)
+    async def pickup_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(
+            content=get_string("character.pickup.choose"),
+            view=PickUpSelectView(self.char, self.state, self.channel_id),
+        )
+
+    @discord.ui.button(label="Drop Item", style=discord.ButtonStyle.secondary)
+    async def drop_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(
+            content=get_string("character.drop.choose"),
+            view=DropSelectView(self.char, self.state, self.channel_id),
+        )
+
+    @discord.ui.button(label="Done", style=discord.ButtonStyle.success)
+    async def done_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(
+            content=_room_items_summary(self.char, self.state),
+            view=None,
+        )
+
+
+class PickUpSelectView(discord.ui.View):
+    """
+    Shown when the player taps "Pick Up Item".
+    Lists the current room's accessible items; stacked items ask for a
+    quantity via ItemQuantityModal.
+    """
+
+    def __init__(self, char, state, channel_id: str):
+        super().__init__(timeout=120)
+        self.char = char
+        self.state = state
+        self.channel_id = channel_id
+
+        options = []
+        room = state.current_room
+        for ri in (room.items if room is not None else []):
+            if ri.visibility is not RoomItemVisibility.ACCESSIBLE:
+                continue
+            defn = ITEM_REGISTRY.get(ri.item.item_id)
+            name = defn.name if defn else ri.item.item_id
+            qty = f" ×{ri.item.quantity}" if ri.item.quantity > 1 else ""
+            options.append(discord.SelectOption(
+                label=f"{name}{qty}"[:100],
+                value=ri.item.instance_id,
+                description=type(defn).__name__ if defn is not None else None,
+            ))
+
+        if not options:
+            options = [discord.SelectOption(label="(nothing to pick up)", value="__none__")]
+
+        select = discord.ui.Select(
+            placeholder="Choose an item to pick up…",
+            options=options[:25],  # Discord maximum
+        )
+        select.callback = self._on_select
+        self.add_item(select)
+
+        back = discord.ui.Button(label="← Back", style=discord.ButtonStyle.secondary)
+        back.callback = self._on_back
+        self.add_item(back)
+
+    async def _on_select(self, interaction: discord.Interaction):
+        instance_id = interaction.data["values"][0]
+        if instance_id == "__none__":
+            await interaction.response.edit_message(
+                content=get_string("character.pickup.none"),
+                view=RoomItemMenuView(self.char, self.state, self.channel_id),
+            )
+            return
+
+        room = self.state.current_room
+        ri = next(
+            (r for r in (room.items if room is not None else [])
+             if r.item.instance_id == instance_id),
+            None,
+        )
+        if ri is not None and ri.item.quantity > 1:
+            defn = ITEM_REGISTRY.get(ri.item.item_id)
+            name = defn.name if defn else ri.item.item_id
+            await interaction.response.send_modal(ItemQuantityModal(
+                action="pickup",
+                channel_id=self.channel_id,
+                instance_id=instance_id,
+                item_name=name,
+                max_qty=ri.item.quantity,
+            ))
+            return
+
+        await _complete_item_action(
+            interaction, self.state, self.char, self.channel_id, "pickup", instance_id,
+        )
+
+    async def _on_back(self, interaction: discord.Interaction):
+        await interaction.response.edit_message(
+            content=_room_items_summary(self.char, self.state),
+            view=RoomItemMenuView(self.char, self.state, self.channel_id),
+        )
+
+
+class DropSelectView(discord.ui.View):
+    """
+    Shown when the player taps "Drop Item".
+    Lists the character's top-level inventory entries (contained items move
+    with their container). Equipped entries are shown but the engine rejects
+    them with an "unequip first" message. Stacked items ask for a quantity.
+    """
+
+    def __init__(self, char, state, channel_id: str):
+        super().__init__(timeout=120)
+        self.char = char
+        self.state = state
+        self.channel_id = channel_id
+
+        options = []
+        for inv in char.inventory:
+            if inv.container_id:
+                continue
+            defn = ITEM_REGISTRY.get(inv.item_id)
+            name = defn.name if defn else inv.item_id
+            qty = f" ×{inv.quantity}" if inv.quantity > 1 else ""
+            equipped = " [equipped]" if inv.equipped else ""
+            options.append(discord.SelectOption(
+                label=f"{name}{qty}{equipped}"[:100],
+                value=inv.instance_id,
+                description=type(defn).__name__ if defn is not None else None,
+            ))
+
+        if not options:
+            options = [discord.SelectOption(label="(nothing to drop)", value="__none__")]
+
+        select = discord.ui.Select(
+            placeholder="Choose an item to drop…",
+            options=options[:25],  # Discord maximum
+        )
+        select.callback = self._on_select
+        self.add_item(select)
+
+        back = discord.ui.Button(label="← Back", style=discord.ButtonStyle.secondary)
+        back.callback = self._on_back
+        self.add_item(back)
+
+    async def _on_select(self, interaction: discord.Interaction):
+        instance_id = interaction.data["values"][0]
+        if instance_id == "__none__":
+            await interaction.response.edit_message(
+                content=get_string("character.drop.none"),
+                view=RoomItemMenuView(self.char, self.state, self.channel_id),
+            )
+            return
+
+        inv = next((i for i in self.char.inventory if i.instance_id == instance_id), None)
+        if inv is not None and inv.quantity > 1 and not inv.equipped:
+            defn = ITEM_REGISTRY.get(inv.item_id)
+            name = defn.name if defn else inv.item_id
+            await interaction.response.send_modal(ItemQuantityModal(
+                action="drop",
+                channel_id=self.channel_id,
+                instance_id=instance_id,
+                item_name=name,
+                max_qty=inv.quantity,
+            ))
+            return
+
+        await _complete_item_action(
+            interaction, self.state, self.char, self.channel_id, "drop", instance_id,
+        )
+
+    async def _on_back(self, interaction: discord.Interaction):
+        await interaction.response.edit_message(
+            content=_room_items_summary(self.char, self.state),
+            view=RoomItemMenuView(self.char, self.state, self.channel_id),
+        )
+
+
+class ItemQuantityModal(discord.ui.Modal):
+    """Shown when picking up / dropping a stacked item — choose how many."""
+
+    def __init__(
+        self,
+        action: str,
+        channel_id: str,
+        instance_id: str,
+        item_name: str,
+        max_qty: int,
+    ):
+        verb = "Pick Up" if action == "pickup" else "Drop"
+        super().__init__(title=f"{verb} {item_name}"[:45], timeout=300)
+        self.action = action
+        self.channel_id = channel_id
+        self.instance_id = instance_id
+        self.max_qty = max_qty
+
+        self.qty_input = discord.ui.TextInput(
+            label=f"Quantity (1–{max_qty} available)",
+            placeholder="e.g. 2",
+            min_length=1,
+            max_length=3,
+        )
+        self.add_item(self.qty_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            qty = int(self.qty_input.value.strip())
+        except ValueError:
+            await interaction.response.send_message("⚠ Please enter a valid number.", ephemeral=True)
+            return
+        if qty < 1 or qty > self.max_qty:
+            await interaction.response.send_message(
+                f"⚠ Quantity must be between 1 and {self.max_qty}.", ephemeral=True
+            )
+            return
+
+        state = get_session(self.channel_id)
+        if state is None:
+            await interaction.response.send_message("⚠ Session no longer exists.", ephemeral=True)
+            return
+        char = _find_character(state, str(interaction.user.id))
+        if char is None:
+            await interaction.response.send_message(
+                "⚠ You don't have a character in this session.", ephemeral=True
+            )
+            return
+
+        await _complete_item_action(
+            interaction, state, char, self.channel_id,
+            self.action, self.instance_id, qty,
         )

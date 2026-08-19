@@ -550,6 +550,18 @@ def set_room_item_visibility(
     return rm.set_room_item_visibility(state, instance_id, visibility, room_id)
 
 
+def pick_up_item(state: GameState, character_id, instance_id: str, quantity: int | None = None):
+    """Player picks up an accessible room item into their inventory."""
+    rm = RoomManager()
+    return rm.pick_up_item(state, character_id, instance_id, quantity)
+
+
+def drop_item(state: GameState, character_id, instance_id: str, quantity: int | None = None):
+    """Player drops an inventory item into the current room."""
+    rm = RoomManager()
+    return rm.drop_item(state, character_id, instance_id, quantity)
+
+
 def say(state: GameState, speaker: str, text: str):
     """Say something."""
     om = OracleManager()
@@ -1234,6 +1246,8 @@ __all__ = [
     "add_room_item",
     "remove_room_item",
     "set_room_item_visibility",
+    "pick_up_item",
+    "drop_item",
     "say",
     "emote",
     "ask_oracle",

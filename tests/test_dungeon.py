@@ -11,8 +11,12 @@ from engine import (
     add_room_item,
     delete_exit,
     delete_feature,
+    drop_item,
+    equip_item,
+    give_item,
     import_dungeon,
     move_party_to_room,
+    pick_up_item,
     register_room,
     remove_npc,
     remove_room_item,
@@ -31,6 +35,7 @@ from engine import (
 )
 from models import (
     NPC,
+    AzureStats,
     DoorState,
     Dungeon,
     Exit,
@@ -617,6 +622,285 @@ class TestRoomItems:
         add_room_item(bare_state, "torch", visibility=RoomItemVisibility.HIDDEN)
         status = render_status(bare_state)
         assert "Torch" not in status
+
+
+# ---------------------------------------------------------------------------
+# Player pickup / drop
+# ---------------------------------------------------------------------------
+
+class TestPickupDrop:
+    def _char(self, state):
+        return next(iter(state.characters.values()))
+
+    def test_pickup_moves_item_to_inventory(self, state_with_fighter):
+        state = state_with_fighter
+        char = self._char(state)
+        set_room(state, _make_room())
+        add_room_item(state, "torch", quantity=3)
+        ri = state.current_room.items[0]
+
+        result = pick_up_item(state, char.character_id, ri.item.instance_id)
+        assert result.ok
+        assert "picked up" in result.message
+        assert state.current_room.items == []
+        inv = next(i for i in char.inventory if i.item_id == "torch")
+        assert inv.quantity == 3
+        assert inv.instance_id == ri.item.instance_id  # instance moved, not recreated
+
+    def test_pickup_partial_splits_stack(self, state_with_fighter):
+        state = state_with_fighter
+        char = self._char(state)
+        set_room(state, _make_room())
+        add_room_item(state, "torch", quantity=4)
+        instance_id = state.current_room.items[0].item.instance_id
+
+        result = pick_up_item(state, char.character_id, instance_id, 1)
+        assert result.ok
+        assert len(state.current_room.items) == 1
+        assert state.current_room.items[0].item.quantity == 3
+        inv = next(i for i in char.inventory if i.item_id == "torch")
+        assert inv.quantity == 1
+
+    def test_pickup_merges_into_existing_stack(self, state_with_fighter):
+        state = state_with_fighter
+        char = self._char(state)
+        set_room(state, _make_room())
+        give_item(state, char.character_id, "torch", 2)
+        add_room_item(state, "torch", quantity=3)
+        instance_id = state.current_room.items[0].item.instance_id
+
+        result = pick_up_item(state, char.character_id, instance_id)
+        assert result.ok
+        assert state.current_room.items == []
+        torches = [i for i in char.inventory if i.item_id == "torch"]
+        assert len(torches) == 1
+        assert torches[0].quantity == 5
+
+    def test_pickup_partial_merges_into_existing_stack(self, state_with_fighter):
+        state = state_with_fighter
+        char = self._char(state)
+        set_room(state, _make_room())
+        give_item(state, char.character_id, "torch", 1)
+        add_room_item(state, "torch", quantity=4)
+        instance_id = state.current_room.items[0].item.instance_id
+
+        result = pick_up_item(state, char.character_id, instance_id, 2)
+        assert result.ok
+        assert state.current_room.items[0].item.quantity == 2
+        torches = [i for i in char.inventory if i.item_id == "torch"]
+        assert len(torches) == 1
+        assert torches[0].quantity == 3
+
+    def test_pickup_charge_weapon_does_not_merge(self, state_with_fighter):
+        state = state_with_fighter
+        char = self._char(state)
+        set_room(state, _make_room())
+        give_item(state, char.character_id, "pyr_1")
+        add_room_item(state, "pyr_1")
+        ri = state.current_room.items[0]
+
+        result = pick_up_item(state, char.character_id, ri.item.instance_id)
+        assert result.ok
+        entries = [i for i in char.inventory if i.item_id == "pyr_1"]
+        assert len(entries) == 2  # independent charge state — never stacked
+
+    def test_pickup_item_with_charges_does_not_merge(self, state_with_fighter):
+        state = state_with_fighter
+        char = self._char(state)
+        set_room(state, _make_room())
+        give_item(state, char.character_id, "torch", 2)
+        add_room_item(state, "torch")
+        ri = state.current_room.items[0]
+        ri.item.charges = 3  # dropped lit torch, partially burnt
+
+        result = pick_up_item(state, char.character_id, ri.item.instance_id)
+        assert result.ok
+        torches = [i for i in char.inventory if i.item_id == "torch"]
+        assert len(torches) == 2
+        lit = next(i for i in torches if i.charges == 3)
+        assert lit.quantity == 1
+
+    def test_pickup_inaccessible_fails(self, state_with_fighter):
+        state = state_with_fighter
+        char = self._char(state)
+        set_room(state, _make_room())
+        add_room_item(state, "torch", visibility=RoomItemVisibility.INACCESSIBLE)
+        instance_id = state.current_room.items[0].item.instance_id
+
+        result = pick_up_item(state, char.character_id, instance_id)
+        assert not result.ok
+        assert "out of reach" in result.error
+        assert len(state.current_room.items) == 1
+
+    def test_pickup_hidden_fails(self, state_with_fighter):
+        state = state_with_fighter
+        char = self._char(state)
+        set_room(state, _make_room())
+        add_room_item(state, "torch", visibility=RoomItemVisibility.HIDDEN)
+        instance_id = state.current_room.items[0].item.instance_id
+
+        result = pick_up_item(state, char.character_id, instance_id)
+        assert not result.ok
+        assert len(state.current_room.items) == 1
+
+    def test_pickup_unknown_instance_fails(self, state_with_fighter):
+        state = state_with_fighter
+        char = self._char(state)
+        set_room(state, _make_room())
+        result = pick_up_item(state, char.character_id, "nope")
+        assert not result.ok
+
+    def test_pickup_no_room_fails(self, state_with_fighter):
+        state = state_with_fighter
+        char = self._char(state)
+        result = pick_up_item(state, char.character_id, "nope")
+        assert not result.ok
+
+    def test_pickup_bad_quantity_fails(self, state_with_fighter):
+        state = state_with_fighter
+        char = self._char(state)
+        set_room(state, _make_room())
+        add_room_item(state, "torch", quantity=2)
+        instance_id = state.current_room.items[0].item.instance_id
+
+        assert not pick_up_item(state, char.character_id, instance_id, 0).ok
+        assert not pick_up_item(state, char.character_id, instance_id, 3).ok
+        assert state.current_room.items[0].item.quantity == 2
+
+    def test_pickup_full_inventory_fails(self, state_with_fighter):
+        state = state_with_fighter
+        char = self._char(state)
+        char.ability_scores = AzureStats()  # inventory_size = BASE_INVENTORY_SIZE
+        set_room(state, _make_room())
+        assert give_item(state, char.character_id, "wool_gloves", 6).ok
+        assert char.slots_used == char.inventory_size
+
+        add_room_item(state, "torch")
+        torch_id = state.current_room.items[0].item.instance_id
+        result = pick_up_item(state, char.character_id, torch_id)
+        assert not result.ok
+        assert "inventory is full" in result.error
+        assert len(state.current_room.items) == 1
+
+    def test_pickup_preserves_charges(self, state_with_fighter):
+        state = state_with_fighter
+        char = self._char(state)
+        set_room(state, _make_room())
+        add_room_item(state, "pyr_1")
+        ri = state.current_room.items[0]
+        ri.item.charges = 2  # partially spent
+
+        result = pick_up_item(state, char.character_id, ri.item.instance_id)
+        assert result.ok
+        inv = next(i for i in char.inventory if i.item_id == "pyr_1")
+        assert inv.charges == 2
+
+    def test_drop_creates_accessible_room_item(self, state_with_fighter):
+        state = state_with_fighter
+        char = self._char(state)
+        set_room(state, _make_room())
+        give_item(state, char.character_id, "dagger")
+        inv = next(i for i in char.inventory if i.item_id == "dagger")
+
+        result = drop_item(state, char.character_id, inv.instance_id)
+        assert result.ok
+        assert "dropped" in result.message
+        assert all(i.item_id != "dagger" for i in char.inventory)
+        assert len(state.current_room.items) == 1
+        ri = state.current_room.items[0]
+        assert ri.item.item_id == "dagger"
+        assert ri.item.instance_id == inv.instance_id
+        assert ri.visibility is RoomItemVisibility.ACCESSIBLE
+
+    def test_drop_partial_splits_stack(self, state_with_fighter):
+        state = state_with_fighter
+        char = self._char(state)
+        set_room(state, _make_room())
+        give_item(state, char.character_id, "torch", 3)
+        inv = next(i for i in char.inventory if i.item_id == "torch")
+
+        result = drop_item(state, char.character_id, inv.instance_id, 2)
+        assert result.ok
+        assert inv.quantity == 1
+        assert state.current_room.items[0].item.quantity == 2
+
+    def test_drop_equipped_fails(self, state_with_fighter):
+        from engine.azure_constants import ItemSlot
+        state = state_with_fighter
+        char = self._char(state)
+        set_room(state, _make_room())
+        give_item(state, char.character_id, "dagger")
+        assert equip_item(state, char.character_id, "dagger", ItemSlot.MAIN_HAND).ok
+        inv = next(i for i in char.inventory if i.item_id == "dagger" and i.equipped)
+
+        result = drop_item(state, char.character_id, inv.instance_id)
+        assert not result.ok
+        assert "unequipped first" in result.error
+        assert state.current_room.items == []
+
+    def test_drop_contained_item_fails(self, state_with_fighter):
+        state = state_with_fighter
+        char = self._char(state)
+        set_room(state, _make_room())
+        give_item(state, char.character_id, "apprentice_manual")
+        child = next(i for i in char.inventory if i.container_id is not None)
+
+        result = drop_item(state, char.character_id, child.instance_id)
+        assert not result.ok
+
+    def test_drop_container_moves_contained(self, state_with_fighter):
+        from engine.data_loader import ITEM_REGISTRY
+        state = state_with_fighter
+        char = self._char(state)
+        set_room(state, _make_room())
+        give_item(state, char.character_id, "apprentice_manual")
+        book = next(i for i in char.inventory if i.item_id == "apprentice_manual")
+        n_spells = len(ITEM_REGISTRY["apprentice_manual"].contained_item_ids)
+
+        result = drop_item(state, char.character_id, book.instance_id)
+        assert result.ok
+        assert not any(
+            i.item_id == "apprentice_manual" or i.container_id == book.instance_id
+            for i in char.inventory
+        )
+        ri = state.current_room.items[0]
+        assert len(ri.contained) == n_spells
+
+        # Picking the book back up restores the contained spells.
+        result = pick_up_item(state, char.character_id, book.instance_id)
+        assert result.ok
+        assert state.current_room.items == []
+        assert sum(1 for i in char.inventory if i.container_id == book.instance_id) == n_spells
+
+    def test_pickup_persistence_roundtrip(self, state_with_fighter):
+        import os
+        import tempfile
+
+        from persistence import Database
+
+        state = state_with_fighter
+        char = self._char(state)
+        set_room(state, _make_room("Vault"))
+        add_room_item(state, "torch", quantity=4)
+        instance_id = state.current_room.items[0].item.instance_id
+        assert pick_up_item(state, char.character_id, instance_id, 1).ok
+
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            path = f.name
+        try:
+            db = Database(path)
+            db.save(state)
+            loaded = db.load(state.platform_channel_id)
+            db.close()
+        finally:
+            os.unlink(path)
+
+        loaded_char = loaded.characters[char.character_id]
+        inv = next(i for i in loaded_char.inventory if i.item_id == "torch")
+        assert inv.quantity == 1
+        room = loaded.dungeon.rooms[state.current_room_id]
+        assert len(room.items) == 1
+        assert room.items[0].item.quantity == 3
 
 
 # ---------------------------------------------------------------------------

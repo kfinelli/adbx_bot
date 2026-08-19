@@ -223,6 +223,15 @@ character:
     no_items: "You have no equippable items."
     choose_item: "Choose an item from your inventory to equip:"
     choose_slot: "Choose a slot to unequip:"
+  items_sent: "Item management sent to your DMs."
+  pickup:
+    choose: "Choose an item to pick up:"
+    none: "There is nothing here to pick up."
+  drop:
+    choose: "Choose an item to drop:"
+    none: "You have nothing to drop."
+  items:
+    not_in_combat: "You can't pick up or drop items during combat."
   weapon_forte:
     button_label: "Weapon Forte"
     choose: "Choose a weapon to designate as your Forte weapon (SVY replaces its normal stat):"
